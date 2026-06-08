@@ -1,0 +1,28 @@
+# 依赖
+node_modules/
+
+# 构建输出
+out/
+dist/
+release/
+
+# 日志
+*.log
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 临时文件
+*.tmp
+*.temp
+
+# 内部规划文档（不提交到 GitHub）
+PLAN.md
+UPDATE_PLAN.md
+ROADMAP.md
