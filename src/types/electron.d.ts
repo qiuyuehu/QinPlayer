@@ -6,8 +6,10 @@
 // =============================================================================
 
 export interface ElectronAPI {
-  /** 将本地文件路径转换为 qinplayer:// 协议 URL */
+  /** 将本地文件路径转换为 qinplayer://audio 协议 URL */
   getAudioUrl: (filePath: string) => string
+  /** 将本地文件路径转换为 qinplayer://cover 协议 URL */
+  getCoverUrl: (filePath: string) => string
   /** 最小化窗口 */
   minimize: () => void
   /** 最大化/还原窗口 */

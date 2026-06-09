@@ -129,3 +129,106 @@ export function togglePlayMode(current: PlayMode): PlayMode {
   const index = PLAY_MODE_ORDER.indexOf(current)
   return PLAY_MODE_ORDER[(index + 1) % PLAY_MODE_ORDER.length]
 }
+
+// ---------------------------------------------------------------------------
+// 状态持久化（保存到 SQLite settings 表）
+// ---------------------------------------------------------------------------
+// 只保存关键设置，不保存 currentTime（进度位置）
+// 防抖保存，避免频繁写入
+// ---------------------------------------------------------------------------
+
+let saveTimer: ReturnType<typeof setTimeout> | null = null
+
+/** 防抖保存播放状态到数据库 */
+function debouncedSave(state: PlayerState): void {
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => {
+    const settings = [
+      { key: 'volume', value: String(state.volume) },
+      { key: 'playMode', value: state.playMode },
+      { key: 'lastTrackId', value: state.currentTrack ? String(state.currentTrack.id) : '' },
+    ]
+    for (const s of settings) {
+      window.electronAPI.invoke('settings:set', s).catch(() => {})
+    }
+  }, 500)
+}
+
+// 监听 store 变化，自动保存（排除 currentTime 高频更新）
+usePlayerStore.subscribe((state) => {
+  debouncedSave(state)
+})
+
+// 播放中每 5 秒保存 currentTime（独立定时器，不走防抖）
+let progressSaveTimer: ReturnType<typeof setInterval> | null = null
+usePlayerStore.subscribe((state) => {
+  if (state.isPlaying && !progressSaveTimer) {
+    progressSaveTimer = setInterval(() => {
+      const ct = usePlayerStore.getState().currentTime
+      if (ct > 0) {
+        window.electronAPI.invoke('settings:set', { key: 'lastCurrentTime', value: String(ct) }).catch(() => {})
+      }
+    }, 5000)
+  } else if (!state.isPlaying && progressSaveTimer) {
+    clearInterval(progressSaveTimer)
+    progressSaveTimer = null
+  }
+})
+
+/** 启动时从数据库恢复播放状态 */
+export async function restorePlayerState(): Promise<void> {
+  try {
+    const [volumeStr, playMode, lastTrackId, lastTimeStr] = await Promise.all([
+      window.electronAPI.invoke('settings:get', { key: 'volume' }) as Promise<string | null>,
+      window.electronAPI.invoke('settings:get', { key: 'playMode' }) as Promise<string | null>,
+      window.electronAPI.invoke('settings:get', { key: 'lastTrackId' }) as Promise<string | null>,
+      window.electronAPI.invoke('settings:get', { key: 'lastCurrentTime' }) as Promise<string | null>,
+    ])
+
+    console.log('[PlayerStore] 恢复状态 - volume:', volumeStr, 'playMode:', playMode, 'lastTrackId:', lastTrackId, 'lastTime:', lastTimeStr)
+
+    const state: Partial<PlayerState> = {}
+
+    // 恢复音量
+    if (volumeStr) {
+      const v = parseFloat(volumeStr)
+      if (!isNaN(v)) state.volume = v
+    }
+
+    // 恢复播放模式
+    if (playMode && ['sequential', 'loop', 'shuffle'].includes(playMode)) {
+      state.playMode = playMode as PlayMode
+    }
+
+    // 恢复上次播放的歌曲
+    if (lastTrackId) {
+      const songId = parseInt(lastTrackId, 10)
+      if (!isNaN(songId)) {
+        const allSongs = await window.electronAPI.invoke('songs:getAll') as Track[]
+        console.log('[PlayerStore] 数据库歌曲数:', allSongs.length, '查找 ID:', songId)
+        const track = allSongs.find(s => s.id === songId)
+        if (track) {
+          state.currentTrack = track
+          state.playlist = allSongs
+          // 恢复播放进度（通过 seekTime，useAudioSync 加载后会自动 seek）
+          if (lastTimeStr) {
+            const lastTime = parseFloat(lastTimeStr)
+            if (!isNaN(lastTime) && lastTime > 0) {
+              state.seekTime = lastTime
+              state.currentTime = lastTime
+              console.log('[PlayerStore] 恢复进度:', lastTime, '秒')
+            }
+          }
+          console.log('[PlayerStore] 恢复歌曲:', track.title)
+        } else {
+          console.log('[PlayerStore] 未找到 ID 为', songId, '的歌曲')
+        }
+      }
+    }
+
+    usePlayerStore.setState(state)
+    console.log('[PlayerStore] 恢复完成:', state)
+  } catch (e) {
+    console.error('[PlayerStore] 恢复状态失败:', e)
+  }
+}

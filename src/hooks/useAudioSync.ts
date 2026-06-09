@@ -31,6 +31,7 @@ export function useAudioSync() {
 
   // 标记：音频加载完毕后需要自动播放
   const pendingAutoPlay = useRef(false)
+  const pendingSeekRef = useRef<number | null>(null)  // 启动时恢复的 seek 位置
 
   // 标记：引擎事件是否已注册
   const eventsRegistered = useRef(false)
@@ -105,6 +106,12 @@ export function useAudioSync() {
       })
       engine.onLoadedMetadata((dur) => {
         setDuration(dur)
+        // 应用启动时恢复的 seek 位置
+        if (pendingSeekRef.current !== null) {
+          engine.currentTime = pendingSeekRef.current
+          setCurrentTime(pendingSeekRef.current)
+          pendingSeekRef.current = null
+        }
         if (pendingAutoPlay.current) {
           pendingAutoPlay.current = false
           engine.play().catch((err) => {
@@ -174,7 +181,13 @@ export function useAudioSync() {
   // ---------------------------------------------------------------------------
   useEffect(() => {
     if (seekTime === null || isNaN(seekTime)) return
-    if (!hasAudioEngine()) return
+
+    if (!hasAudioEngine()) {
+      // 引擎还没创建（启动恢复场景），存到 ref 等加载完后 seek
+      pendingSeekRef.current = seekTime
+      setSeekTime(null)
+      return
+    }
 
     const engine = getAudioEngine()
     engine.currentTime = seekTime

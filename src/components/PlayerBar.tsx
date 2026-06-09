@@ -43,6 +43,7 @@ function PlayerBar() {
   const progressRef = useRef<HTMLDivElement>(null)
   const [dragTime, setDragTime] = useState<number | null>(null)
   const isDraggingRef = useRef(false)
+  const dragTimeRef = useRef<number | null>(null)  // ref 用于 mouseup 回调读取最新值
 
   // --- 音量条拖拽 ---
   const volumeBarRef = useRef<HTMLDivElement>(null)
@@ -74,7 +75,9 @@ function PlayerBar() {
     if (!progressRef.current || duration <= 0) return
     const rect = progressRef.current.getBoundingClientRect()
     const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
-    setDragTime(ratio * duration)
+    const time = ratio * duration
+    setDragTime(time)
+    dragTimeRef.current = time  // 同步更新 ref
   }, [duration])
 
   const handleProgressMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
@@ -87,18 +90,20 @@ function PlayerBar() {
 
     const handleMouseUp = () => {
       isDraggingRef.current = false
-      // 拖拽结束，通过 Zustand 发送 seekTime（useAudioSync 会驱动 AudioEngine）
-      const finalTime = usePlayerStore.getState().seekTime
-      const currentTimeVal = dragTime ?? currentTime
-      setSeekTime(currentTimeVal)
+      // 从 ref 读取最新拖拽时间（闭包里的 dragTime 是旧值）
+      const seekTo = dragTimeRef.current
+      if (seekTo !== null) {
+        setSeekTime(seekTo)
+      }
       setDragTime(null)
+      dragTimeRef.current = null
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
     }
 
     document.addEventListener('mousemove', handleMouseMove)
     document.addEventListener('mouseup', handleMouseUp)
-  }, [updateDragTime, setSeekTime, dragTime, currentTime])
+  }, [updateDragTime, setSeekTime])
 
   // ---------------------------------------------------------------------------
   // 音量：拖拽交互

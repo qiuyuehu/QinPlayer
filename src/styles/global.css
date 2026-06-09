@@ -44,6 +44,40 @@ html, body {
   overflow: hidden;
 }
 
+/* 骨架屏 */
+.app__skeleton {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.app__skeleton-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background-color: var(--bg-secondary);
+  border-right: 1px solid var(--border);
+}
+
+.app__skeleton-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 24px;
+}
+
+.app__skeleton-bar {
+  height: 16px;
+  background-color: var(--bg-tertiary);
+  border-radius: 4px;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
 /* 禁止文本选中（桌面应用不需要） */
 * {
   user-select: none;
