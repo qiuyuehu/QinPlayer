@@ -149,7 +149,7 @@ function PlayerBar() {
       <div className="player-bar__info">
         <div className="player-bar__cover">
           {currentTrack?.coverPath && (
-            <img src={currentTrack.coverPath} alt="封面" />
+            <img src={window.electronAPI.getCoverUrl(currentTrack.coverPath)} alt="封面" />
           )}
         </div>
         <div className="player-bar__meta">

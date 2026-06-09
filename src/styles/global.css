@@ -940,6 +940,40 @@ html, body {
 }
 
 /* =============================================================================
+   最近播放 / 我喜欢的 页面
+   ============================================================================= */
+
+.recent-page__title,
+.liked-page__title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 16px;
+}
+
+.recent-page__loading,
+.liked-page__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.recent-page__empty,
+.liked-page__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: var(--text-muted);
+  font-size: 13px;
+  gap: 4px;
+}
+
+/* =============================================================================
    歌曲列表
    ============================================================================= */
 
@@ -1054,6 +1088,27 @@ html, body {
   color: var(--text-muted);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
+}
+
+/* 收藏心形按钮 */
+.song-list__like {
+  width: 32px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  padding: 0;
+}
+
+.song-list__row:hover .song-list__like,
+.song-list__like--active {
+  opacity: 1;
 }
 
 /* =============================================================================

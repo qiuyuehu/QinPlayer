@@ -50,17 +50,24 @@ function SongList({ tracks, showIndex = true, showAlbum = false, playlistId, onR
   // --- 歌单列表（用于"添加到歌单"子菜单）---
   const [playlists, setPlaylists] = useState<Playlist[]>([])
 
-  // 加载歌单列表
+  // --- 收藏歌曲 ID 集合（快速查找）---
+  const [likedIds, setLikedIds] = useState<Set<number>>(new Set())
+
+  // 加载歌单列表 + 收藏列表
   useEffect(() => {
-    async function loadPlaylists() {
+    async function loadData() {
       try {
-        const list = await window.electronAPI.invoke('playlists:getAll') as Playlist[]
+        const [list, likedSongs] = await Promise.all([
+          window.electronAPI.invoke('playlists:getAll') as Promise<Playlist[]>,
+          window.electronAPI.invoke('songs:getLiked') as Promise<Track[]>
+        ])
         setPlaylists(list)
+        setLikedIds(new Set(likedSongs.map(s => s.id)))
       } catch {
         // 忽略
       }
     }
-    loadPlaylists()
+    loadData()
   }, [])
 
   // --- 虚拟列表配置 ---
@@ -76,7 +83,27 @@ function SongList({ tracks, showIndex = true, showAlbum = false, playlistId, onR
     setPlaylist(tracks)
     setCurrentTrack(track)
     setPlaying(true)
+    // 记录播放
+    window.electronAPI.invoke('songs:recordPlay', { songId: track.id })
+    window.electronAPI.invoke('songs:updatePlayCount', { songId: track.id })
   }, [tracks, setCurrentTrack, setPlaylist, setPlaying])
+
+  // --- 切换收藏状态 ---
+  const toggleLike = useCallback(async (e: React.MouseEvent, track: Track) => {
+    e.stopPropagation()  // 阻止触发行点击
+    const isLiked = likedIds.has(track.id)
+    if (isLiked) {
+      await window.electronAPI.invoke('songs:unlike', { songId: track.id })
+      setLikedIds(prev => {
+        const next = new Set(prev)
+        next.delete(track.id)
+        return next
+      })
+    } else {
+      await window.electronAPI.invoke('songs:like', { songId: track.id })
+      setLikedIds(prev => new Set(prev).add(track.id))
+    }
+  }, [likedIds])
 
   // --- 右键菜单 ---
   const handleContextMenu = useCallback((e: React.MouseEvent, track: Track) => {
@@ -215,6 +242,13 @@ function SongList({ tracks, showIndex = true, showAlbum = false, playlistId, onR
                 <span className="song-list__col song-list__col--duration">
                   {formatDuration(track.duration)}
                 </span>
+                <button
+                  className={`song-list__like ${likedIds.has(track.id) ? 'song-list__like--active' : ''}`}
+                  onClick={(e) => toggleLike(e, track)}
+                  title={likedIds.has(track.id) ? '取消收藏' : '收藏'}
+                >
+                  {likedIds.has(track.id) ? '❤️' : '🤍'}
+                </button>
               </div>
             )
           })}
