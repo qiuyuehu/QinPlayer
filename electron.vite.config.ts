@@ -11,7 +11,8 @@ export default defineConfig({
       rollupOptions: {
         external: ['better-sqlite3'],  // 原生模块不打包进 bundle
         input: {
-          index: resolve(__dirname, 'electron/main.ts')
+          index: resolve(__dirname, 'electron/main.ts'),
+          scanner: resolve(__dirname, 'electron/workers/scanner.ts')
         }
       }
     }

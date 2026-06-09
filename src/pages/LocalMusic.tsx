@@ -1,49 +1,13 @@
 // =============================================================================
 // QinPlayer — 本地音乐页面
 // =============================================================================
-// 职责：选择音乐文件夹、扫描音频文件、显示歌曲列表
-// Task 1.10：文件夹选择 + 扫描
-// Task 1.11：使用 SongList 组件渲染歌曲列表
+// 职责：选择音乐文件夹、启动 Worker 扫描、实时显示歌曲列表
+// 扫描通过 Worker Threads 异步进行，歌曲逐首推送渲染
 // =============================================================================
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import SongList from '../components/SongList'
 import type { Track } from '../types'
-
-// 扫描结果类型
-interface ScanResult {
-  success: boolean
-  files: string[]
-  error?: string
-}
-
-// 自增 ID（Phase 2 由 SQLite 管理）
-let nextId = 1
-
-/**
- * 将文件路径转换为 Track 对象（临时方案，Phase 2 用 ID3 标签）
- */
-function filePathToTrack(filePath: string): Track {
-  // 从路径提取文件名
-  const parts = filePath.replace(/\\/g, '/').split('/')
-  const fileName = parts[parts.length - 1] || filePath
-  // 去掉扩展名作为标题
-  const title = fileName.replace(/\.[^.]+$/, '')
-
-  return {
-    id: nextId++,
-    filePath,
-    fileName,
-    title,
-    artist: '未知歌手',
-    album: '未知专辑',
-    duration: 0,  // Phase 2 解析 ID3 后填充
-    coverPath: null,
-    mtime: 0,
-    playCount: 0,
-    createdAt: new Date().toISOString(),
-  }
-}
 
 function LocalMusic() {
   // --- 状态 ---
@@ -51,8 +15,57 @@ function LocalMusic() {
   const [tracks, setTracks] = useState<Track[]>([])
   const [folderPath, setFolderPath] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [progress, setProgress] = useState(0)
+  const [scanTotal, setScanTotal] = useState(0)
 
-  // --- 选择文件夹并扫描 ---
+  // --- 启动时从数据库加载已有歌曲 ---
+  useEffect(() => {
+    async function loadExistingSongs() {
+      try {
+        const songs = await window.electronAPI.invoke('songs:getAll') as Track[]
+        if (songs && songs.length > 0) {
+          setTracks(songs)
+        }
+      } catch {
+        // 数据库可能还没数据，忽略
+      }
+    }
+    loadExistingSongs()
+  }, [])
+
+  // --- 监听 Worker 扫描事件 ---
+  useEffect(() => {
+    // 监听：发现新歌曲
+    const unsubSong = window.electronAPI.on('scan:song-found', (song: Track) => {
+      setTracks(prev => [...prev, song])
+    })
+
+    // 监听：扫描进度
+    const unsubProgress = window.electronAPI.on('scan:progress', (data: { percent: number }) => {
+      setProgress(data.percent)
+    })
+
+    // 监听：扫描完成
+    const unsubDone = window.electronAPI.on('scan:done', () => {
+      setScanning(false)
+      setProgress(100)
+    })
+
+    // 监听：扫描错误
+    const unsubError = window.electronAPI.on('scan:error', (data: { message: string }) => {
+      setError(data.message)
+      setScanning(false)
+    })
+
+    return () => {
+      unsubSong()
+      unsubProgress()
+      unsubDone()
+      unsubError()
+    }
+  }, [])
+
+  // --- 选择文件夹并启动扫描 ---
   const handleSelectFolder = useCallback(async () => {
     // 1. 打开文件夹选择对话框
     const path = await window.electronAPI.invoke('select-folder') as string | null
@@ -61,21 +74,18 @@ function LocalMusic() {
     setFolderPath(path)
     setScanning(true)
     setError(null)
-    setTracks([])
+    setProgress(0)
+    setScanTotal(0)
 
-    // 2. 扫描文件夹
+    // 2. 启动 Worker 扫描（异步，歌曲通过事件推送）
     try {
-      const result = await window.electronAPI.invoke('scan-folder', path) as ScanResult
-      if (result.success) {
-        // 将文件路径转换为 Track 对象
-        const newTracks = result.files.map(filePathToTrack)
-        setTracks(newTracks)
-      } else {
-        setError(result.error || '扫描失败')
+      const result = await window.electronAPI.invoke('scan-folder', path) as { success: boolean; error?: string }
+      if (!result.success) {
+        setError(result.error || '扫描启动失败')
+        setScanning(false)
       }
     } catch (e) {
       setError(String(e))
-    } finally {
       setScanning(false)
     }
   }, [])
@@ -99,6 +109,19 @@ function LocalMusic() {
         <div className="local-music__path">
           📁 {folderPath}
           {tracks.length > 0 && <span className="local-music__count">（{tracks.length} 首）</span>}
+        </div>
+      )}
+
+      {/* 扫描进度条 */}
+      {scanning && (
+        <div className="local-music__progress">
+          <div className="local-music__progress-bar">
+            <div
+              className="local-music__progress-fill"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <span className="local-music__progress-text">{progress}%</span>
         </div>
       )}
 

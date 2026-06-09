@@ -7,8 +7,7 @@
 
 import { app, BrowserWindow, ipcMain, protocol, dialog } from 'electron'
 import { join } from 'path'
-import { readdir, stat } from 'fs/promises'
-import { initDatabase, closeDatabase } from './db/database'
+import { initDatabase, closeDatabase, getDatabase } from './db/database'
 import { registerSongsIPC } from './ipc/songs'
 import { registerPlaylistsIPC } from './ipc/playlists'
 import { registerSettingsIPC } from './ipc/settings'
@@ -195,32 +194,15 @@ function registerProtocol(): void {
 }
 
 // ---------------------------------------------------------------------------
-// 文件夹扫描 IPC
+// 文件夹扫描 IPC（使用 Worker Threads）
+// ---------------------------------------------------------------------------
+// ⚠️ 绝对不要在主进程主线程同步读取和解析大量音频文件的 ID3 标签！
+// 使用 Worker Threads 在独立线程中扫描，通过 postMessage 传递结果
 // ---------------------------------------------------------------------------
 
-// 支持的音频文件格式
-const AUDIO_EXTENSIONS = ['.mp3', '.flac', '.wav', '.m4a', '.ogg', '.aac', '.wma']
+import { Worker } from 'worker_threads'
 
-/**
- * 递归扫描目录中的音频文件（异步，不阻塞事件循环）
- * 使用 fs/promises 而非 readdirSync/statSync
- */
-async function scanDirectory(dir: string, fileList: string[] = []): Promise<string[]> {
-  const entries = await readdir(dir)
-  for (const entry of entries) {
-    const fullPath = join(dir, entry)
-    const fileStat = await stat(fullPath)
-    if (fileStat.isDirectory()) {
-      await scanDirectory(fullPath, fileList)
-    } else {
-      const ext = fullPath.toLowerCase().slice(fullPath.lastIndexOf('.'))
-      if (AUDIO_EXTENSIONS.includes(ext)) {
-        fileList.push(fullPath)
-      }
-    }
-  }
-  return fileList
-}
+let scanWorker: Worker | null = null
 
 function registerScanIPC(): void {
   // 打开文件夹选择对话框
@@ -232,15 +214,106 @@ function registerScanIPC(): void {
     return result.filePaths[0]
   })
 
-  // 扫描文件夹中的音频文件（异步，不阻塞 UI）
+  // 启动 Worker 扫描文件夹
   ipcMain.handle('scan-folder', async (_event, folderPath: string) => {
     try {
-      const files = await scanDirectory(folderPath)
-      return { success: true, files }
+      const db = getDatabase()
+
+      // 保存文件夹到数据库
+      db.prepare('INSERT OR IGNORE INTO music_folders (path) VALUES (?)').run(folderPath)
+
+      // 封面缓存目录
+      const coversDir = join(app.getPath('userData'), 'covers')
+
+      // 创建 Worker 线程
+      const workerPath = join(__dirname, 'scanner.js')
+      scanWorker = new Worker(workerPath, {
+        workerData: {
+          folderPaths: [folderPath],
+          coversDir
+        }
+      })
+
+      // 监听 Worker 消息
+      scanWorker.on('message', (msg: { type: string; data: unknown }) => {
+        switch (msg.type) {
+          case 'song':
+            // Worker 解析完一首歌，写入数据库
+            insertSong(msg.data as ScanResult)
+            // 推送给渲染进程更新 UI
+            mainWindow?.webContents.send('scan:song-found', msg.data)
+            break
+
+          case 'progress':
+            // 推送扫描进度
+            mainWindow?.webContents.send('scan:progress', msg.data)
+            break
+
+          case 'done':
+            // 扫描完成
+            mainWindow?.webContents.send('scan:done', msg.data)
+            scanWorker = null
+            break
+
+          case 'error':
+            // 扫描错误
+            console.error('[Scanner] 错误:', msg.data)
+            mainWindow?.webContents.send('scan:error', msg.data)
+            break
+
+          case 'log':
+            console.log('[Scanner]', msg.data)
+            break
+        }
+      })
+
+      scanWorker.on('error', (err) => {
+        console.error('[Scanner] Worker 异常:', err)
+        mainWindow?.webContents.send('scan:error', { message: err.message })
+        scanWorker = null
+      })
+
+      return { success: true }
     } catch (e) {
-      return { success: false, files: [], error: String(e) }
+      return { success: false, error: String(e) }
     }
   })
+}
+
+// ---------------------------------------------------------------------------
+// 数据库写入辅助函数
+// ---------------------------------------------------------------------------
+
+interface ScanResult {
+  filePath: string
+  fileName: string
+  title: string | null
+  artist: string | null
+  album: string | null
+  duration: number | null
+  coverPath: string | null
+  mtime: number
+}
+
+/**
+ * 将 Worker 解析的歌曲数据写入数据库
+ * 使用 INSERT OR IGNORE 避免重复插入
+ */
+function insertSong(song: ScanResult): void {
+  const db = getDatabase()
+  db.prepare(`
+    INSERT OR IGNORE INTO songs (file_path, file_name, title, artist, album, duration, cover_path, mtime)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    song.filePath,
+    song.fileName,
+    song.title,
+    song.artist,
+    song.album,
+    song.duration,
+    song.coverPath,
+    song.mtime
+  )
 }
 
 // ---------------------------------------------------------------------------

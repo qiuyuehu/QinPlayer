@@ -285,6 +285,36 @@ html, body {
   border-radius: 6px;
 }
 
+/* 扫描进度条 */
+.local-music__progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.local-music__progress-bar {
+  flex: 1;
+  height: 4px;
+  background-color: var(--bg-tertiary);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.local-music__progress-fill {
+  height: 100%;
+  background-color: var(--accent);
+  border-radius: 2px;
+  transition: width 0.2s ease;
+}
+
+.local-music__progress-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  min-width: 36px;
+  text-align: right;
+}
+
 /* 文件列表 */
 .local-music__list {
   border: 1px solid var(--border);
