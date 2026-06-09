@@ -131,29 +131,36 @@ function registerWindowIPC(): void {
 
 function registerProtocol(): void {
   protocol.handle('qinplayer', (request) => {
-    console.log('[Protocol] 收到请求:', request.url)
-
     try {
       const url = new URL(request.url)
       const filePath = decodeURIComponent(url.searchParams.get('path') || '')
-      console.log('[Protocol] 解析文件路径:', filePath)
+      const host = url.hostname  // 'audio' 或 'cover'
 
-      // 同步检查文件是否存在（protocol.handle 回调中允许同步操作）
       const fs = require('fs') as typeof import('fs')
       const { Readable } = require('stream') as typeof import('stream')
 
-      if (!filePath) {
-        console.log('[Protocol] 错误：路径为空')
-        return new Response('Missing path', { status: 400 })
-      }
-
-      if (!fs.existsSync(filePath)) {
-        console.log('[Protocol] 错误：文件不存在')
+      if (!filePath || !fs.existsSync(filePath)) {
         return new Response('Not Found', { status: 404 })
       }
 
       const stat = fs.statSync(filePath)
-      console.log('[Protocol] 文件大小:', stat.size, 'bytes')
+
+      // 根据类型确定 Content-Type
+      let contentType: string
+      if (host === 'cover') {
+        // 封面图片
+        const ext = filePath.toLowerCase()
+        if (ext.endsWith('.png')) contentType = 'image/png'
+        else contentType = 'image/jpeg'
+      } else {
+        // 音频文件
+        const ext = filePath.toLowerCase()
+        if (ext.endsWith('.flac')) contentType = 'audio/flac'
+        else if (ext.endsWith('.wav')) contentType = 'audio/wav'
+        else if (ext.endsWith('.ogg')) contentType = 'audio/ogg'
+        else if (ext.endsWith('.m4a') || ext.endsWith('.aac')) contentType = 'audio/mp4'
+        else contentType = 'audio/mpeg'
+      }
 
       const range = request.headers.get('range')
 
@@ -163,7 +170,6 @@ function registerProtocol(): void {
         const start = parseInt(parts[0], 10)
         const end = parts[1] ? parseInt(parts[1], 10) : stat.size - 1
         const chunkSize = (end - start) + 1
-        console.log('[Protocol] Range Request:', start, '-', end)
 
         const stream = fs.createReadStream(filePath, { start, end })
         const webStream = Readable.toWeb(stream) as ReadableStream
@@ -174,19 +180,18 @@ function registerProtocol(): void {
             'Content-Range': `bytes ${start}-${end}/${stat.size}`,
             'Accept-Ranges': 'bytes',
             'Content-Length': chunkSize.toString(),
-            'Content-Type': 'audio/mpeg'
+            'Content-Type': contentType
           }
         })
       } else {
-        // ---- 完整文件请求（从头播放）----
-        console.log('[Protocol] 完整文件请求')
+        // ---- 完整文件请求 ----
         const stream = fs.createReadStream(filePath)
         const webStream = Readable.toWeb(stream) as ReadableStream
 
         return new Response(webStream, {
           headers: {
             'Content-Length': stat.size.toString(),
-            'Content-Type': 'audio/mpeg'
+            'Content-Type': contentType
           }
         })
       }
@@ -195,7 +200,6 @@ function registerProtocol(): void {
       return new Response('Internal Error', { status: 500 })
     }
   })
-  console.log('[Protocol] qinplayer:// 协议已注册')
 }
 
 // ---------------------------------------------------------------------------
@@ -302,13 +306,20 @@ interface ScanResult {
 
 /**
  * 将 Worker 解析的歌曲数据写入数据库
- * 使用 INSERT OR IGNORE 避免重复插入
+ * 使用 upsert：新歌插入，已有歌曲更新元数据和封面（保留 play_count）
  */
 function insertSong(song: ScanResult): void {
   const db = getDatabase()
   db.prepare(`
-    INSERT OR IGNORE INTO songs (file_path, file_name, title, artist, album, duration, cover_path, mtime)
+    INSERT INTO songs (file_path, file_name, title, artist, album, duration, cover_path, mtime)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(file_path) DO UPDATE SET
+      title = excluded.title,
+      artist = excluded.artist,
+      album = excluded.album,
+      duration = excluded.duration,
+      cover_path = COALESCE(excluded.cover_path, songs.cover_path),
+      mtime = excluded.mtime
   `).run(
     song.filePath,
     song.fileName,

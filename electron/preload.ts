@@ -17,9 +17,11 @@ import { contextBridge, ipcRenderer } from 'electron'
 contextBridge.exposeInMainWorld('electronAPI', {
   // --- 自定义协议 ---
   // 将本地文件路径转换为 qinplayer:// 协议 URL
-  // 渲染进程用这个 URL 设置 <audio> 标签的 src
   getAudioUrl: (filePath: string): string => {
     return `qinplayer://audio?path=${encodeURIComponent(filePath)}`
+  },
+  getCoverUrl: (filePath: string): string => {
+    return `qinplayer://cover?path=${encodeURIComponent(filePath)}`
   },
 
   // --- 窗口控制 ---
@@ -55,6 +57,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
 export interface ElectronAPI {
   getAudioUrl: (filePath: string) => string
+  getCoverUrl: (filePath: string) => string
   minimize: () => void
   maximize: () => void
   close: () => void

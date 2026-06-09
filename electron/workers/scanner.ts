@@ -89,10 +89,18 @@ async function parseAudioFile(filePath: string, coversDir: string): Promise<Scan
     const metadata = await mm.parseFile(filePath, { skipCovers: false })
     const { common, format } = metadata
 
-    // 提取封面并写入缓存目录
+    // 提取封面：优先内嵌，其次同目录 cover.jpg/folder.jpg
     let coverPath: string | null = null
     if (common.picture && common.picture.length > 0) {
       coverPath = await extractAndSaveCover(filePath, common.picture[0], coversDir)
+    }
+    // 没有内嵌封面 → 查找同目录的封面文件
+    if (!coverPath) {
+      sendMessage('log', `[解析] ${basename(filePath)}: 无内嵌封面，查找同目录封面`)
+      coverPath = await findLocalCover(filePath)
+      sendMessage('log', `[解析] ${basename(filePath)}: 封面结果 = ${coverPath}`)
+    } else {
+      sendMessage('log', `[解析] ${basename(filePath)}: 有内嵌封面 = ${coverPath}`)
     }
 
     return {
@@ -151,6 +159,58 @@ async function extractAndSaveCover(
   } catch {
     return null
   }
+}
+
+// ---------------------------------------------------------------------------
+// 查找同目录下的封面文件（兜底方案）
+// ---------------------------------------------------------------------------
+// 没有内嵌封面时，查找同目录下常见的封面文件名
+// ---------------------------------------------------------------------------
+
+const COVER_NAMES = ['cover.jpg', 'cover.jpeg', 'cover.png', 'folder.jpg', 'folder.jpeg', 'folder.png']
+const COVER_EXTS = ['.jpg', '.jpeg', '.png']
+
+async function findLocalCover(audioFilePath: string): Promise<string | null> {
+  try {
+    const dir = audioFilePath.substring(0, audioFilePath.lastIndexOf('\\'))
+    const fileName = audioFilePath.substring(audioFilePath.lastIndexOf('\\') + 1)
+    const nameWithoutExt = fileName.substring(0, fileName.lastIndexOf('.'))
+
+    sendMessage('log', `[封面查找] 目录: ${dir}`)
+    sendMessage('log', `[封面查找] 文件名: ${fileName}`)
+    sendMessage('log', `[封面查找] 去扩展名: ${nameWithoutExt}`)
+
+    // 优先：同名封面（如 song.mp3 → song.jpg）
+    for (const ext of COVER_EXTS) {
+      const coverPath = join(dir, nameWithoutExt + ext)
+      sendMessage('log', `[封面查找] 尝试: ${coverPath}`)
+      try {
+        await access(coverPath)
+        sendMessage('log', `[封面查找] ✅ 找到: ${coverPath}`)
+        return coverPath
+      } catch {
+        // 不存在，继续
+      }
+    }
+
+    // 兜底：通用封面名（cover.jpg / folder.jpg）
+    for (const name of COVER_NAMES) {
+      const coverPath = join(dir, name)
+      sendMessage('log', `[封面查找] 尝试通用: ${coverPath}`)
+      try {
+        await access(coverPath)
+        sendMessage('log', `[封面查找] ✅ 找到通用: ${coverPath}`)
+        return coverPath
+      } catch {
+        // 不存在，继续
+      }
+    }
+
+    sendMessage('log', `[封面查找] ❌ 未找到任何封面`)
+  } catch (e) {
+    sendMessage('log', `[封面查找] 异常: ${e}`)
+  }
+  return null
 }
 
 // ---------------------------------------------------------------------------
