@@ -10,10 +10,18 @@ import { usePlayerStore, togglePlayMode } from '../stores/playerStore'
 import type { PlayMode } from '../types'
 
 // 播放模式图标映射
+// 用简洁文字 + 符号区分，避免 emoji 在不同系统显示不一致
 const PLAY_MODE_ICONS: Record<PlayMode, string> = {
-  sequential: '↻',
-  loop: '🔁',
-  shuffle: '🔀',
+  sequential: '↻',    // 顺序：循环箭头
+  loop: '↻₁',         // 单曲循环：循环箭头 + 下标 1
+  shuffle: '⤮',       // 随机：交叉箭头
+}
+
+// 播放模式 tooltip 文字
+const PLAY_MODE_LABELS: Record<PlayMode, string> = {
+  sequential: '顺序播放',
+  loop: '单曲循环',
+  shuffle: '随机播放',
 }
 
 function PlayerBar() {
@@ -185,7 +193,11 @@ function PlayerBar() {
 
       {/* 右侧：播放模式 + 音量 */}
       <div className="player-bar__extra">
-        <button className="player-bar__btn" onClick={handleToggleMode}>
+        <button
+          className="player-bar__btn"
+          onClick={handleToggleMode}
+          title={PLAY_MODE_LABELS[playMode]}
+        >
           {PLAY_MODE_ICONS[playMode]}
         </button>
         <div className="player-bar__volume-row">

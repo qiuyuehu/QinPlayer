@@ -64,8 +64,16 @@ export function useAudioSync() {
       })
 
       engine.onEnded(() => {
-        setIsPlaying(false)
-        nextTrack()
+        const mode = usePlayerStore.getState().playMode
+        if (mode === 'loop') {
+          // 单曲循环：重新播放当前歌曲
+          engine.currentTime = 0
+          engine.play().catch(() => {})
+        } else {
+          // 顺序播放 / 随机：切到下一首
+          setIsPlaying(false)
+          nextTrack()
+        }
       })
 
       return true
@@ -105,8 +113,16 @@ export function useAudioSync() {
         }
       })
       engine.onEnded(() => {
-        setIsPlaying(false)
-        nextTrack()
+        const mode = usePlayerStore.getState().playMode
+        if (mode === 'loop') {
+          // 单曲循环：重新播放当前歌曲
+          engine.currentTime = 0
+          engine.play().catch(() => {})
+        } else {
+          // 顺序播放 / 随机：切到下一首
+          setIsPlaying(false)
+          nextTrack()
+        }
       })
     }
 
