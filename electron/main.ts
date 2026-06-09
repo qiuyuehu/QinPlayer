@@ -5,7 +5,7 @@
 // 注意：主进程通过 electron-vite 编译为 CommonJS，但源码用 TypeScript 编写
 // =============================================================================
 
-import { app, BrowserWindow, ipcMain, protocol, dialog, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, protocol, dialog, shell, nativeTheme } from 'electron'
 import { join } from 'path'
 import { initDatabase, closeDatabase, getDatabase } from './db/database'
 import { registerSongsIPC } from './ipc/songs'
@@ -500,6 +500,13 @@ app.whenReady().then(() => {
   // 7. 启动增量扫描（后台自动检测新增/修改的歌曲）
   // 窗口创建后再启动，确保渲染进程已准备好接收事件
   startIncrementalScan()
+
+  // 8. 监听系统主题变化（nativeTheme），主动通知渲染进程
+  // 渲染进程的 matchMedia 也能监听，但主进程监听更可靠（双重保险）
+  nativeTheme.on('updated', () => {
+    const systemTheme = nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
+    mainWindow?.webContents.send('theme:system-changed', systemTheme)
+  })
 
   // macOS：点击 dock 图标时重新创建窗口
   app.on('activate', () => {

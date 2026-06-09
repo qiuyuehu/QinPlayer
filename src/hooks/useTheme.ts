@@ -36,14 +36,25 @@ export function useTheme() {
     applyTheme(theme)
   }, [theme])
 
-  // system 模式下监听系统主题变化
+  // system 模式下监听系统主题变化（两套机制互补）
+  // 1. matchMedia：渲染进程自己监听（响应快）
+  // 2. 主进程 nativeTheme：主进程推送（更可靠，作为备份）
   useEffect(() => {
     if (theme !== 'system') return
 
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
     const handler = () => applyTheme('system')
     mediaQuery.addEventListener('change', handler)
-    return () => mediaQuery.removeEventListener('change', handler)
+
+    // 监听主进程 nativeTheme 推送
+    const unsubscribe = window.electronAPI.on('theme:system-changed', () => {
+      applyTheme('system')
+    })
+
+    return () => {
+      mediaQuery.removeEventListener('change', handler)
+      unsubscribe()
+    }
   }, [theme])
 
   return { theme }
