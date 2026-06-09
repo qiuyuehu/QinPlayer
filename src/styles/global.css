@@ -393,6 +393,15 @@ html, body {
   font-size: 13px;
 }
 
+/* 虚拟列表滚动容器 */
+.song-list__scroll {
+  height: calc(100vh - 260px);  /* 填满剩余空间（减去标题栏+导航+表头+播放条） */
+  overflow: auto;
+  border-radius: 0 0 8px 8px;
+  border: 1px solid var(--border);
+  border-top: none;
+}
+
 .song-list__header {
   display: flex;
   align-items: center;
@@ -411,16 +420,17 @@ html, body {
   display: flex;
   align-items: center;
   padding: 8px 12px;
+  height: 44px;  /* 与 ROW_HEIGHT 常量一致，虚拟列表需要精确高度 */
   font-size: 13px;
   color: var(--text-primary);
   border-bottom: 1px solid var(--border);
   cursor: pointer;
   transition: background-color 0.1s;
+  box-sizing: border-box;
 }
 
 .song-list__row:last-child {
   border-bottom: none;
-  border-radius: 0 0 8px 8px;
 }
 
 .song-list__row:hover {
