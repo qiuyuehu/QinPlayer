@@ -10,10 +10,14 @@ import Sidebar from './components/Sidebar'
 import Content from './components/Content'
 import PlayerBar from './components/PlayerBar'
 import { useTheme } from './hooks/useTheme'
+import { useAudioSync } from './hooks/useAudioSync'
 
 function App() {
   // 初始化主题系统（监听 theme 状态，切换 data-theme 属性）
   useTheme()
+
+  // 初始化音频同步（监听 Zustand 状态，统一驱动 AudioEngine）
+  useAudioSync()
 
   return (
     <div className="app">

@@ -2,17 +2,19 @@
 // QinPlayer — Web Audio API 播放引擎
 // =============================================================================
 // 职责：封装音频播放核心逻辑，管理 AudioContext 生命周期
-// 设计：基于 Web Audio API，通过 GainNode 控制音量，预留淡入淡出接口
-// 注意：AudioContext 在用户首次交互前处于 suspended 状态，
-//       必须在 play() 中调用 resume() 解锁
+// 设计：
+//   - 基础播放直接用 HTMLAudioElement（简单可靠）
+//   - Web Audio API（GainNode）仅在需要淡入淡出时接入
+//   - AudioContext 在用户首次交互后才创建（避免白屏）
 // =============================================================================
 
 export class AudioEngine {
   // --- 核心节点 ---
-  private audioContext: AudioContext
-  private gainNode: GainNode
+  private audioContext: AudioContext | null = null  // 延迟创建
+  private gainNode: GainNode | null = null
   private audioElement: HTMLAudioElement
   private sourceNode: MediaElementAudioSourceNode | null = null
+  private webAudioConnected = false  // 是否已接入 Web Audio 图
 
   // --- 状态回调（外部注册）---
   private _onTimeUpdate: ((currentTime: number, duration: number) => void) | null = null
@@ -24,21 +26,12 @@ export class AudioEngine {
   private readonly _updateInterval = 250  // 每 250ms 更新一次（约 4fps）
 
   constructor() {
-    // 创建 AudioContext（Chrome 要求用户交互后才能 resume）
-    this.audioContext = new AudioContext()
-
-    // 创建 GainNode（音量控制）
-    this.gainNode = this.audioContext.createGain()
-    this.gainNode.connect(this.audioContext.destination)
-
-    // 创建 HTMLAudioElement（用于加载和播放音频）
-    this.audioElement = new HTMLAudioElement()
-    this.audioElement.crossOrigin = 'anonymous'  // 允许跨域音频
+    // 创建 HTMLAudioElement（基础播放用，不依赖 Web Audio API）
+    this.audioElement = new Audio()
 
     // 监听 timeupdate 事件（播放进度更新）
     this.audioElement.addEventListener('timeupdate', () => {
       const now = Date.now()
-      // 节流：避免过于频繁的回调导致性能问题
       if (now - this._lastUpdateTime < this._updateInterval) return
       this._lastUpdateTime = now
 
@@ -60,6 +53,41 @@ export class AudioEngine {
         this._onLoadedMetadata(this.audioElement.duration)
       }
     })
+
+    // 监听加载错误
+    this.audioElement.addEventListener('error', () => {
+      const err = this.audioElement.error
+      console.error('[AudioEngine] 加载错误:', err?.code, err?.message, 'src:', this.audioElement.src)
+    })
+  }
+
+  // ---------------------------------------------------------------------------
+  // 确保 Web Audio API 已接入（延迟初始化，需要用户交互上下文）
+  // ---------------------------------------------------------------------------
+  private ensureWebAudio(): void {
+    if (this.webAudioConnected) return
+
+    // 创建 AudioContext（需要用户交互上下文）
+    if (!this.audioContext) {
+      this.audioContext = new AudioContext()
+    }
+
+    // 解锁 AudioContext
+    if (this.audioContext.state === 'suspended') {
+      this.audioContext.resume()
+    }
+
+    // 创建 GainNode
+    this.gainNode = this.audioContext.createGain()
+    this.gainNode.connect(this.audioContext.destination)
+
+    // 创建 MediaElementAudioSourceNode（只能创建一次）
+    if (!this.sourceNode) {
+      this.sourceNode = this.audioContext.createMediaElementSource(this.audioElement)
+      this.sourceNode.connect(this.gainNode)
+    }
+
+    this.webAudioConnected = true
   }
 
   // ---------------------------------------------------------------------------
@@ -71,14 +99,7 @@ export class AudioEngine {
    * @param protocolUrl qinplayer:// 协议 URL（由 preload.getAudioUrl 生成）
    */
   load(protocolUrl: string): void {
-    // 如果已经有 sourceNode，先断开
-    // 注意：不能重复创建 MediaElementAudioSourceNode（会报错）
-    if (!this.sourceNode) {
-      // 首次加载：创建 MediaElementAudioSourceNode
-      this.sourceNode = this.audioContext.createMediaElementSource(this.audioElement)
-      this.sourceNode.connect(this.gainNode)
-    }
-
+    console.log('[AudioEngine] 加载:', protocolUrl)
     this.audioElement.src = protocolUrl
     this.audioElement.load()
   }
@@ -88,10 +109,8 @@ export class AudioEngine {
    * 注意：首次播放前必须解锁 AudioContext（Chrome 自动播放策略）
    */
   async play(): Promise<void> {
-    // 解锁 AudioContext（如果处于 suspended 状态）
-    if (this.audioContext.state === 'suspended') {
-      await this.audioContext.resume()
-    }
+    // 首次播放时接入 Web Audio API（此时已有用户交互上下文）
+    this.ensureWebAudio()
 
     return this.audioElement.play()
   }
@@ -105,13 +124,16 @@ export class AudioEngine {
 
   /**
    * 设置音量 (0-1)
-   * 使用 GainNode 实现，比直接设置 audioElement.volume 更灵活
-   * （支持淡入淡出等高级功能）
+   * 如果 Web Audio 已接入，用 GainNode（支持淡入淡出）
+   * 否则用 audioElement.volume（基础音量控制）
    */
   setVolume(vol: number): void {
     const v = Math.max(0, Math.min(1, vol))
-    // 使用 setTargetAtTime 实现平滑过渡，避免爆音
-    this.gainNode.gain.setTargetAtTime(v, this.audioContext.currentTime, 0.01)
+    if (this.gainNode && this.webAudioConnected) {
+      this.gainNode.gain.setTargetAtTime(v, this.audioContext!.currentTime, 0.01)
+    } else {
+      this.audioElement.volume = v
+    }
   }
 
   /**
@@ -162,7 +184,66 @@ export class AudioEngine {
   }
 
   // ---------------------------------------------------------------------------
-  // 高级功能（Phase 3 实现）
+  // 音频输出设备切换
+  // ---------------------------------------------------------------------------
+
+  /**
+   * 获取当前选中的输出设备 ID
+   * 优先从 localStorage 读取持久化偏好，否则返回 'default'
+   */
+  getOutputDeviceId(): string {
+    return localStorage.getItem('qinplayer-output-device') || 'default'
+  }
+
+  /**
+   * 切换音频输出设备
+   * 优先用 AudioContext.setSinkId()（Web Audio API 接入后音频由 AudioContext 控制）
+   * 回退用 HTMLAudioElement.setSinkId()（Web Audio 未接入时）
+   * @param deviceId 设备 ID（从 enumerateDevices 获取）或 'default' 恢复默认
+   */
+  async setOutputDevice(deviceId: string): Promise<void> {
+    // 检查浏览器是否支持 setSinkId
+    if (!('setSinkId' in this.audioElement)) {
+      console.warn('[AudioEngine] 当前环境不支持 setSinkId')
+      return
+    }
+
+    try {
+      // Web Audio API 已接入时，用 AudioContext.setSinkId()
+      // 因为此时音频输出由 AudioContext 控制，HTMLAudioElement.setSinkId() 无效
+      if (this.audioContext && this.webAudioConnected) {
+        await (this.audioContext as any).setSinkId(deviceId)
+        console.log('[AudioEngine] AudioContext 输出设备已切换为:', deviceId)
+      } else {
+        // Web Audio 未接入时，用 HTMLAudioElement.setSinkId()
+        await (this.audioElement as any).setSinkId(deviceId)
+        console.log('[AudioEngine] AudioElement 输出设备已切换为:', deviceId)
+      }
+
+      // 持久化用户选择
+      localStorage.setItem('qinplayer-output-device', deviceId)
+    } catch (err) {
+      console.error('[AudioEngine] 切换输出设备失败:', err)
+      throw err
+    }
+  }
+
+  /**
+   * 枚举可用的音频输出设备
+   * 返回所有 audiooutput 类型的设备列表
+   */
+  async enumerateOutputDevices(): Promise<MediaDeviceInfo[]> {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices()
+      return devices.filter(d => d.kind === 'audiooutput')
+    } catch (err) {
+      console.error('[AudioEngine] 枚举音频设备失败:', err)
+      return []
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 高级功能（需要 Web Audio API）
   // ---------------------------------------------------------------------------
 
   /**
@@ -171,11 +252,12 @@ export class AudioEngine {
    * @param targetVolume 目标音量 (0-1)
    */
   fadeIn(duration: number, targetVolume: number = 1): void {
-    const gain = this.gainNode.gain
-    gain.setValueAtTime(0, this.audioContext.currentTime)
+    this.ensureWebAudio()
+    const gain = this.gainNode!.gain
+    gain.setValueAtTime(0, this.audioContext!.currentTime)
     gain.linearRampToValueAtTime(
       targetVolume,
-      this.audioContext.currentTime + duration / 1000
+      this.audioContext!.currentTime + duration / 1000
     )
   }
 
@@ -184,10 +266,11 @@ export class AudioEngine {
    * @param duration 淡出时长（毫秒）
    */
   fadeOut(duration: number): void {
-    const gain = this.gainNode.gain
+    this.ensureWebAudio()
+    const gain = this.gainNode!.gain
     const currentVolume = gain.value
-    gain.setValueAtTime(currentVolume, this.audioContext.currentTime)
-    gain.linearRampToValueAtTime(0, this.audioContext.currentTime + duration / 1000)
+    gain.setValueAtTime(currentVolume, this.audioContext!.currentTime)
+    gain.linearRampToValueAtTime(0, this.audioContext!.currentTime + duration / 1000)
   }
 
   /**
@@ -196,7 +279,7 @@ export class AudioEngine {
   destroy(): void {
     this.audioElement.pause()
     this.audioElement.src = ''
-    if (this.audioContext.state !== 'closed') {
+    if (this.audioContext && this.audioContext.state !== 'closed') {
       this.audioContext.close()
     }
   }
@@ -205,14 +288,18 @@ export class AudioEngine {
 // ---------------------------------------------------------------------------
 // 单例（全局唯一播放引擎实例）
 // ---------------------------------------------------------------------------
-// 渲染进程中所有组件共享同一个 AudioEngine 实例
-// 通过 React Context 或直接 import 使用
 
 let engineInstance: AudioEngine | null = null
 
+/** 获取 AudioEngine 单例（懒初始化，首次调用时创建） */
 export function getAudioEngine(): AudioEngine {
   if (!engineInstance) {
     engineInstance = new AudioEngine()
   }
   return engineInstance
+}
+
+/** 检查引擎是否已被创建（不触发创建） */
+export function hasAudioEngine(): boolean {
+  return engineInstance !== null
 }

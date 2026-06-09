@@ -1,21 +1,22 @@
 // =============================================================================
-// QinPlayer — Electron API 类型声明（渲染进程用）
+// QinPlayer — Electron API 类型声明
 // =============================================================================
-// 声明 window.electronAPI 的类型，让渲染进程的 TypeScript 编译通过
-// 实际实现在 electron/preload.ts 中通过 contextBridge 暴露
+// 为 window.electronAPI 提供 TypeScript 类型支持
+// 实现在 electron/preload.ts 的 contextBridge.exposeInMainWorld 中
 // =============================================================================
 
 export interface ElectronAPI {
-  // 自定义协议：将本地文件路径转为 qinplayer:// URL
+  /** 将本地文件路径转换为 qinplayer:// 协议 URL */
   getAudioUrl: (filePath: string) => string
-
-  // 窗口控制
+  /** 最小化窗口 */
   minimize: () => void
+  /** 最大化/还原窗口 */
   maximize: () => void
+  /** 关闭窗口 */
   close: () => void
-
-  // 通用 IPC
+  /** 双向 IPC 通信（渲染 → 主进程） */
   invoke: (channel: string, ...args: unknown[]) => Promise<unknown>
+  /** 监听主进程推送的消息 */
   on: (channel: string, callback: (...args: unknown[]) => void) => () => void
 }
 

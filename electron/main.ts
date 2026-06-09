@@ -5,8 +5,9 @@
 // 注意：主进程通过 electron-vite 编译为 CommonJS，但源码用 TypeScript 编写
 // =============================================================================
 
-import { app, BrowserWindow, ipcMain, protocol } from 'electron'
+import { app, BrowserWindow, ipcMain, protocol, dialog } from 'electron'
 import { join } from 'path'
+import { readdir, stat } from 'fs/promises'
 
 // ---------------------------------------------------------------------------
 // 全局引用
@@ -122,50 +123,118 @@ function registerWindowIPC(): void {
 
 function registerProtocol(): void {
   protocol.handle('qinplayer', (request) => {
-    const url = new URL(request.url)
-    const filePath = decodeURIComponent(url.searchParams.get('path') || '')
+    console.log('[Protocol] 收到请求:', request.url)
 
-    // 同步检查文件是否存在（protocol.handle 回调中允许同步操作）
-    const fs = require('fs')
-    const { Readable } = require('stream')
+    try {
+      const url = new URL(request.url)
+      const filePath = decodeURIComponent(url.searchParams.get('path') || '')
+      console.log('[Protocol] 解析文件路径:', filePath)
 
-    if (!filePath || !fs.existsSync(filePath)) {
-      return new Response('Not Found', { status: 404 })
+      // 同步检查文件是否存在（protocol.handle 回调中允许同步操作）
+      const fs = require('fs') as typeof import('fs')
+      const { Readable } = require('stream') as typeof import('stream')
+
+      if (!filePath) {
+        console.log('[Protocol] 错误：路径为空')
+        return new Response('Missing path', { status: 400 })
+      }
+
+      if (!fs.existsSync(filePath)) {
+        console.log('[Protocol] 错误：文件不存在')
+        return new Response('Not Found', { status: 404 })
+      }
+
+      const stat = fs.statSync(filePath)
+      console.log('[Protocol] 文件大小:', stat.size, 'bytes')
+
+      const range = request.headers.get('range')
+
+      if (range) {
+        // ---- Range Request（拖动进度条 / 缓冲）----
+        const parts = range.replace(/bytes=/, '').split('-')
+        const start = parseInt(parts[0], 10)
+        const end = parts[1] ? parseInt(parts[1], 10) : stat.size - 1
+        const chunkSize = (end - start) + 1
+        console.log('[Protocol] Range Request:', start, '-', end)
+
+        const stream = fs.createReadStream(filePath, { start, end })
+        const webStream = Readable.toWeb(stream) as ReadableStream
+
+        return new Response(webStream, {
+          status: 206,
+          headers: {
+            'Content-Range': `bytes ${start}-${end}/${stat.size}`,
+            'Accept-Ranges': 'bytes',
+            'Content-Length': chunkSize.toString(),
+            'Content-Type': 'audio/mpeg'
+          }
+        })
+      } else {
+        // ---- 完整文件请求（从头播放）----
+        console.log('[Protocol] 完整文件请求')
+        const stream = fs.createReadStream(filePath)
+        const webStream = Readable.toWeb(stream) as ReadableStream
+
+        return new Response(webStream, {
+          headers: {
+            'Content-Length': stat.size.toString(),
+            'Content-Type': 'audio/mpeg'
+          }
+        })
+      }
+    } catch (err) {
+      console.error('[Protocol] 处理异常:', err)
+      return new Response('Internal Error', { status: 500 })
     }
+  })
+  console.log('[Protocol] qinplayer:// 协议已注册')
+}
 
-    const stat = fs.statSync(filePath)
-    const range = request.headers.get('range')
+// ---------------------------------------------------------------------------
+// 文件夹扫描 IPC
+// ---------------------------------------------------------------------------
 
-    if (range) {
-      // ---- Range Request（拖动进度条 / 缓冲）----
-      const parts = range.replace(/bytes=/, '').split('-')
-      const start = parseInt(parts[0], 10)
-      const end = parts[1] ? parseInt(parts[1], 10) : stat.size - 1
-      const chunkSize = (end - start) + 1
+// 支持的音频文件格式
+const AUDIO_EXTENSIONS = ['.mp3', '.flac', '.wav', '.m4a', '.ogg', '.aac', '.wma']
 
-      const stream = fs.createReadStream(filePath, { start, end })
-      const webStream = Readable.toWeb(stream) as ReadableStream
-
-      return new Response(webStream, {
-        status: 206,
-        headers: {
-          'Content-Range': `bytes ${start}-${end}/${stat.size}`,
-          'Accept-Ranges': 'bytes',
-          'Content-Length': chunkSize.toString(),
-          'Content-Type': 'audio/mpeg'
-        }
-      })
+/**
+ * 递归扫描目录中的音频文件（异步，不阻塞事件循环）
+ * 使用 fs/promises 而非 readdirSync/statSync
+ */
+async function scanDirectory(dir: string, fileList: string[] = []): Promise<string[]> {
+  const entries = await readdir(dir)
+  for (const entry of entries) {
+    const fullPath = join(dir, entry)
+    const fileStat = await stat(fullPath)
+    if (fileStat.isDirectory()) {
+      await scanDirectory(fullPath, fileList)
     } else {
-      // ---- 完整文件请求（从头播放）----
-      const stream = fs.createReadStream(filePath)
-      const webStream = Readable.toWeb(stream) as ReadableStream
+      const ext = fullPath.toLowerCase().slice(fullPath.lastIndexOf('.'))
+      if (AUDIO_EXTENSIONS.includes(ext)) {
+        fileList.push(fullPath)
+      }
+    }
+  }
+  return fileList
+}
 
-      return new Response(webStream, {
-        headers: {
-          'Content-Length': stat.size.toString(),
-          'Content-Type': 'audio/mpeg'
-        }
-      })
+function registerScanIPC(): void {
+  // 打开文件夹选择对话框
+  ipcMain.handle('select-folder', async () => {
+    const result = await dialog.showOpenDialog(mainWindow!, {
+      properties: ['openDirectory']
+    })
+    if (result.canceled) return null
+    return result.filePaths[0]
+  })
+
+  // 扫描文件夹中的音频文件（异步，不阻塞 UI）
+  ipcMain.handle('scan-folder', async (_event, folderPath: string) => {
+    try {
+      const files = await scanDirectory(folderPath)
+      return { success: true, files }
+    } catch (e) {
+      return { success: false, files: [], error: String(e) }
     }
   })
 }
@@ -181,7 +250,10 @@ app.whenReady().then(() => {
   // 2. 注册窗口控制 IPC
   registerWindowIPC()
 
-  // 3. 创建主窗口
+  // 3. 注册文件夹扫描 IPC
+  registerScanIPC()
+
+  // 4. 创建主窗口
   createWindow()
 
   // macOS：点击 dock 图标时重新创建窗口
