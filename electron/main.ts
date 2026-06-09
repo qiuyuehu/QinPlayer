@@ -120,6 +120,24 @@ function registerWindowIPC(): void {
   ipcMain.handle('open-folder', async (_event, folderPath: string) => {
     await shell.openPath(folderPath)
   })
+
+  // 主题切换 → 更新标题栏颜色（Windows 原生 overlay）
+  ipcMain.on('theme-changed', (_event, theme: 'dark' | 'light') => {
+    if (!mainWindow) return
+    if (theme === 'light') {
+      mainWindow.setTitleBarOverlay({
+        color: '#f5f5f7',
+        symbolColor: '#1d1d1f',
+        height: 36
+      })
+    } else {
+      mainWindow.setTitleBarOverlay({
+        color: '#1a1a1a',
+        symbolColor: '#e8e8ef',
+        height: 36
+      })
+    }
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -234,12 +252,14 @@ function registerScanIPC(): void {
       // 封面缓存目录
       const coversDir = join(app.getPath('userData'), 'covers')
 
-      // 创建 Worker 线程
+      // 创建 Worker 线程（用户手动扫描 = 全量模式）
       const workerPath = join(__dirname, 'scanner.js')
       scanWorker = new Worker(workerPath, {
         workerData: {
           folderPaths: [folderPath],
-          coversDir
+          coversDir,
+          mode: 'full',           // 用户手动选择文件夹时走全量扫描
+          existingFiles: {}        // 全量模式不需要已有文件映射
         }
       })
 
@@ -333,6 +353,126 @@ function insertSong(song: ScanResult): void {
 }
 
 // ---------------------------------------------------------------------------
+// 增量扫描相关辅助函数
+// ---------------------------------------------------------------------------
+
+/**
+ * 从数据库获取所有歌曲的 file_path + mtime（增量对比用）
+ * 返回 Map<filePath, mtime>
+ */
+function getExistingSongs(): Record<string, number> {
+  const db = getDatabase()
+  const rows = db.prepare('SELECT file_path, mtime FROM songs').all() as { file_path: string; mtime: number }[]
+  const map: Record<string, number> = {}
+  for (const row of rows) {
+    map[row.file_path] = row.mtime
+  }
+  return map
+}
+
+/**
+ * 清理已删除的歌曲记录
+ * 对比数据库中的 file_path 和文件系统实际存在的文件，删除不存在的记录
+ */
+function cleanDeletedSongs(existingPaths: string[]): number {
+  const db = getDatabase()
+  const dbSongs = db.prepare('SELECT id, file_path FROM songs').all() as { id: number; file_path: string }[]
+  const pathSet = new Set(existingPaths)
+
+  let deletedCount = 0
+  const deleteStmt = db.prepare('DELETE FROM songs WHERE id = ?')
+  for (const song of dbSongs) {
+    if (!pathSet.has(song.file_path)) {
+      deleteStmt.run(song.id)
+      deletedCount++
+    }
+  }
+
+  if (deletedCount > 0) {
+    console.log(`[增量扫描] 已清理 ${deletedCount} 条已删除文件的记录`)
+  }
+  return deletedCount
+}
+
+/**
+ * 启动增量扫描（应用启动时自动调用）
+ * 从数据库读取已注册的音乐文件夹和已有歌曲，启动 Worker 做增量扫描
+ */
+function startIncrementalScan(): void {
+  try {
+    const db = getDatabase()
+
+    // 1. 读取已注册的音乐文件夹
+    const folders = db.prepare('SELECT path FROM music_folders ORDER BY id').all() as { path: string }[]
+    if (folders.length === 0) {
+      console.log('[增量扫描] 没有已注册的音乐文件夹，跳过')
+      return
+    }
+
+    const folderPaths = folders.map(f => f.path)
+
+    // 2. 读取已有歌曲的 file_path + mtime
+    const existingFiles = getExistingSongs()
+    console.log(`[增量扫描] 启动：${folderPaths.length} 个文件夹，${Object.keys(existingFiles).length} 首已有歌曲`)
+
+    // 3. 封面缓存目录
+    const coversDir = join(app.getPath('userData'), 'covers')
+
+    // 4. 创建增量扫描 Worker
+    const workerPath = join(__dirname, 'scanner.js')
+    const worker = new Worker(workerPath, {
+      workerData: {
+        folderPaths,
+        coversDir,
+        mode: 'incremental',
+        existingFiles
+      }
+    })
+
+    // 5. 监听 Worker 消息（复用已有 IPC 事件，渲染进程无需改动）
+    worker.on('message', (msg: { type: string; data: unknown }) => {
+      switch (msg.type) {
+        case 'song':
+          // 新增/更新的歌曲，写入数据库
+          insertSong(msg.data as ScanResult)
+          // 推送给渲染进程
+          mainWindow?.webContents.send('scan:song-found', msg.data)
+          break
+
+        case 'progress':
+          mainWindow?.webContents.send('scan:progress', msg.data)
+          break
+
+        case 'existing-paths':
+          // Worker 发送了文件系统中实际存在的所有文件路径，清理已删除的记录
+          const { paths } = msg.data as { paths: string[] }
+          cleanDeletedSongs(paths)
+          break
+
+        case 'done':
+          console.log('[增量扫描] 完成')
+          mainWindow?.webContents.send('scan:done', msg.data)
+          break
+
+        case 'error':
+          console.error('[增量扫描] 错误:', msg.data)
+          break
+
+        case 'log':
+          console.log('[增量扫描]', msg.data)
+          break
+      }
+    })
+
+    worker.on('error', (err) => {
+      console.error('[增量扫描] Worker 异常:', err)
+    })
+  } catch (err) {
+    console.error('[增量扫描] 启动失败:', err)
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 应用生命周期
 // ---------------------------------------------------------------------------
 
@@ -356,6 +496,10 @@ app.whenReady().then(() => {
 
   // 6. 创建主窗口
   createWindow()
+
+  // 7. 启动增量扫描（后台自动检测新增/修改的歌曲）
+  // 窗口创建后再启动，确保渲染进程已准备好接收事件
+  startIncrementalScan()
 
   // macOS：点击 dock 图标时重新创建窗口
   app.on('activate', () => {

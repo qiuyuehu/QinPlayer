@@ -18,6 +18,8 @@ export interface ElectronAPI {
   close: () => void
   /** 双向 IPC 通信（渲染 → 主进程） */
   invoke: (channel: string, ...args: unknown[]) => Promise<unknown>
+  /** 单向发送（渲染 → 主进程） */
+  send: (channel: string, ...args: unknown[]) => void
   /** 监听主进程推送的消息 */
   on: (channel: string, callback: (...args: unknown[]) => void) => () => void
 }

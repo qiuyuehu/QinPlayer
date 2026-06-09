@@ -29,6 +29,8 @@ interface ScanResult {
 interface WorkerData {
   folderPaths: string[]
   coversDir: string
+  mode: 'full' | 'incremental'   // 扫描模式：全量 / 增量
+  existingFiles: Record<string, number>  // filePath → mtime 映射（增量模式用）
 }
 
 // 支持的音频格式
@@ -84,6 +86,9 @@ async function scanDirectory(dir: string): Promise<string[]> {
 
 async function parseAudioFile(filePath: string, coversDir: string): Promise<ScanResult | null> {
   try {
+    // 获取文件真实 mtime（增量扫描对比用）
+    const fileStat = await stat(filePath)
+
     // 动态导入 music-metadata（ESM 模块）
     const mm = await import('music-metadata')
     const metadata = await mm.parseFile(filePath, { skipCovers: false })
@@ -111,10 +116,11 @@ async function parseAudioFile(filePath: string, coversDir: string): Promise<Scan
       album: common.album || null,
       duration: format.duration || null,
       coverPath,
-      mtime: Date.now()
+      mtime: fileStat.mtimeMs  // 使用文件真实修改时间，不是 Date.now()
     }
   } catch {
     // 解析失败时，返回基本信息（用文件名兜底）
+    const fileStat = await stat(filePath).catch(() => null)
     return {
       filePath,
       fileName: basename(filePath),
@@ -123,7 +129,7 @@ async function parseAudioFile(filePath: string, coversDir: string): Promise<Scan
       album: null,
       duration: null,
       coverPath: null,
-      mtime: Date.now()
+      mtime: fileStat?.mtimeMs ?? 0
     }
   }
 }
@@ -214,13 +220,49 @@ async function findLocalCover(audioFilePath: string): Promise<string | null> {
 }
 
 // ---------------------------------------------------------------------------
-// 主扫描逻辑
+// 递归扫描目录中的音频文件（返回路径 + mtime，增量模式用）
 // ---------------------------------------------------------------------------
 
-async function scan(): Promise<void> {
-  const { folderPaths, coversDir } = workerData as WorkerData
-  sendMessage('log', `开始扫描，共 ${folderPaths.length} 个文件夹`)
+interface FileWithMtime {
+  filePath: string
+  mtimeMs: number
+}
 
+async function scanDirectoryWithStat(dir: string): Promise<FileWithMtime[]> {
+  const files: FileWithMtime[] = []
+
+  try {
+    const entries = await readdir(dir)
+    for (const entry of entries) {
+      const fullPath = join(dir, entry)
+      try {
+        const fileStat = await stat(fullPath)
+        if (fileStat.isDirectory()) {
+          // 递归扫描子目录
+          const subFiles = await scanDirectoryWithStat(fullPath)
+          files.push(...subFiles)
+        } else {
+          const ext = extname(fullPath).toLowerCase()
+          if (AUDIO_EXTENSIONS.has(ext)) {
+            files.push({ filePath: fullPath, mtimeMs: fileStat.mtimeMs })
+          }
+        }
+      } catch {
+        // 跳过无权限的文件/目录
+      }
+    }
+  } catch {
+    // 跳过无权限的目录
+  }
+
+  return files
+}
+
+// ---------------------------------------------------------------------------
+// 全量扫描（原有逻辑）
+// ---------------------------------------------------------------------------
+
+async function fullScan(folderPaths: string[], coversDir: string): Promise<void> {
   // 1. 收集所有音频文件路径
   const allFiles: string[] = []
   for (const folder of folderPaths) {
@@ -228,7 +270,7 @@ async function scan(): Promise<void> {
     allFiles.push(...files)
   }
 
-  sendMessage('log', `发现 ${allFiles.length} 个音频文件`)
+  sendMessage('log', `全量扫描：发现 ${allFiles.length} 个音频文件`)
   sendMessage('total', { total: allFiles.length })
 
   // 2. 逐个解析 ID3 标签
@@ -237,7 +279,6 @@ async function scan(): Promise<void> {
     try {
       const result = await parseAudioFile(filePath, coversDir)
       if (result) {
-        // 每解析完一首，立即发给主进程
         sendMessage('song', result)
       }
     } catch (err) {
@@ -256,15 +297,96 @@ async function scan(): Promise<void> {
       })
     }
   }
-
-  // 3. 扫描完成
-  sendMessage('done', { total: allFiles.length })
 }
 
 // ---------------------------------------------------------------------------
-// 启动扫描
+// 增量扫描（启动时自动检测新增/修改的文件）
+// ---------------------------------------------------------------------------
+// 逻辑：扫描目录 → 对比 existingFiles 映射 → 只解析新增/修改的文件
+// 增量扫描不显示进度条（预期秒级完成）
 // ---------------------------------------------------------------------------
 
-scan().catch(err => {
+async function incrementalScan(
+  folderPaths: string[],
+  coversDir: string,
+  existingFiles: Record<string, number>
+): Promise<void> {
+  // 1. 收集所有音频文件 + 真实 mtime
+  const allFiles: FileWithMtime[] = []
+  for (const folder of folderPaths) {
+    const files = await scanDirectoryWithStat(folder)
+    allFiles.push(...files)
+  }
+
+  sendMessage('log', `增量扫描：文件系统 ${allFiles.length} 首，数据库 ${Object.keys(existingFiles).length} 首`)
+
+  // 2. 筛选需要解析的文件：新增 或 mtime 变化
+  const toProcess: FileWithMtime[] = []
+  for (const file of allFiles) {
+    const dbMtime = existingFiles[file.filePath]
+    if (dbMtime === undefined || file.mtimeMs > dbMtime) {
+      // 新增文件 或 文件修改时间比数据库记录的更新
+      toProcess.push(file)
+    }
+  }
+
+  sendMessage('log', `增量扫描：${toProcess.length} 首需要更新`)
+
+  if (toProcess.length === 0) {
+    // 没有需要更新的，发送空结果
+    sendMessage('total', { total: 0 })
+    return
+  }
+
+  sendMessage('total', { total: toProcess.length })
+
+  // 3. 只解析需要更新的文件
+  let processed = 0
+  for (const file of toProcess) {
+    try {
+      const result = await parseAudioFile(file.filePath, coversDir)
+      if (result) {
+        sendMessage('song', result)
+      }
+    } catch (err) {
+      sendMessage('error', { file: file.filePath, message: String(err) })
+    }
+    processed++
+    // 增量扫描每 5 首报告一次进度（文件少，频率高一点）
+    if (processed % 5 === 0 || processed === toProcess.length) {
+      const percent = Math.round((processed / toProcess.length) * 100)
+      sendMessage('progress', {
+        percent,
+        currentFile: basename(file.filePath),
+        processed,
+        total: toProcess.length
+      })
+    }
+  }
+
+  // 4. 发送文件系统中实际存在的所有文件路径（主进程用来清理已删除的记录）
+  const currentPaths = allFiles.map(f => f.filePath)
+  sendMessage('existing-paths', { paths: currentPaths })
+}
+
+// ---------------------------------------------------------------------------
+// 启动扫描（根据 mode 路由到全量或增量）
+// ---------------------------------------------------------------------------
+
+async function main(): Promise<void> {
+  const { folderPaths, coversDir, mode, existingFiles } = workerData as WorkerData
+  sendMessage('log', `Worker 启动，模式=${mode}，文件夹=${folderPaths.length} 个`)
+
+  if (mode === 'incremental') {
+    await incrementalScan(folderPaths, coversDir, existingFiles)
+  } else {
+    await fullScan(folderPaths, coversDir)
+  }
+
+  // 扫描完成
+  sendMessage('done', { total: 0 })
+}
+
+main().catch(err => {
   sendMessage('error', { message: `扫描失败: ${err}` })
 })

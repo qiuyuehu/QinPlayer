@@ -38,6 +38,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return ipcRenderer.invoke(channel, ...args)
   },
 
+  // 单向发送（渲染 → 主进程）
+  send: (channel: string, ...args: unknown[]) => {
+    ipcRenderer.send(channel, ...args)
+  },
+
   // 监听主进程推送的消息
   on: (channel: string, callback: (...args: unknown[]) => void) => {
     const subscription = (_event: Electron.IpcRendererEvent, ...args: unknown[]) => {
@@ -62,6 +67,7 @@ export interface ElectronAPI {
   maximize: () => void
   close: () => void
   invoke: (channel: string, ...args: unknown[]) => Promise<unknown>
+  send: (channel: string, ...args: unknown[]) => void
   on: (channel: string, callback: (...args: unknown[]) => void) => () => void
 }
 

@@ -14,6 +14,8 @@ import PlayerBar from './components/PlayerBar'
 import { useTheme } from './hooks/useTheme'
 import { useAudioSync } from './hooks/useAudioSync'
 import { restorePlayerState } from './stores/playerStore'
+import { useUIStore } from './stores/uiStore'
+import type { Theme } from './types'
 
 function App() {
   // 水合状态（数据库加载完成前显示骨架屏）
@@ -25,11 +27,27 @@ function App() {
   // 初始化音频同步
   useAudioSync()
 
-  // 启动时恢复播放状态
+  // 启动时恢复播放状态 + 主题设置
   useEffect(() => {
-    restorePlayerState().finally(() => {
-      setIsHydrated(true)
-    })
+    async function hydrate() {
+      try {
+        // 并行恢复：播放状态 + 主题设置
+        const [, savedTheme] = await Promise.all([
+          restorePlayerState(),
+          window.electronAPI.invoke('settings:get', { key: 'theme' }) as Promise<string | null>,
+        ])
+
+        // 恢复主题（如果有保存的值）
+        if (savedTheme && ['dark', 'light', 'system'].includes(savedTheme)) {
+          useUIStore.getState().setTheme(savedTheme as Theme)
+        }
+      } catch (e) {
+        console.error('[App] 水合失败:', e)
+      } finally {
+        setIsHydrated(true)
+      }
+    }
+    hydrate()
   }, [])
 
   // 加载中显示骨架屏
