@@ -121,6 +121,20 @@ function registerWindowIPC(): void {
     await shell.openPath(folderPath)
   })
 
+  // 读取 .lrc 歌词文件内容
+  ipcMain.handle('read-lrc-file', async (_event, lrcPath: string): Promise<string | null> => {
+    const fs = require('fs') as typeof import('fs')
+    try {
+      if (fs.existsSync(lrcPath)) {
+        return fs.readFileSync(lrcPath, 'utf-8')
+      }
+      return null
+    } catch (err) {
+      console.error('[IPC] 读取歌词文件失败:', lrcPath, err)
+      return null
+    }
+  })
+
   // 主题切换 → 更新标题栏颜色（Windows 原生 overlay）
   ipcMain.on('theme-changed', (_event, theme: 'dark' | 'light') => {
     if (!mainWindow) return

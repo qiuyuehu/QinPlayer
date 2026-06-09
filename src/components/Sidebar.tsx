@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { id: 'albums',      label: '专辑',     icon: '💿' },
   { id: 'playlists',   label: '歌单',     icon: '📋' },
   { id: 'liked',       label: '我喜欢的', icon: '❤️' },
+  { id: 'lyrics',      label: '歌词',     icon: '🎤' },
   { id: 'settings',    label: '设置',     icon: '⚙️' },
 ]
 

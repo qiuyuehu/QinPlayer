@@ -12,6 +12,7 @@ import LocalMusic from '../pages/LocalMusic'
 import Albums from '../pages/Albums'
 import Playlists from '../pages/Playlists'
 import Liked from '../pages/Liked'
+import Lyrics from '../pages/Lyrics'
 import Settings from '../pages/Settings'
 
 // ---------------------------------------------------------------------------
@@ -36,6 +37,8 @@ function Content() {
         return <Playlists />
       case 'liked':
         return <Liked />
+      case 'lyrics':
+        return <Lyrics />
       case 'settings':
         return <Settings />
       default:
