@@ -17,6 +17,7 @@
 import { useEffect, useRef } from 'react'
 import { usePlayerStore } from '../stores/playerStore'
 import { getAudioEngine, hasAudioEngine } from '../utils/AudioEngine'
+import { updateMediaSession, setPlaybackState, registerMediaSessionActions } from '../utils/mediaSession'
 
 export function useAudioSync() {
   const currentTrack = usePlayerStore((s) => s.currentTrack)
@@ -68,14 +69,21 @@ export function useAudioSync() {
       engine.onEnded(() => {
         const mode = usePlayerStore.getState().playMode
         if (mode === 'loop') {
-          // 单曲循环：重新播放当前歌曲
           engine.currentTime = 0
           engine.play().catch(() => {})
         } else {
-          // 顺序播放 / 随机：切到下一首
           setIsPlaying(false)
           nextTrack()
         }
+      })
+
+      // 注册 Media Session 动作回调（键盘多媒体键、任务栏按钮）
+      registerMediaSessionActions({
+        play: () => usePlayerStore.getState().setPlaying(true),
+        pause: () => usePlayerStore.getState().setPlaying(false),
+        prevTrack: () => usePlayerStore.getState().prevTrack(),
+        nextTrack: () => usePlayerStore.getState().nextTrack(),
+        seekTo: (time) => usePlayerStore.getState().setSeekTime(time)
       })
 
       return true
@@ -123,19 +131,29 @@ export function useAudioSync() {
       engine.onEnded(() => {
         const mode = usePlayerStore.getState().playMode
         if (mode === 'loop') {
-          // 单曲循环：重新播放当前歌曲
           engine.currentTime = 0
           engine.play().catch(() => {})
         } else {
-          // 顺序播放 / 随机：切到下一首
           setIsPlaying(false)
           nextTrack()
         }
+      })
+
+      // 注册 Media Session 动作回调
+      registerMediaSessionActions({
+        play: () => usePlayerStore.getState().setPlaying(true),
+        pause: () => usePlayerStore.getState().setPlaying(false),
+        prevTrack: () => usePlayerStore.getState().prevTrack(),
+        nextTrack: () => usePlayerStore.getState().nextTrack(),
+        seekTo: (time) => usePlayerStore.getState().setSeekTime(time)
       })
     }
 
     const url = window.electronAPI.getAudioUrl(currentTrack.filePath)
     console.log('[useAudioSync] 加载歌曲:', currentTrack.title, url)
+
+    // ⚠️ 暗礁 1：更新 Media Session（封面图需转 Blob URL）
+    updateMediaSession(currentTrack)
 
     // 根据 fadeEnabled 决定是否使用淡入淡出
     if (fadeEnabled.current && isPlaying) {
@@ -171,7 +189,6 @@ export function useAudioSync() {
       if (p) {
         p.catch((err) => {
           if (err.name === 'AbortError') {
-            // 音频还没加载完，等 loadedmetadata 后再播
             pendingAutoPlay.current = true
           } else {
             console.error('[useAudioSync] 播放失败:', err)
@@ -179,8 +196,10 @@ export function useAudioSync() {
           }
         })
       }
+      setPlaybackState('playing')
     } else {
       engine.pause()
+      setPlaybackState('paused')
     }
   }, [isPlaying, setIsPlaying])
 
