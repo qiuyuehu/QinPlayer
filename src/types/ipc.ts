@@ -50,6 +50,18 @@ export interface IpcChannels {
     args: void
     return: Track[]
   }
+  'songs:updatePlayCount': {
+    args: { songId: number }
+    return: void
+  }
+  'songs:recordPlay': {
+    args: { songId: number }
+    return: void
+  }
+  'songs:isLiked': {
+    args: { songId: number }
+    return: boolean
+  }
 
   // --- 歌单 CRUD ---
   'playlists:create': {
@@ -79,6 +91,10 @@ export interface IpcChannels {
   'playlists:removeSong': {
     args: { playlistId: number; songId: number }
     return: void
+  }
+  'playlists:isInPlaylist': {
+    args: { playlistId: number; songId: number }
+    return: boolean
   }
 
   // --- 设置 ---

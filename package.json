@@ -10,7 +10,8 @@
     "preview": "electron-vite preview",
     "dist": "electron-vite build && electron-builder --win",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "postinstall": "electron-rebuild"
   },
   "build": {
     "appId": "com.qinplayer.app",
@@ -41,6 +42,9 @@
     }
   },
   "dependencies": {
+    "@electron/rebuild": "^4.0.4",
+    "@types/better-sqlite3": "^7.6.13",
+    "better-sqlite3": "^12.10.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "zustand": "^5.0.14"

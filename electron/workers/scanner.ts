@@ -1,0 +1,210 @@
+// =============================================================================
+// QinPlayer — 媒体库扫描 Worker
+// =============================================================================
+// 职责：在独立线程中扫描文件夹、解析 ID3 标签、提取封面
+// 注意：Worker 线程绝对不能直接操作 SQLite！
+//       只负责解析，通过 postMessage 将 JSON 数据发回主进程
+// =============================================================================
+
+import { parentPort, workerData } from 'worker_threads'
+import { readdir, stat, writeFile, access } from 'fs/promises'
+import { join, extname, basename } from 'path'
+import { createHash } from 'crypto'
+
+// ---------------------------------------------------------------------------
+// 类型定义
+// ---------------------------------------------------------------------------
+
+interface ScanResult {
+  filePath: string
+  fileName: string
+  title: string | null
+  artist: string | null
+  album: string | null
+  duration: number | null
+  coverPath: string | null
+  mtime: number
+}
+
+interface WorkerData {
+  folderPaths: string[]
+  coversDir: string
+}
+
+// 支持的音频格式
+const AUDIO_EXTENSIONS = new Set([
+  '.mp3', '.flac', '.wav', '.m4a', '.ogg', '.aac', '.wma', '.opus'
+])
+
+// ---------------------------------------------------------------------------
+// 发送消息给主进程（类型安全）
+// ---------------------------------------------------------------------------
+
+function sendMessage(type: string, data: unknown): void {
+  parentPort?.postMessage({ type, data })
+}
+
+// ---------------------------------------------------------------------------
+// 递归扫描目录中的音频文件
+// ---------------------------------------------------------------------------
+
+async function scanDirectory(dir: string): Promise<string[]> {
+  const files: string[] = []
+
+  try {
+    const entries = await readdir(dir)
+    for (const entry of entries) {
+      const fullPath = join(dir, entry)
+      try {
+        const fileStat = await stat(fullPath)
+        if (fileStat.isDirectory()) {
+          // 递归扫描子目录
+          const subFiles = await scanDirectory(fullPath)
+          files.push(...subFiles)
+        } else {
+          const ext = extname(fullPath).toLowerCase()
+          if (AUDIO_EXTENSIONS.has(ext)) {
+            files.push(fullPath)
+          }
+        }
+      } catch {
+        // 跳过无权限的文件/目录
+      }
+    }
+  } catch {
+    // 跳过无权限的目录
+  }
+
+  return files
+}
+
+// ---------------------------------------------------------------------------
+// 解析单个音频文件的 ID3 标签
+// ---------------------------------------------------------------------------
+
+async function parseAudioFile(filePath: string, coversDir: string): Promise<ScanResult | null> {
+  try {
+    // 动态导入 music-metadata（ESM 模块）
+    const mm = await import('music-metadata')
+    const metadata = await mm.parseFile(filePath, { skipCovers: false })
+    const { common, format } = metadata
+
+    // 提取封面并写入缓存目录
+    let coverPath: string | null = null
+    if (common.picture && common.picture.length > 0) {
+      coverPath = await extractAndSaveCover(filePath, common.picture[0], coversDir)
+    }
+
+    return {
+      filePath,
+      fileName: basename(filePath),
+      title: common.title || null,
+      artist: common.artist || null,
+      album: common.album || null,
+      duration: format.duration || null,
+      coverPath,
+      mtime: Date.now()
+    }
+  } catch {
+    // 解析失败时，返回基本信息（用文件名兜底）
+    return {
+      filePath,
+      fileName: basename(filePath),
+      title: null,
+      artist: null,
+      album: null,
+      duration: null,
+      coverPath: null,
+      mtime: Date.now()
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 提取封面图并写入缓存目录
+// ---------------------------------------------------------------------------
+// 封面 Buffer 不能通过 IPC 传给主进程（内存爆炸），
+// 必须在 Worker 内部写入磁盘，只返回文件路径
+// ---------------------------------------------------------------------------
+
+async function extractAndSaveCover(
+  filePath: string,
+  picture: { format: string; data: Buffer },
+  coversDir: string
+): Promise<string | null> {
+  try {
+    // 用文件路径的 MD5 作为封面文件名（保证唯一性）
+    const hash = createHash('md5').update(filePath).digest('hex')
+    const ext = picture.format === 'image/jpeg' ? 'jpg' : 'png'
+    const coverPath = join(coversDir, `${hash}.${ext}`)
+
+    // 检查是否已缓存（避免重复写入）
+    try {
+      await access(coverPath)
+      return coverPath // 已存在，直接返回路径
+    } catch {
+      // 不存在，写入缓存
+    }
+
+    await writeFile(coverPath, picture.data)
+    return coverPath
+  } catch {
+    return null
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 主扫描逻辑
+// ---------------------------------------------------------------------------
+
+async function scan(): Promise<void> {
+  const { folderPaths, coversDir } = workerData as WorkerData
+  sendMessage('log', `开始扫描，共 ${folderPaths.length} 个文件夹`)
+
+  // 1. 收集所有音频文件路径
+  const allFiles: string[] = []
+  for (const folder of folderPaths) {
+    const files = await scanDirectory(folder)
+    allFiles.push(...files)
+  }
+
+  sendMessage('log', `发现 ${allFiles.length} 个音频文件`)
+  sendMessage('total', { total: allFiles.length })
+
+  // 2. 逐个解析 ID3 标签
+  let processed = 0
+  for (const filePath of allFiles) {
+    try {
+      const result = await parseAudioFile(filePath, coversDir)
+      if (result) {
+        // 每解析完一首，立即发给主进程
+        sendMessage('song', result)
+      }
+    } catch (err) {
+      sendMessage('error', { file: filePath, message: String(err) })
+    }
+
+    processed++
+    // 每 10 首或最后一首报告进度
+    if (processed % 10 === 0 || processed === allFiles.length) {
+      const percent = Math.round((processed / allFiles.length) * 100)
+      sendMessage('progress', {
+        percent,
+        currentFile: basename(filePath),
+        processed,
+        total: allFiles.length
+      })
+    }
+  }
+
+  // 3. 扫描完成
+  sendMessage('done', { total: allFiles.length })
+}
+
+// ---------------------------------------------------------------------------
+// 启动扫描
+// ---------------------------------------------------------------------------
+
+scan().catch(err => {
+  sendMessage('error', { message: `扫描失败: ${err}` })
+})

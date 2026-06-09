@@ -8,6 +8,10 @@
 import { app, BrowserWindow, ipcMain, protocol, dialog } from 'electron'
 import { join } from 'path'
 import { readdir, stat } from 'fs/promises'
+import { initDatabase, closeDatabase } from './db/database'
+import { registerSongsIPC } from './ipc/songs'
+import { registerPlaylistsIPC } from './ipc/playlists'
+import { registerSettingsIPC } from './ipc/settings'
 
 // ---------------------------------------------------------------------------
 // 全局引用
@@ -244,16 +248,24 @@ function registerScanIPC(): void {
 // ---------------------------------------------------------------------------
 
 app.whenReady().then(() => {
-  // 1. 注册自定义协议拦截
+  // 1. 初始化数据库（最先，其他模块可能依赖数据库）
+  initDatabase()
+
+  // 2. 注册自定义协议拦截
   registerProtocol()
 
-  // 2. 注册窗口控制 IPC
+  // 3. 注册窗口控制 IPC
   registerWindowIPC()
 
-  // 3. 注册文件夹扫描 IPC
+  // 4. 注册文件夹扫描 IPC
   registerScanIPC()
 
-  // 4. 创建主窗口
+  // 5. 注册数据库相关 IPC（歌曲/歌单/设置）
+  registerSongsIPC()
+  registerPlaylistsIPC()
+  registerSettingsIPC()
+
+  // 6. 创建主窗口
   createWindow()
 
   // macOS：点击 dock 图标时重新创建窗口
@@ -266,6 +278,9 @@ app.whenReady().then(() => {
 
 // 所有窗口关闭时退出（macOS 除外，Phase 3 加入托盘后行为会变）
 app.on('window-all-closed', () => {
+  // 关闭数据库连接
+  closeDatabase()
+
   if (process.platform !== 'darwin') {
     app.quit()
   }
