@@ -1645,6 +1645,7 @@ html, body {
 /* 右侧：歌词滚动面板 */
 .lyrics-page__right {
   width: 60%;
+  height: 100%;
   overflow: hidden;
   position: relative;
 }
@@ -1697,4 +1698,14 @@ html, body {
   font-weight: 600;
   color: var(--text-primary);
   transform: scale(1.05);
+}
+
+/* 播放栏封面可点击 */
+.player-bar__cover--clickable {
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.player-bar__cover--clickable:hover {
+  opacity: 0.8;
 }

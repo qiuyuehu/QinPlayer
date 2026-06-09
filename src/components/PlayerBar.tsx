@@ -7,6 +7,7 @@
 
 import { useRef, useCallback, useState } from 'react'   // React Hooks
 import { usePlayerStore, togglePlayMode } from '../stores/playerStore'  // Zustand 状态
+import { useUIStore } from '../stores/uiStore'  // UI 状态（导航切换）
 import type { PlayMode } from '../types'  // 播放模式类型
 
 // 播放模式图标映射
@@ -39,6 +40,9 @@ function PlayerBar() {
   const setSeekTime = usePlayerStore((s) => s.setSeekTime)
   const nextTrack = usePlayerStore((s) => s.nextTrack)
   const prevTrack = usePlayerStore((s) => s.prevTrack)
+
+  // 导航切换（点击封面打开歌词页面）
+  const setActiveNav = useUIStore((s) => s.setActiveNav)
 
   // --- 进度条拖拽（三阶段：mousedown → mousemove → mouseup） ---
   // mousedown 时注册 mousemove/mouseup 全局事件，mouseup 时移除
@@ -161,7 +165,11 @@ function PlayerBar() {
     <div className="player-bar">
       {/* 左侧：封面缩略图 + 歌名 + 歌手 */}
       <div className="player-bar__info">
-        <div className="player-bar__cover">
+        <div
+          className="player-bar__cover player-bar__cover--clickable"
+          onClick={() => setActiveNav('lyrics')}
+          title="查看歌词"
+        >
           {currentTrack?.coverPath && (
             <img src={window.electronAPI.getCoverUrl(currentTrack.coverPath)} alt="封面" />
           )}
