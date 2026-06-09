@@ -173,7 +173,7 @@ function LocalMusic() {
 
       {/* 歌曲列表 */}
       {tracks.length > 0 && (   // 有歌曲时才渲染列表，避免空列表占位
-        <SongList tracks={tracks} showIndex showAlbum={false} />  {/* showAlbum=false：本地音乐页不需要专辑列 */}
+        <SongList tracks={tracks} showIndex showAlbum={false} />
       )}
 
       {/* 空状态 */}
