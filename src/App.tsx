@@ -21,6 +21,10 @@ function App() {
   // 水合状态（数据库加载完成前显示骨架屏）
   const [isHydrated, setIsHydrated] = useState(false)
 
+  // 当前导航项（歌词界面时隐藏导航栏和播放栏）
+  const activeNav = useUIStore((state) => state.activeNav)
+  const isLyricsMode = activeNav === 'lyrics'
+
   // 初始化主题系统
   useTheme()
 
@@ -77,12 +81,13 @@ function App() {
 
       {/* 主体区域：左侧导航栏 + 右侧内容区 */}
       <div className="app__main">
-        <Sidebar />
+        {/* 歌词界面时隐藏导航栏 */}
+        {!isLyricsMode && <Sidebar />}
         <Content />
       </div>
 
-      {/* 底部播放控制条 */}
-      <PlayerBar />
+      {/* 底部播放控制条（歌词界面时隐藏） */}
+      {!isLyricsMode && <PlayerBar />}
     </div>
   )
 }

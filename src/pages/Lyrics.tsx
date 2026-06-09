@@ -1,16 +1,17 @@
 // =============================================================================
-// QinPlayer — 歌词界面页面
+// QinPlayer — 歌词界面页面（沉浸式）
 // =============================================================================
-// 职责：左右分屏展示歌词
+// 职责：全屏沉浸式歌词展示
 // 设计要点：
-//   - 左侧（40%）：大封面 + 歌名 + 歌手 + 专辑 + 偏移量控制
-//   - 右侧（60%）：歌词逐行滚动面板（GPU 加速）
-//   - 切歌时自动加载同目录同名 .lrc 文件
-//   - 歌词时间轴偏移设置（±0.5s），兼容不准的 LRC 文件
+//   - 隐藏导航栏和播放栏，最大化歌词显示区域
+//   - 左侧：大封面 + 歌曲信息 + 播放控制（播放/暂停/上下首/进度条）
+//   - 右侧：歌词逐行滚动（GPU 加速）
+//   - 按 Esc 返回主界面
 // =============================================================================
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { usePlayerStore } from '../stores/playerStore'
+import { useUIStore } from '../stores/uiStore'
 import LyricsPanel from '../components/LyricsPanel'
 import { parseLrc } from '../utils/lrcParser'
 import type { LyricLine } from '../types'
@@ -19,11 +20,38 @@ function Lyrics() {
   // --- 播放状态 ---
   const currentTrack = usePlayerStore((s) => s.currentTrack)
   const currentTime = usePlayerStore((s) => s.currentTime)
+  const duration = usePlayerStore((s) => s.duration)
+  const isPlaying = usePlayerStore((s) => s.isPlaying)
+  const setPlaying = usePlayerStore((s) => s.setPlaying)
   const setSeekTime = usePlayerStore((s) => s.setSeekTime)
+  const nextTrack = usePlayerStore((s) => s.nextTrack)
+  const prevTrack = usePlayerStore((s) => s.prevTrack)
+
+  // --- 导航状态 ---
+  const setActiveNav = useUIStore((s) => s.setActiveNav)
 
   // --- 歌词状态 ---
   const [lyrics, setLyrics] = useState<LyricLine[]>([])
-  const [lyricOffset, setLyricOffset] = useState(0)
+
+  // --- 进度条拖拽 ---
+  const progressRef = useRef<HTMLDivElement>(null)
+  const [dragTime, setDragTime] = useState<number | null>(null)
+  const isDraggingRef = useRef(false)
+  const dragTimeRef = useRef<number | null>(null)
+
+  // ---------------------------------------------------------------------------
+  // 按 Esc 返回主界面
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setActiveNav('local')  // 返回本地音乐页面
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [setActiveNav])
 
   // ---------------------------------------------------------------------------
   // 切歌时加载 .lrc 文件
@@ -47,39 +75,58 @@ function Lyrics() {
           console.log('[Lyrics] 歌词加载成功，共', parsed.length, '行')
         } else {
           setLyrics([])
-          console.log('[Lyrics] 未找到歌词文件:', lrcPath)
         }
       })
       .catch(() => {
         setLyrics([])
       })
-
-    // 从数据库恢复偏移量
-    window.electronAPI.invoke('settings:get', { key: 'lyricOffset' })
-      .then((val: string | null) => {
-        if (val) {
-          const offset = parseFloat(val)
-          if (!isNaN(offset)) setLyricOffset(offset)
-        }
-      })
-      .catch(() => {})
   }, [currentTrack])
 
   // ---------------------------------------------------------------------------
-  // 偏移量调整
+  // 进度条拖拽逻辑
   // ---------------------------------------------------------------------------
-  const handleOffsetChange = useCallback(async (delta: number) => {
-    const newOffset = lyricOffset + delta
-    setLyricOffset(newOffset)
-    await window.electronAPI.invoke('settings:set', { key: 'lyricOffset', value: String(newOffset) })
-  }, [lyricOffset])
+  const updateDragTime = useCallback((e: MouseEvent) => {
+    if (!progressRef.current || duration <= 0) return
+    const rect = progressRef.current.getBoundingClientRect()
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+    const time = ratio * duration
+    setDragTime(time)
+    dragTimeRef.current = time
+  }, [duration])
+
+  const handleProgressMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    isDraggingRef.current = true
+    updateDragTime(e as unknown as MouseEvent)
+
+    const handleMouseMove = (ev: MouseEvent) => {
+      updateDragTime(ev)
+    }
+
+    const handleMouseUp = () => {
+      isDraggingRef.current = false
+      const seekTo = dragTimeRef.current
+      if (seekTo !== null) {
+        setSeekTime(seekTo)
+      }
+      setDragTime(null)
+      dragTimeRef.current = null
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }, [updateDragTime, setSeekTime])
 
   // ---------------------------------------------------------------------------
-  // 点击歌词行跳转
+  // 格式化时间
   // ---------------------------------------------------------------------------
-  const handleLineClick = useCallback((time: number) => {
-    setSeekTime(time)
-  }, [setSeekTime])
+  const formatTime = (seconds: number): string => {
+    if (!isFinite(seconds) || seconds < 0) return '0:00'
+    const m = Math.floor(seconds / 60)
+    const s = Math.floor(seconds % 60)
+    return `${m}:${s.toString().padStart(2, '0')}`
+  }
 
   // ---------------------------------------------------------------------------
   // 无歌曲时显示空状态
@@ -97,9 +144,13 @@ function Lyrics() {
     ? window.electronAPI.getCoverUrl(currentTrack.coverPath)
     : null
 
+  // 进度条
+  const displayTime = dragTime ?? currentTime
+  const progressPercent = duration > 0 ? (displayTime / duration) * 100 : 0
+
   return (
-    <div className="lyrics-page">
-      {/* 左侧：封面 + 歌曲信息 */}
+    <div className="lyrics-page lyrics-page--immersive">
+      {/* 左侧：封面 + 歌曲信息 + 播放控制 */}
       <div className="lyrics-page__left">
         {/* 封面 */}
         <div className="lyrics-page__cover">
@@ -121,23 +172,38 @@ function Lyrics() {
           )}
         </div>
 
-        {/* 偏移量控制（±0.5s） */}
-        <div className="lyrics-page__offset">
-          <button
-            className="lyrics-page__offset-btn"
-            onClick={() => handleOffsetChange(-0.5)}
-          >
-            -0.5s
-          </button>
-          <span className="lyrics-page__offset-label">
-            偏移: {lyricOffset >= 0 ? '+' : ''}{lyricOffset.toFixed(1)}s
-          </span>
-          <button
-            className="lyrics-page__offset-btn"
-            onClick={() => handleOffsetChange(0.5)}
-          >
-            +0.5s
-          </button>
+        {/* 播放控制 */}
+        <div className="lyrics-page__controls">
+          <div className="lyrics-page__buttons">
+            <button className="lyrics-page__btn" onClick={prevTrack}>⏮</button>
+            <button
+              className="lyrics-page__btn lyrics-page__btn--play"
+              onClick={() => setPlaying(!isPlaying)}
+            >
+              {isPlaying ? '⏸' : '▶'}
+            </button>
+            <button className="lyrics-page__btn" onClick={nextTrack}>⏭</button>
+          </div>
+
+          {/* 小进度条 */}
+          <div className="lyrics-page__progress-row">
+            <span className="lyrics-page__time">{formatTime(displayTime)}</span>
+            <div
+              className="lyrics-page__progress-bar"
+              ref={progressRef}
+              onMouseDown={handleProgressMouseDown}
+            >
+              <div
+                className="lyrics-page__progress-fill"
+                style={{ width: `${progressPercent}%` }}
+              />
+              <div
+                className="lyrics-page__progress-thumb"
+                style={{ left: `${progressPercent}%` }}
+              />
+            </div>
+            <span className="lyrics-page__time">{formatTime(duration)}</span>
+          </div>
         </div>
       </div>
 
@@ -146,8 +212,8 @@ function Lyrics() {
         <LyricsPanel
           lyrics={lyrics}
           currentTime={currentTime}
-          offset={lyricOffset}
-          onLineClick={handleLineClick}
+          offset={0}
+          onLineClick={(time) => setSeekTime(time)}
         />
       </div>
     </div>

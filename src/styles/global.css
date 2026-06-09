@@ -1711,3 +1711,112 @@ html, body {
 .player-bar__cover--clickable:hover {
   opacity: 0.8;
 }
+
+/* =============================================================================
+   歌词界面沉浸式模式
+   ============================================================================= */
+
+/* 沉浸式：占满整个内容区 */
+.lyrics-page--immersive {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--bg-primary);
+  z-index: 10;
+}
+
+/* 播放控制区 */
+.lyrics-page__controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 280px;
+}
+
+.lyrics-page__buttons {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.lyrics-page__btn {
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.lyrics-page__btn:hover {
+  background: var(--bg-tertiary);
+}
+
+.lyrics-page__btn--play {
+  width: 48px;
+  height: 48px;
+  font-size: 22px;
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.lyrics-page__btn--play:hover {
+  background: var(--accent-hover);
+}
+
+/* 小进度条 */
+.lyrics-page__progress-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.lyrics-page__time {
+  font-size: 11px;
+  color: var(--text-muted);
+  min-width: 35px;
+  text-align: center;
+}
+
+.lyrics-page__progress-bar {
+  flex: 1;
+  height: 4px;
+  background: var(--bg-tertiary);
+  border-radius: 2px;
+  position: relative;
+  cursor: pointer;
+}
+
+.lyrics-page__progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.1s linear;
+}
+
+.lyrics-page__progress-thumb {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 12px;
+  height: 12px;
+  background: var(--accent);
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.lyrics-page__progress-bar:hover .lyrics-page__progress-thumb {
+  opacity: 1;
+}
