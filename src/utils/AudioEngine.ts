@@ -250,29 +250,65 @@ export class AudioEngine {
 
   /**
    * 淡入（从静音渐增到目标音量）
+   * ⚠️ 暗礁 6：先 cancelScheduledValues 清理之前的调度，防止快速切歌音量归零
    * @param duration 淡入时长（毫秒）
    * @param targetVolume 目标音量 (0-1)
    */
   fadeIn(duration: number, targetVolume: number = 1): void {
     this.ensureWebAudio()
     const gain = this.gainNode!.gain
-    gain.setValueAtTime(0, this.audioContext!.currentTime)
-    gain.linearRampToValueAtTime(
-      targetVolume,
-      this.audioContext!.currentTime + duration / 1000
-    )
+    const currentTime = this.audioContext!.currentTime
+
+    // ⚠️ 关键：先清理之前的调度，防止多个 linearRamp 打架
+    gain.cancelScheduledValues(currentTime)
+    gain.setValueAtTime(0, currentTime)
+    gain.linearRampToValueAtTime(targetVolume, currentTime + duration / 1000)
   }
 
   /**
    * 淡出（从当前音量渐减到静音）
+   * ⚠️ 暗礁 6：先 cancelScheduledValues 清理之前的调度
    * @param duration 淡出时长（毫秒）
    */
   fadeOut(duration: number): void {
     this.ensureWebAudio()
     const gain = this.gainNode!.gain
+    const currentTime = this.audioContext!.currentTime
     const currentVolume = gain.value
-    gain.setValueAtTime(currentVolume, this.audioContext!.currentTime)
-    gain.linearRampToValueAtTime(0, this.audioContext!.currentTime + duration / 1000)
+
+    // ⚠️ 关键：先清理之前的调度
+    gain.cancelScheduledValues(currentTime)
+    gain.setValueAtTime(currentVolume, currentTime)
+    gain.linearRampToValueAtTime(0, currentTime + duration / 1000)
+  }
+
+  /**
+   * 切歌时的淡入淡出流程
+   * 1. fadeOut 当前歌曲（异步，不等待）
+   * 2. load 新歌曲
+   * 3. play 后 fadeIn
+   *
+   * @param protocolUrl 新歌曲的 qinplayer:// 协议 URL
+   * @param fadeDuration 淡入淡出时长（毫秒），默认 500ms
+   */
+  async loadWithFade(protocolUrl: string, fadeDuration: number = 500): Promise<void> {
+    // 1. 淡出当前歌曲
+    if (this.playing && this.webAudioConnected) {
+      this.fadeOut(fadeDuration)
+      // 等淡出动画完成
+      await new Promise(resolve => setTimeout(resolve, fadeDuration))
+    }
+
+    // 2. 加载新歌曲
+    this.load(protocolUrl)
+
+    // 3. 播放
+    await this.play()
+
+    // 4. 淡入新歌曲
+    if (this.webAudioConnected) {
+      this.fadeIn(fadeDuration)
+    }
   }
 
   /**

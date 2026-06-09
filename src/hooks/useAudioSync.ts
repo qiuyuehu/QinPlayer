@@ -32,6 +32,7 @@ export function useAudioSync() {
   // 标记：音频加载完毕后需要自动播放
   const pendingAutoPlay = useRef(false)
   const pendingSeekRef = useRef<number | null>(null)  // 启动时恢复的 seek 位置
+  const fadeEnabled = useRef(true)  // 淡入淡出开关（默认开启，后续可从设置读取）
 
   // 标记：引擎事件是否已注册
   const eventsRegistered = useRef(false)
@@ -135,11 +136,26 @@ export function useAudioSync() {
 
     const url = window.electronAPI.getAudioUrl(currentTrack.filePath)
     console.log('[useAudioSync] 加载歌曲:', currentTrack.title, url)
-    engine.load(url)
 
-    // 如果当前应该播放，标记加载完后自动播放
-    if (isPlaying) {
-      pendingAutoPlay.current = true
+    // 根据 fadeEnabled 决定是否使用淡入淡出
+    if (fadeEnabled.current && isPlaying) {
+      // 淡入淡出模式：fadeOut → load → play → fadeIn
+      engine.loadWithFade(url, 500).catch((err) => {
+        if (err.name !== 'AbortError') {
+          console.error('[useAudioSync] loadWithFade 失败:', err)
+          // 降级：直接加载播放
+          engine.load(url)
+          pendingAutoPlay.current = true
+        }
+      })
+    } else {
+      // 普通模式：直接加载
+      engine.load(url)
+
+      // 如果当前应该播放，标记加载完后自动播放
+      if (isPlaying) {
+        pendingAutoPlay.current = true
+      }
     }
   }, [currentTrack])  // 只依赖 currentTrack
 
