@@ -107,7 +107,18 @@ function Playlists() {
 
         {/* 歌曲列表 */}
         {songs.length > 0 ? (
-          <SongList tracks={songs} showIndex />
+          <SongList
+            tracks={songs}
+            showIndex
+            playlistId={selectedPlaylist.id}
+            onRemoveFromPlaylist={async (songId) => {
+              await window.electronAPI.invoke('playlists:removeSong', {
+                playlistId: selectedPlaylist.id,
+                songId
+              })
+              loadPlaylistSongs(selectedPlaylist.id)
+            }}
+          />
         ) : (
           <div className="playlists__empty">
             <p>歌单里还没有歌曲</p>

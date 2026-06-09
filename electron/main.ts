@@ -5,7 +5,7 @@
 // 注意：主进程通过 electron-vite 编译为 CommonJS，但源码用 TypeScript 编写
 // =============================================================================
 
-import { app, BrowserWindow, ipcMain, protocol, dialog } from 'electron'
+import { app, BrowserWindow, ipcMain, protocol, dialog, shell } from 'electron'
 import { join } from 'path'
 import { initDatabase, closeDatabase, getDatabase } from './db/database'
 import { registerSongsIPC } from './ipc/songs'
@@ -114,6 +114,11 @@ function registerWindowIPC(): void {
   // 关闭窗口（Phase 3 改为最小化到托盘）
   ipcMain.on('window:close', () => {
     mainWindow?.close()
+  })
+
+  // 打开文件夹（用系统资源管理器）
+  ipcMain.handle('open-folder', async (_event, folderPath: string) => {
+    await shell.openPath(folderPath)
   })
 }
 
