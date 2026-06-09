@@ -8,6 +8,9 @@
 // =============================================================================
 
 import { useState, useEffect, useCallback } from 'react'
+// useState: 窗口最大化状态
+// useEffect: 监听主进程推送的最大化/还原事件
+// useCallback: 稳定窗口控制回调，避免不必要的 re-render
 
 function TitleBar() {
   // 窗口最大化状态（用于切换图标）

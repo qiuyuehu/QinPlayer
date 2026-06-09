@@ -5,9 +5,9 @@
 // 设计：只读/写 Zustand 状态，不直接操作 AudioEngine（由 useAudioSync 统一驱动）
 // =============================================================================
 
-import { useRef, useCallback, useState } from 'react'
-import { usePlayerStore, togglePlayMode } from '../stores/playerStore'
-import type { PlayMode } from '../types'
+import { useRef, useCallback, useState } from 'react'   // React Hooks
+import { usePlayerStore, togglePlayMode } from '../stores/playerStore'  // Zustand 状态
+import type { PlayMode } from '../types'  // 播放模式类型
 
 // 播放模式图标映射
 // 用简洁文字 + 符号区分，避免 emoji 在不同系统显示不一致
@@ -25,7 +25,8 @@ const PLAY_MODE_LABELS: Record<PlayMode, string> = {
 }
 
 function PlayerBar() {
-  // --- Zustand store ---
+  // --- Zustand store（通过 useAudioSync hook 统一驱动 AudioEngine） ---
+  // 播放状态：isPlaying 控制播放/暂停，currentTrack 当前歌曲
   const isPlaying = usePlayerStore((s) => s.isPlaying)
   const currentTrack = usePlayerStore((s) => s.currentTrack)
   const currentTime = usePlayerStore((s) => s.currentTime)
@@ -39,38 +40,43 @@ function PlayerBar() {
   const nextTrack = usePlayerStore((s) => s.nextTrack)
   const prevTrack = usePlayerStore((s) => s.prevTrack)
 
-  // --- 进度条拖拽 ---
+  // --- 进度条拖拽（三阶段：mousedown → mousemove → mouseup） ---
+  // mousedown 时注册 mousemove/mouseup 全局事件，mouseup 时移除
   const progressRef = useRef<HTMLDivElement>(null)
-  const [dragTime, setDragTime] = useState<number | null>(null)
-  const isDraggingRef = useRef(false)
-  const dragTimeRef = useRef<number | null>(null)  // ref 用于 mouseup 回调读取最新值
+  const [dragTime, setDragTime] = useState<number | null>(null)  // 拖拽中的预览时间
+  const isDraggingRef = useRef(false)  // 是否正在拖拽（ref 避免闭包问题）
+  const dragTimeRef = useRef<number | null>(null)  // 最新拖拽时间（mouseup 回调读取）
 
-  // --- 音量条拖拽 ---
+  // --- 音量条拖拽（与进度条同理，但不需要 ref，因为没有延迟回调） ---
+  // 拖拽音量条 → 实时更新 volume 状态 → useAudioSync 立即驱动 AudioEngine
   const volumeBarRef = useRef<HTMLDivElement>(null)
 
-  // --- 播放/暂停 ---
+  // --- 播放/暂停切换（只改状态，useAudioSync 会驱动 AudioEngine） ---
+  // 切换 isPlaying 状态 → useAudioSync 检测到变化 → 调用 engine.play()/pause()
   const handlePlayPause = useCallback(() => {
-    setPlaying(!isPlaying)
+    setPlaying(!isPlaying)  // 取反：播放→暂停，暂停→播放
   }, [isPlaying, setPlaying])
 
-  // --- 上一首/下一首 ---
+  // --- 上一首/下一首（切歌逻辑在 playerStore.nextTrack/prevTrack） ---
+  // 切歌后 playerStore 自动更新 currentTrack → useAudioSync 检测到变化 → 加载新歌曲
   const handlePrev = useCallback(() => {
-    prevTrack()
+    prevTrack()  // playerStore 内部处理顺序/随机/循环模式
   }, [prevTrack])
 
   const handleNext = useCallback(() => {
     nextTrack()
   }, [nextTrack])
 
-  // --- 播放模式切换 ---
+  // --- 播放模式切换（顺序 → 单曲循环 → 随机，三态循环） ---
   const handleToggleMode = useCallback(() => {
-    const nextMode = togglePlayMode(playMode)
+    const nextMode = togglePlayMode(playMode)  // 按顺序取下一个模式
     setPlayMode(nextMode)
   }, [playMode, setPlayMode])
 
-  // ---------------------------------------------------------------------------
-  // 进度条：拖拽交互
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------------
+  // 进度条：拖拽交互（mousedown 注册事件，mousemove 更新预览，mouseup 发送 seek）
+  // ------------------------------------------------------------------
+  // 用 ref 存储最新拖拽时间，避免 mouseup 闭包捕获旧值
   const updateDragTime = useCallback((e: MouseEvent) => {
     if (!progressRef.current || duration <= 0) return
     const rect = progressRef.current.getBoundingClientRect()
@@ -105,9 +111,9 @@ function PlayerBar() {
     document.addEventListener('mouseup', handleMouseUp)
   }, [updateDragTime, setSeekTime])
 
-  // ---------------------------------------------------------------------------
-  // 音量：拖拽交互
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------------
+  // 音量：拖拽交互（与进度条同理，但不需要 ref，因为没有延迟回调）
+  // ------------------------------------------------------------------
   const updateVolume = useCallback((e: MouseEvent) => {
     if (!volumeBarRef.current) return
     const rect = volumeBarRef.current.getBoundingClientRect()
@@ -134,6 +140,8 @@ function PlayerBar() {
   // ---------------------------------------------------------------------------
   // 工具函数
   // ---------------------------------------------------------------------------
+
+  /** 格式化秒数为 mm:ss（用于进度条两侧时间显示） */
   const formatTime = (seconds: number): string => {
     if (!isFinite(seconds) || seconds < 0) return '0:00'
     const m = Math.floor(seconds / 60)
@@ -142,15 +150,16 @@ function PlayerBar() {
   }
 
   // ---------------------------------------------------------------------------
-  // 渲染
+  // 渲染（三栏布局：左侧歌曲信息 | 中间控制+进度 | 右侧模式+音量）
   // ---------------------------------------------------------------------------
   // 拖拽中显示拖拽预览时间，否则显示真实播放时间
   const displayTime = dragTime ?? currentTime
+  // 进度百分比：拖拽中用预览时间，否则用真实播放时间
   const progressPercent = duration > 0 ? (displayTime / duration) * 100 : 0
 
   return (
     <div className="player-bar">
-      {/* 左侧：歌曲信息 */}
+      {/* 左侧：封面缩略图 + 歌名 + 歌手 */}
       <div className="player-bar__info">
         <div className="player-bar__cover">
           {currentTrack?.coverPath && (
@@ -167,7 +176,7 @@ function PlayerBar() {
         </div>
       </div>
 
-      {/* 中间：控制按钮 + 进度条 */}
+      {/* 中间：上一首/播放/下一首 + 进度条（可拖拽） */}
       <div className="player-bar__controls">
         <div className="player-bar__buttons">
           <button className="player-bar__btn" onClick={handlePrev}>⏮</button>
@@ -196,7 +205,7 @@ function PlayerBar() {
         </div>
       </div>
 
-      {/* 右侧：播放模式 + 音量 */}
+      {/* 右侧：播放模式切换 + 音量滑块 */}
       <div className="player-bar__extra">
         <button
           className="player-bar__btn"

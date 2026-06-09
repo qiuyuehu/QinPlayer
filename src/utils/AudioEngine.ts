@@ -23,13 +23,15 @@ export class AudioEngine {
 
   // --- timeupdate 节流 ---
   private _lastUpdateTime = 0
-  private readonly _updateInterval = 250  // 每 250ms 更新一次（约 4fps）
+  private readonly _updateInterval = 250  // 每 250ms 更新一次（约 4fps，避免高频 setState）
 
   constructor() {
     // 创建 HTMLAudioElement（基础播放用，不依赖 Web Audio API）
+    // 注意：不能用 new HTMLAudioElement()，会报 Illegal constructor
     this.audioElement = new Audio()
 
     // 监听 timeupdate 事件（播放进度更新）
+    // 节流：每 250ms 最多触发一次，避免高频 setState 导致性能问题
     this.audioElement.addEventListener('timeupdate', () => {
       const now = Date.now()
       if (now - this._lastUpdateTime < this._updateInterval) return
@@ -91,7 +93,7 @@ export class AudioEngine {
   }
 
   // ---------------------------------------------------------------------------
-  // 公开方法
+  // 公开方法（外部通过这些方法控制播放，不直接操作内部节点）
   // ---------------------------------------------------------------------------
 
   /**
