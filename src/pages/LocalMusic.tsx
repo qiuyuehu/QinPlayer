@@ -46,9 +46,19 @@ function LocalMusic() {
   // 采用事件驱动模式：Worker 逐首推送歌曲，前端实时追加到列表
   useEffect(() => {
     // 监听：发现新歌曲
-    // 每发现一首歌就追加到列表，实现"边扫边显示"的流式体验
+    // 每发现一首歌就追加到列表（已存在则更新，避免重复）
     const unsubSong = window.electronAPI.on('scan:song-found', (song: Track) => {
-      setTracks(prev => [...prev, song])  // 函数式更新，避免闭包过期
+      setTracks(prev => {
+        const idx = prev.findIndex(t => t.id === (song as Track).id)
+        if (idx >= 0) {
+          // 已存在，更新元数据（封面、标题等可能变化）
+          const next = [...prev]
+          next[idx] = song as Track
+          return next
+        }
+        // 新歌曲，追加到末尾
+        return [...prev, song as Track]
+      })
     })
 
     // 监听：扫描进度
@@ -59,9 +69,19 @@ function LocalMusic() {
 
     // 监听：扫描完成
     // 扫描结束：停止 loading 状态，进度条固定在 100%
-    const unsubDone = window.electronAPI.on('scan:done', () => {
+    // 同时从数据库重新加载歌曲列表（增量扫描可能新增/删除了歌曲）
+    const unsubDone = window.electronAPI.on('scan:done', async () => {
       setScanning(false)
       setProgress(100)
+      // 从数据库重新加载最新歌曲列表（清理已删除的 + 新增的）
+      try {
+        const songs = await window.electronAPI.invoke('songs:getAll') as Track[]
+        if (songs) {
+          setTracks(songs)
+        }
+      } catch {
+        // 忽略
+      }
     })
 
     // 监听：扫描错误
@@ -118,7 +138,7 @@ function LocalMusic() {
           onClick={handleSelectFolder}
           disabled={scanning}   // 扫描中禁用按钮，防止重复触发
         >
-          {scanning ? '扫描中...' : '选择文件夹'}  // 动态按钮文案
+          {scanning ? '扫描中...' : '选择文件夹'}  {/* 动态按钮文案 */}
         </button>
       </div>
 
@@ -153,7 +173,7 @@ function LocalMusic() {
 
       {/* 歌曲列表 */}
       {tracks.length > 0 && (   // 有歌曲时才渲染列表，避免空列表占位
-        <SongList tracks={tracks} showIndex showAlbum={false} />  // showAlbum=false：本地音乐页不需要专辑列
+        <SongList tracks={tracks} showIndex showAlbum={false} />  {/* showAlbum=false：本地音乐页不需要专辑列 */}
       )}
 
       {/* 空状态 */}

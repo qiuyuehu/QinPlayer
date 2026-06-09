@@ -243,7 +243,7 @@ function SongList({ tracks, showIndex = true, showAlbum = false, playlistId, onR
               >
                 {showIndex && (
                   <span className="song-list__col song-list__col--index">
-                    {isActive ? '♫' : virtualRow.index + 1}   // 播放中显示音符图标，否则显示序号
+                    {isActive ? '♫' : virtualRow.index + 1}   {/* 播放中显示音符图标，否则显示序号 */}
                   </span>
                 )}
                 <span className="song-list__col song-list__col--title" title={track.title}>

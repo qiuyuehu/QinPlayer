@@ -129,7 +129,7 @@ function ContextMenu({ items, x, y, onClose }: ContextMenuProps) {
         >
           {item.icon && <span className="context-menu__icon">{item.icon}</span>}
           <span className="context-menu__label">{item.label}</span>
-          {item.children && <span className="context-menu__arrow">›</span>}  // 有子菜单时显示右箭头
+          {item.children && <span className="context-menu__arrow">›</span>}  {/* 有子菜单时显示右箭头 */}
 
           {/* 子菜单 —— 只在 hover 到对应父项时渲染，通过 submenuIndex 控制显隐 */}
           {item.children && submenuIndex === index && (
