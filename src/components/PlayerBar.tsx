@@ -8,6 +8,7 @@
 import { useRef, useCallback, useState, useEffect } from 'react'   // React Hooks
 import { usePlayerStore, togglePlayMode } from '../stores/playerStore'  // Zustand 状态
 import { useUIStore } from '../stores/uiStore'  // UI 状态（导航切换、迷你模式）
+import { currentTimeRef } from '../utils/currentTimeRef'  // 共享播放时间 ref
 import type { PlayMode } from '../types'  // 播放模式类型
 import {
   IconPlay, IconPause, IconPrev, IconNext,
@@ -35,7 +36,6 @@ function PlayerBar() {
   // 播放状态：isPlaying 控制播放/暂停，currentTrack 当前歌曲
   const isPlaying = usePlayerStore((s) => s.isPlaying)
   const currentTrack = usePlayerStore((s) => s.currentTrack)
-  const currentTime = usePlayerStore((s) => s.currentTime)
   const duration = usePlayerStore((s) => s.duration)
   const volume = usePlayerStore((s) => s.volume)
   const playMode = usePlayerStore((s) => s.playMode)
@@ -53,9 +53,13 @@ function PlayerBar() {
   // --- 进度条拖拽（三阶段：mousedown → mousemove → mouseup） ---
   // mousedown 时注册 mousemove/mouseup 全局事件，mouseup 时移除
   const progressRef = useRef<HTMLDivElement>(null)
-  const [dragTime, setDragTime] = useState<number | null>(null)  // 拖拽中的预览时间
   const isDraggingRef = useRef(false)  // 是否正在拖拽（ref 避免闭包问题）
-  const dragTimeRef = useRef<number | null>(null)  // 最新拖拽时间（mouseup 回调读取）
+  const dragTimeRef = useRef<number | null>(null)  // 拖拽中的预览时间（RAF 直接读取）
+
+  // --- 进度条 DOM 元素 ref（RAF 直接操作，不触发 re-render） ---
+  const progressFillRef = useRef<HTMLDivElement>(null)
+  const progressThumbRef = useRef<HTMLDivElement>(null)
+  const currentTimeTextRef = useRef<HTMLSpanElement>(null)
 
   // --- 音量条拖拽（与进度条同理，但不需要 ref，因为没有延迟回调） ---
   // 拖拽音量条 → 实时更新 volume 状态 → useAudioSync 立即驱动 AudioEngine
@@ -106,8 +110,7 @@ function PlayerBar() {
     const rect = progressRef.current.getBoundingClientRect()
     const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
     const time = ratio * duration
-    setDragTime(time)
-    dragTimeRef.current = time  // 同步更新 ref
+    dragTimeRef.current = time  // RAF 循环直接读取，不触发 re-render
   }, [duration])
 
   const handleProgressMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
@@ -125,7 +128,6 @@ function PlayerBar() {
       if (seekTo !== null) {
         setSeekTime(seekTo)
       }
-      setDragTime(null)
       dragTimeRef.current = null
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
@@ -166,6 +168,7 @@ function PlayerBar() {
   // ---------------------------------------------------------------------------
 
   /** 格式化秒数为 mm:ss（用于进度条两侧时间显示） */
+  // 注意：此函数被 RAF 循环调用，不能依赖任何 React state
   const formatTime = (seconds: number): string => {
     if (!isFinite(seconds) || seconds < 0) return '0:00'
     const m = Math.floor(seconds / 60)
@@ -174,12 +177,33 @@ function PlayerBar() {
   }
 
   // ---------------------------------------------------------------------------
+  // RAF 循环：直接操作进度条 DOM，不触发 React re-render
+  // ---------------------------------------------------------------------------
+  // 播放时每帧更新进度条位置和时间文字，拖拽时显示拖拽预览时间
+  useEffect(() => {
+    let rafId: number
+    const update = () => {
+      // 拖拽中用拖拽时间，否则用共享 ref 的播放时间
+      const time = isDraggingRef.current
+        ? (dragTimeRef.current ?? 0)
+        : currentTimeRef.current
+      const pct = duration > 0 ? (time / duration) * 100 : 0
+
+      // 直接操作 DOM，不触发 re-render
+      if (progressFillRef.current) progressFillRef.current.style.width = `${pct}%`
+      if (progressThumbRef.current) progressThumbRef.current.style.left = `${pct}%`
+      if (currentTimeTextRef.current) currentTimeTextRef.current.textContent = formatTime(time)
+
+      rafId = requestAnimationFrame(update)
+    }
+    rafId = requestAnimationFrame(update)
+    return () => cancelAnimationFrame(rafId)
+  }, [duration])
+
+  // ---------------------------------------------------------------------------
   // 渲染（三栏布局：左侧歌曲信息 | 中间控制+进度 | 右侧模式+音量）
   // ---------------------------------------------------------------------------
-  // 拖拽中显示拖拽预览时间，否则显示真实播放时间
-  const displayTime = dragTime ?? currentTime
-  // 进度百分比：拖拽中用预览时间，否则用真实播放时间
-  const progressPercent = duration > 0 ? (displayTime / duration) * 100 : 0
+  // 进度条由 RAF 循环直接操作 DOM，不依赖 React state
 
   // 音量图标：根据音量大小选择
   const VolumeIcon = volume === 0 ? IconVolumeMuted : volume < 0.5 ? IconVolumeLow : IconVolumeHigh
@@ -230,7 +254,7 @@ function PlayerBar() {
           </button>
         </div>
         <div className="player-bar__progress-row">
-          <span className="player-bar__time">{formatTime(displayTime)}</span>
+          <span className="player-bar__time" ref={currentTimeTextRef}>0:00</span>
           <div
             className="player-bar__progress-bar"
             ref={progressRef}
@@ -238,11 +262,11 @@ function PlayerBar() {
           >
             <div
               className="player-bar__progress-fill"
-              style={{ width: `${progressPercent}%` }}
+              ref={progressFillRef}
             />
             <div
               className="player-bar__progress-thumb"
-              style={{ left: `${progressPercent}%` }}
+              ref={progressThumbRef}
             />
           </div>
           <span className="player-bar__time">{formatTime(duration)}</span>

@@ -6,12 +6,15 @@
 //   - 隐藏导航栏和播放栏，最大化歌词显示区域
 //   - 左侧：大封面 + 歌曲信息 + 播放控制（播放/暂停/上下首/进度条）
 //   - 右侧：歌词逐行滚动（GPU 加速）
+//   - 进度条用 RAF + ref 直接操作 DOM，不触发 re-render
+//   - 歌词面板用 10fps 低频更新（足够歌词滚动，避免高频 re-render）
 //   - 按 Esc 返回主界面
 // =============================================================================
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { usePlayerStore } from '../stores/playerStore'
 import { useUIStore } from '../stores/uiStore'
+import { currentTimeRef } from '../utils/currentTimeRef'
 import LyricsPanel from '../components/LyricsPanel'
 import { parseLrc } from '../utils/lrcParser'
 import { extractMainColor } from '../utils/colorExtract'
@@ -21,7 +24,6 @@ import { IconPlay, IconPause, IconPrev, IconNext, IconBack } from '../components
 function Lyrics() {
   // --- 播放状态 ---
   const currentTrack = usePlayerStore((s) => s.currentTrack)
-  const currentTime = usePlayerStore((s) => s.currentTime)
   const duration = usePlayerStore((s) => s.duration)
   const isPlaying = usePlayerStore((s) => s.isPlaying)
   const setPlaying = usePlayerStore((s) => s.setPlaying)
@@ -39,9 +41,16 @@ function Lyrics() {
 
   // --- 进度条拖拽 ---
   const progressRef = useRef<HTMLDivElement>(null)
-  const [dragTime, setDragTime] = useState<number | null>(null)
   const isDraggingRef = useRef(false)
   const dragTimeRef = useRef<number | null>(null)
+
+  // --- 进度条 DOM 元素 ref（RAF 直接操作，不触发 re-render） ---
+  const progressFillRef = useRef<HTMLDivElement>(null)
+  const progressThumbRef = useRef<HTMLDivElement>(null)
+  const currentTimeTextRef = useRef<HTMLSpanElement>(null)
+
+  // --- 歌词面板用的 currentTime（只在行索引变化时才更新，避免高频 re-render） ---
+  const [lyricsCurrentTime, setLyricsCurrentTime] = useState(0)
 
   // ---------------------------------------------------------------------------
   // 按 Esc 返回主界面
@@ -104,7 +113,6 @@ function Lyrics() {
     const rect = progressRef.current.getBoundingClientRect()
     const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
     const time = ratio * duration
-    setDragTime(time)
     dragTimeRef.current = time
   }, [duration])
 
@@ -122,7 +130,6 @@ function Lyrics() {
       if (seekTo !== null) {
         setSeekTime(seekTo)
       }
-      setDragTime(null)
       dragTimeRef.current = null
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
@@ -143,6 +150,39 @@ function Lyrics() {
   }
 
   // ---------------------------------------------------------------------------
+  // RAF 循环：进度条 DOM 直接操作 + 歌词面板低频更新（10fps）
+  // ---------------------------------------------------------------------------
+  // 进度条每帧更新（60fps），歌词面板每 100ms 更新一次（10fps，足够歌词滚动）
+  useEffect(() => {
+    let rafId: number
+    let lastLyricsUpdate = 0
+    const LYRICS_INTERVAL = 100  // 歌词面板更新间隔（ms）
+
+    const update = () => {
+      const time = isDraggingRef.current
+        ? (dragTimeRef.current ?? 0)
+        : currentTimeRef.current
+      const pct = duration > 0 ? (time / duration) * 100 : 0
+
+      // 进度条：每帧直接操作 DOM
+      if (progressFillRef.current) progressFillRef.current.style.width = `${pct}%`
+      if (progressThumbRef.current) progressThumbRef.current.style.left = `${pct}%`
+      if (currentTimeTextRef.current) currentTimeTextRef.current.textContent = formatTime(time)
+
+      // 歌词面板：每 100ms 更新一次 state（触发 LyricsPanel re-render）
+      const now = performance.now()
+      if (now - lastLyricsUpdate >= LYRICS_INTERVAL) {
+        lastLyricsUpdate = now
+        setLyricsCurrentTime(time)
+      }
+
+      rafId = requestAnimationFrame(update)
+    }
+    rafId = requestAnimationFrame(update)
+    return () => cancelAnimationFrame(rafId)
+  }, [duration])
+
+  // ---------------------------------------------------------------------------
   // 无歌曲时显示空状态
   // ---------------------------------------------------------------------------
   if (!currentTrack) {
@@ -158,9 +198,7 @@ function Lyrics() {
     ? window.electronAPI.getCoverUrl(currentTrack.coverPath)
     : null
 
-  // 进度条
-  const displayTime = dragTime ?? currentTime
-  const progressPercent = duration > 0 ? (displayTime / duration) * 100 : 0
+  // 进度条由 RAF 循环直接操作 DOM，不依赖 React state
 
   return (
     <div
@@ -224,7 +262,7 @@ function Lyrics() {
 
           {/* 小进度条 */}
           <div className="lyrics-page__progress-row">
-            <span className="lyrics-page__time">{formatTime(displayTime)}</span>
+            <span className="lyrics-page__time" ref={currentTimeTextRef}>0:00</span>
             <div
               className="lyrics-page__progress-bar"
               ref={progressRef}
@@ -232,11 +270,11 @@ function Lyrics() {
             >
               <div
                 className="lyrics-page__progress-fill"
-                style={{ width: `${progressPercent}%` }}
+                ref={progressFillRef}
               />
               <div
                 className="lyrics-page__progress-thumb"
-                style={{ left: `${progressPercent}%` }}
+                ref={progressThumbRef}
               />
             </div>
             <span className="lyrics-page__time">{formatTime(duration)}</span>
@@ -248,7 +286,7 @@ function Lyrics() {
       <div className="lyrics-page__right">
         <LyricsPanel
           lyrics={lyrics}
-          currentTime={currentTime}
+          currentTime={lyricsCurrentTime}
           offset={lyricOffset}
           onLineClick={(time) => setSeekTime(time)}
         />

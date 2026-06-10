@@ -6,9 +6,10 @@
 // 交互：可拖拽、进度条可拖拽、音量点击静音
 // =============================================================================
 
-import { useRef, useCallback, useState } from 'react'
+import { useRef, useCallback, useState, useEffect } from 'react'
 import { usePlayerStore } from '../stores/playerStore'
 import { useUIStore } from '../stores/uiStore'
+import { currentTimeRef } from '../utils/currentTimeRef'
 import {
   IconPlay, IconPause, IconPrev, IconNext,
   IconVolumeHigh, IconVolumeMuted,
@@ -19,7 +20,6 @@ function MiniPlayer() {
   // --- 播放状态 ---
   const isPlaying = usePlayerStore((s) => s.isPlaying)
   const currentTrack = usePlayerStore((s) => s.currentTrack)
-  const currentTime = usePlayerStore((s) => s.currentTime)
   const duration = usePlayerStore((s) => s.duration)
   const volume = usePlayerStore((s) => s.volume)
   const setPlaying = usePlayerStore((s) => s.setPlaying)
@@ -34,9 +34,13 @@ function MiniPlayer() {
 
   // --- 进度条拖拽 ---
   const progressRef = useRef<HTMLDivElement>(null)
-  const [dragTime, setDragTime] = useState<number | null>(null)
   const isDraggingRef = useRef(false)
   const dragTimeRef = useRef<number | null>(null)
+
+  // --- 进度条 DOM 元素 ref（RAF 直接操作，不触发 re-render） ---
+  const progressFillRef = useRef<HTMLDivElement>(null)
+  const progressThumbRef = useRef<HTMLDivElement>(null)
+  const currentTimeTextRef = useRef<HTMLSpanElement>(null)
 
   // --- 音量状态（点击静音/取消静音） ---
   const [isMuted, setIsMuted] = useState(false)
@@ -88,8 +92,7 @@ function MiniPlayer() {
     const rect = progressRef.current.getBoundingClientRect()
     const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
     const time = ratio * duration
-    setDragTime(time)
-    dragTimeRef.current = time
+    dragTimeRef.current = time  // RAF 循环直接读取，不触发 re-render
   }, [duration])
 
   const handleProgressMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
@@ -106,7 +109,6 @@ function MiniPlayer() {
       if (seekTo !== null) {
         setSeekTime(seekTo)
       }
-      setDragTime(null)
       dragTimeRef.current = null
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
@@ -127,10 +129,30 @@ function MiniPlayer() {
   }
 
   // ---------------------------------------------------------------------------
+  // RAF 循环：直接操作进度条 DOM，不触发 React re-render
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    let rafId: number
+    const update = () => {
+      const time = isDraggingRef.current
+        ? (dragTimeRef.current ?? 0)
+        : currentTimeRef.current
+      const pct = duration > 0 ? (time / duration) * 100 : 0
+
+      if (progressFillRef.current) progressFillRef.current.style.width = `${pct}%`
+      if (progressThumbRef.current) progressThumbRef.current.style.left = `${pct}%`
+      if (currentTimeTextRef.current) currentTimeTextRef.current.textContent = formatTime(time)
+
+      rafId = requestAnimationFrame(update)
+    }
+    rafId = requestAnimationFrame(update)
+    return () => cancelAnimationFrame(rafId)
+  }, [duration])
+
+  // ---------------------------------------------------------------------------
   // 渲染
   // ---------------------------------------------------------------------------
-  const displayTime = dragTime ?? currentTime
-  const progressPercent = duration > 0 ? (displayTime / duration) * 100 : 0
+  // 进度条由 RAF 循环直接操作 DOM，不依赖 React state
 
   // 封面 URL
   const coverUrl = currentTrack?.coverPath
@@ -172,7 +194,7 @@ function MiniPlayer() {
 
       {/* 中间：进度条 */}
       <div className="mini-player__progress-row">
-        <span className="mini-player__time">{formatTime(displayTime)}</span>
+        <span className="mini-player__time" ref={currentTimeTextRef}>0:00</span>
         <div
           className="mini-player__progress-bar"
           ref={progressRef}
@@ -180,11 +202,11 @@ function MiniPlayer() {
         >
           <div
             className="mini-player__progress-fill"
-            style={{ width: `${progressPercent}%` }}
+            ref={progressFillRef}
           />
           <div
             className="mini-player__progress-thumb"
-            style={{ left: `${progressPercent}%` }}
+            ref={progressThumbRef}
           />
         </div>
         <span className="mini-player__time">{formatTime(duration)}</span>

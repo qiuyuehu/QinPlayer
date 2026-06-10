@@ -1,12 +1,14 @@
 // =============================================================================
 // QinPlayer — 播放控制状态管理 Store
 // =============================================================================
-// 职责：管理播放相关状态（当前曲目、播放列表、音量、播放模式、进度）
-// 设计：所有音频相关状态都在这里，useAudioSync hook 统一同步到 AudioEngine
+// 职责：管理播放相关状态（当前曲目、播放列表、音量、播放模式）
+// 设计：低频状态放 Zustand，高频状态（currentTime）用模块级 ref + RAF
+//       useAudioSync hook 统一同步到 AudioEngine
 // =============================================================================
 
 import { create } from 'zustand'
 import type { Track, PlayMode } from '../types'
+import { currentTimeRef } from '../utils/currentTimeRef'
 
 // ---------------------------------------------------------------------------
 // 状态接口
@@ -23,8 +25,7 @@ interface PlayerState {
   lyricOffset: number             // 歌词时间轴偏移量（秒）
 
   // --- 进度状态 ---
-  currentTime: number             // 当前播放位置（秒）
-  duration: number                // 总时长（秒）
+  duration: number                // 总时长（秒）—— 低频，每首歌只变一次
   seekTime: number | null         // 用户拖拽的目标时间（null = 未拖拽）
 
   // --- actions ---
@@ -35,7 +36,6 @@ interface PlayerState {
   setPlayMode: (m: PlayMode) => void
   setFadeEnabled: (v: boolean) => void
   setLyricOffset: (v: number) => void
-  setCurrentTime: (t: number) => void
   setDuration: (d: number) => void
   setSeekTime: (t: number | null) => void
   nextTrack: () => void
@@ -61,7 +61,6 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   playMode: 'sequential',         // 默认顺序播放
   fadeEnabled: true,              // 默认开启淡入淡出
   lyricOffset: 0,                 // 默认无偏移
-  currentTime: 0,
   duration: 0,
   seekTime: null,
 
@@ -69,7 +68,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   setPlaying: (v) => set({ isPlaying: v }),
 
-  setCurrentTrack: (t) => set({ currentTrack: t, currentTime: 0, duration: 0 }),
+  setCurrentTrack: (t) => set({ currentTrack: t, duration: 0 }),
 
   setPlaylist: (list) => set({ playlist: list }),
 
@@ -83,8 +82,6 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   setFadeEnabled: (v) => set({ fadeEnabled: v }),
 
   setLyricOffset: (v) => set({ lyricOffset: v }),
-
-  setCurrentTime: (t) => set({ currentTime: t }),
 
   setDuration: (d) => set({ duration: d }),
 
@@ -104,10 +101,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       do {
         randomIndex = Math.floor(Math.random() * playlist.length)
       } while (randomIndex === currentIndex)
-      set({ currentTrack: playlist[randomIndex], currentTime: 0, duration: 0, isPlaying: true })
+      set({ currentTrack: playlist[randomIndex], duration: 0, isPlaying: true })
     } else {
       const nextIndex = (currentIndex + 1) % playlist.length
-      set({ currentTrack: playlist[nextIndex], currentTime: 0, duration: 0, isPlaying: true })
+      set({ currentTrack: playlist[nextIndex], duration: 0, isPlaying: true })
     }
   },
 
@@ -123,10 +120,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       do {
         randomIndex = Math.floor(Math.random() * playlist.length)
       } while (randomIndex === currentIndex)
-      set({ currentTrack: playlist[randomIndex], currentTime: 0, duration: 0, isPlaying: true })
+      set({ currentTrack: playlist[randomIndex], duration: 0, isPlaying: true })
     } else {
       const prevIndex = (currentIndex - 1 + playlist.length) % playlist.length
-      set({ currentTrack: playlist[prevIndex], currentTime: 0, duration: 0, isPlaying: true })
+      set({ currentTrack: playlist[prevIndex], duration: 0, isPlaying: true })
     }
   },
 }))
@@ -170,11 +167,12 @@ usePlayerStore.subscribe((state) => {
 })
 
 // 播放中每 5 秒保存 currentTime（独立定时器，不走防抖）
+// 从 currentTimeRef 读取（不依赖 Zustand，避免高频 re-render）
 let progressSaveTimer: ReturnType<typeof setInterval> | null = null
 usePlayerStore.subscribe((state) => {
   if (state.isPlaying && !progressSaveTimer) {
     progressSaveTimer = setInterval(() => {
-      const ct = usePlayerStore.getState().currentTime
+      const ct = currentTimeRef.current
       if (ct > 0) {
         window.electronAPI.invoke('settings:set', { key: 'lastCurrentTime', value: String(ct) }).catch(() => {})
       }
@@ -225,7 +223,7 @@ export async function restorePlayerState(): Promise<void> {
             const lastTime = parseFloat(lastTimeStr)
             if (!isNaN(lastTime) && lastTime > 0) {
               state.seekTime = lastTime
-              state.currentTime = lastTime
+              currentTimeRef.current = lastTime  // 写入共享 ref（不触发 re-render）
               console.log('[PlayerStore] 恢复进度:', lastTime, '秒')
             }
           }

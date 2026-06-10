@@ -9,7 +9,7 @@
 //   isPlaying 变化   → AudioEngine.play() / pause()
 //   volume 变化      → AudioEngine.setVolume()
 //   seekTime 变化    → AudioEngine.currentTime = seekTime
-//   AudioEngine timeupdate → setCurrentTime()
+//   AudioEngine timeupdate → currentTimeRef.current（共享 ref，不触发 re-render）
 //   AudioEngine loadedmetadata → setDuration()
 //   AudioEngine ended → nextTrack()
 // =============================================================================
@@ -18,13 +18,13 @@ import { useEffect, useRef } from 'react'
 import { usePlayerStore } from '../stores/playerStore'
 import { getAudioEngine, hasAudioEngine } from '../utils/AudioEngine'
 import { updateMediaSession, setPlaybackState, registerMediaSessionActions } from '../utils/mediaSession'
+import { currentTimeRef } from '../utils/currentTimeRef'
 
 export function useAudioSync() {
   const currentTrack = usePlayerStore((s) => s.currentTrack)
   const isPlaying = usePlayerStore((s) => s.isPlaying)
   const volume = usePlayerStore((s) => s.volume)
   const seekTime = usePlayerStore((s) => s.seekTime)
-  const setCurrentTime = usePlayerStore((s) => s.setCurrentTime)
   const setDuration = usePlayerStore((s) => s.setDuration)
   const setIsPlaying = usePlayerStore((s) => s.setPlaying)
   const setSeekTime = usePlayerStore((s) => s.setSeekTime)
@@ -51,7 +51,7 @@ export function useAudioSync() {
       const engine = getAudioEngine()
 
       engine.onTimeUpdate((time, dur) => {
-        setCurrentTime(time)
+        currentTimeRef.current = time    // 写入共享 ref，不触发 re-render
         if (dur > 0) setDuration(dur)
       })
 
@@ -96,7 +96,7 @@ export function useAudioSync() {
     }, 300)
 
     return () => clearInterval(timer)
-  }, [setCurrentTime, setDuration, setIsPlaying, nextTrack])
+  }, [setDuration, setIsPlaying, nextTrack])
 
   // ---------------------------------------------------------------------------
   // currentTrack 变化 → 加载音频
@@ -110,7 +110,7 @@ export function useAudioSync() {
       // 如果事件还没注册，先注册
       eventsRegistered.current = true
       engine.onTimeUpdate((time, dur) => {
-        setCurrentTime(time)
+        currentTimeRef.current = time    // 写入共享 ref，不触发 re-render
         if (dur > 0) setDuration(dur)
       })
       engine.onLoadedMetadata((dur) => {
@@ -118,7 +118,7 @@ export function useAudioSync() {
         // 应用启动时恢复的 seek 位置
         if (pendingSeekRef.current !== null) {
           engine.currentTime = pendingSeekRef.current
-          setCurrentTime(pendingSeekRef.current)
+          currentTimeRef.current = pendingSeekRef.current
           pendingSeekRef.current = null
         }
         if (pendingAutoPlay.current) {
@@ -226,9 +226,9 @@ export function useAudioSync() {
 
     const engine = getAudioEngine()
     engine.currentTime = seekTime
-    setCurrentTime(seekTime)
+    currentTimeRef.current = seekTime
     setSeekTime(null)
-  }, [seekTime, setCurrentTime, setSeekTime])
+  }, [seekTime, setSeekTime])
 
   // ---------------------------------------------------------------------------
   // 播放状态变化 → 通知主进程（托盘菜单需要）
