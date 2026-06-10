@@ -99,11 +99,13 @@ function LyricsPanel({ lyrics, currentTime, offset = 0, onLineClick }: LyricsPan
       <div className="lyrics-panel__spacer" />
 
       {lyrics.map((line, index) => {
-        // 计算当前行与激活行的距离（渐进式披露核心）
-        const distance = Math.abs(index - currentIndex)
-        // 距离越远，越小越透明
-        const scale = distance === 0 ? 1.15 : distance === 1 ? 1 : distance === 2 ? 0.92 : 0.85
-        const opacity = distance === 0 ? 1 : distance === 1 ? 0.65 : distance === 2 ? 0.4 : 0.25
+        // 计算当前行与激活行的距离（渐进式披露）
+        const distance = index - currentIndex
+        const absDistance = Math.abs(distance)
+
+        // 只显示当前行和后面2行（共3句），之前的歌词隐藏
+        const isVisible = distance >= 0 && distance <= 2
+        const opacity = isVisible ? (distance === 0 ? 1 : distance === 1 ? 0.5 : 0.25) : 0
         const isActive = index === currentIndex
 
         return (
@@ -113,8 +115,8 @@ function LyricsPanel({ lyrics, currentTime, offset = 0, onLineClick }: LyricsPan
             className={`lyrics-panel__line ${isActive ? 'lyrics-panel__line--active' : ''}`}
             onClick={() => handleLineClick(line.time)}
             style={{
-              transform: `scale(${scale})`,
               opacity,
+              pointerEvents: isVisible ? 'auto' : 'none',
             }}
           >
             <div className="lyrics-panel__text">{line.text || '♪'}</div>
