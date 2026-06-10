@@ -1544,6 +1544,83 @@ html, body {
   box-shadow: 0 0 1px var(--accent);
 }
 
+/* ===== 文件夹列表样式 ===== */
+
+.folder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.folder-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.folder-item--empty {
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.folder-item__path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.folder-item__remove {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  margin-left: 8px;
+  transition: all 0.2s ease;
+}
+
+.folder-item__remove:hover {
+  background: var(--bg-tertiary);
+  color: #ef4444;
+}
+
+/* ===== 歌词偏移量控件 ===== */
+
+.lyric-offset-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.lyric-offset-value {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  min-width: 50px;
+  text-align: center;
+}
+
+.settings-btn--small {
+  padding: 4px 12px;
+  font-size: 12px;
+}
+
 /* ===== 主题切换按钮组 ===== */
 
 .theme-options {
@@ -1711,7 +1788,6 @@ html, body {
   height: 100%;
   transition: transform 0.3s ease;
   will-change: transform;
-  overflow-y: auto;
 }
 
 .lyrics-panel--empty {
@@ -1735,14 +1811,14 @@ html, body {
 .lyrics-panel__line {
   padding: 8px 0;
   font-size: 16px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   text-align: center;
   transition: all 0.3s ease;
   cursor: pointer;
 }
 
 .lyrics-panel__line:hover {
-  color: var(--text-secondary);
+  color: var(--text-primary);
 }
 
 /* 当前播放行 */

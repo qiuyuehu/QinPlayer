@@ -35,6 +35,13 @@ function Settings() {
   const fadeEnabled = usePlayerStore((s) => s.fadeEnabled)
   const setFadeEnabled = usePlayerStore((s) => s.setFadeEnabled)
 
+  // --- 歌词偏移量状态（从 Zustand 读取） ---
+  const lyricOffset = usePlayerStore((s) => s.lyricOffset)
+  const setLyricOffset = usePlayerStore((s) => s.setLyricOffset)
+
+  // --- 音乐文件夹状态 ---
+  const [folders, setFolders] = useState<string[]>([])
+
   // ---------------------------------------------------------------------------
   // 主题切换
   // ---------------------------------------------------------------------------
@@ -112,6 +119,42 @@ function Settings() {
     // 持久化到数据库
     window.electronAPI.invoke('settings:set', { key: 'fadeEnabled', value: String(enabled) })
   }, [setFadeEnabled])
+
+  // ---------------------------------------------------------------------------
+  // 歌词时间轴偏移
+  // ---------------------------------------------------------------------------
+
+  const handleLyricOffsetChange = useCallback((delta: number) => {
+    const newOffset = Math.max(-0.5, Math.min(0.5, lyricOffset + delta))
+    setLyricOffset(newOffset)
+    // 持久化到数据库
+    window.electronAPI.invoke('settings:set', { key: 'lyricOffset', value: String(newOffset) })
+  }, [lyricOffset, setLyricOffset])
+
+  // ---------------------------------------------------------------------------
+  // 音乐文件夹管理
+  // ---------------------------------------------------------------------------
+
+  // 加载文件夹列表
+  useEffect(() => {
+    window.electronAPI.invoke('settings:getFolders').then((list: string[]) => {
+      setFolders(list)
+    })
+  }, [])
+
+  // 添加文件夹
+  const handleAddFolder = useCallback(async () => {
+    const folderPath = await window.electronAPI.invoke('settings:addFolder')
+    if (folderPath) {
+      setFolders(prev => [...prev, folderPath])
+    }
+  }, [])
+
+  // 删除文件夹
+  const handleRemoveFolder = useCallback((folderPath: string) => {
+    window.electronAPI.send('settings:removeFolder', folderPath)
+    setFolders(prev => prev.filter(f => f !== folderPath))
+  }, [])
 
   return (
     <div className="settings-page">
@@ -227,13 +270,71 @@ function Settings() {
         </div>
       </section>
 
-      {/* ===== 文件管理区域（Phase 2 后续补充） ===== */}
-      <section className="settings-section settings-section--placeholder">
+      {/* ===== 文件管理区域 ===== */}
+      <section className="settings-section">
         <h3 className="settings-section__title">文件管理</h3>
-        <div className="settings-item">
+
+        {/* 音乐文件夹 */}
+        <div className="settings-item settings-item--vertical">
           <div className="settings-item__info">
             <span className="settings-item__label">音乐文件夹</span>
-            <span className="settings-item__desc">Phase 2 后续实现</span>
+            <span className="settings-item__desc">管理扫描的音乐目录</span>
+          </div>
+          <div className="settings-item__control settings-item__control--full">
+            <div className="folder-list">
+              {folders.map((folder) => (
+                <div key={folder} className="folder-item">
+                  <span className="folder-item__path" title={folder}>{folder}</span>
+                  <button
+                    className="folder-item__remove"
+                    onClick={() => handleRemoveFolder(folder)}
+                    title="移除"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              {folders.length === 0 && (
+                <div className="folder-item folder-item--empty">
+                  <span>未添加音乐文件夹</span>
+                </div>
+              )}
+            </div>
+            <button
+              className="settings-btn"
+              onClick={handleAddFolder}
+            >
+              + 添加文件夹
+            </button>
+          </div>
+        </div>
+
+        {/* 歌词时间轴偏移 */}
+        <div className="settings-item">
+          <div className="settings-item__info">
+            <span className="settings-item__label">歌词时间轴偏移</span>
+            <span className="settings-item__desc">调整歌词与音乐的同步（±0.5s）</span>
+          </div>
+          <div className="settings-item__control">
+            <div className="lyric-offset-controls">
+              <button
+                className="settings-btn settings-btn--small"
+                onClick={() => handleLyricOffsetChange(-0.1)}
+                disabled={lyricOffset <= -0.5}
+              >
+                -0.1s
+              </button>
+              <span className="lyric-offset-value">
+                {lyricOffset > 0 ? '+' : ''}{lyricOffset.toFixed(1)}s
+              </span>
+              <button
+                className="settings-btn settings-btn--small"
+                onClick={() => handleLyricOffsetChange(0.1)}
+                disabled={lyricOffset >= 0.5}
+              >
+                +0.1s
+              </button>
+            </div>
           </div>
         </div>
       </section>

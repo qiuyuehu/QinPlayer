@@ -27,6 +27,7 @@ function Lyrics() {
   const setSeekTime = usePlayerStore((s) => s.setSeekTime)
   const nextTrack = usePlayerStore((s) => s.nextTrack)
   const prevTrack = usePlayerStore((s) => s.prevTrack)
+  const lyricOffset = usePlayerStore((s) => s.lyricOffset)
 
   // --- 导航状态 ---
   const setActiveNav = useUIStore((s) => s.setActiveNav)
@@ -239,7 +240,7 @@ function Lyrics() {
         <LyricsPanel
           lyrics={lyrics}
           currentTime={currentTime}
-          offset={0}
+          offset={lyricOffset}
           onLineClick={(time) => setSeekTime(time)}
         />
       </div>

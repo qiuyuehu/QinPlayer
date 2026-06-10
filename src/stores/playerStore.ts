@@ -20,6 +20,7 @@ interface PlayerState {
   volume: number                  // 音量 (0-1)
   playMode: PlayMode              // 播放模式
   fadeEnabled: boolean            // 淡入淡出开关
+  lyricOffset: number             // 歌词时间轴偏移量（秒）
 
   // --- 进度状态 ---
   currentTime: number             // 当前播放位置（秒）
@@ -33,6 +34,7 @@ interface PlayerState {
   setVolume: (v: number) => void
   setPlayMode: (m: PlayMode) => void
   setFadeEnabled: (v: boolean) => void
+  setLyricOffset: (v: number) => void
   setCurrentTime: (t: number) => void
   setDuration: (d: number) => void
   setSeekTime: (t: number | null) => void
@@ -58,6 +60,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   volume: 0.8,                    // 默认音量 80%
   playMode: 'sequential',         // 默认顺序播放
   fadeEnabled: true,              // 默认开启淡入淡出
+  lyricOffset: 0,                 // 默认无偏移
   currentTime: 0,
   duration: 0,
   seekTime: null,
@@ -78,6 +81,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   setPlayMode: (m) => set({ playMode: m }),
 
   setFadeEnabled: (v) => set({ fadeEnabled: v }),
+
+  setLyricOffset: (v) => set({ lyricOffset: v }),
 
   setCurrentTime: (t) => set({ currentTime: t }),
 

@@ -574,6 +574,30 @@ app.whenReady().then(() => {
     app.setLoginItemSettings({ openAtLogin: enabled })
   })
 
+  // 音乐文件夹管理
+  ipcMain.handle('settings:getFolders', async () => {
+    const db = getDatabase()
+    const rows = db.prepare('SELECT path FROM music_folders ORDER BY id').all() as { path: string }[]
+    return rows.map(r => r.path)
+  })
+
+  ipcMain.handle('settings:addFolder', async () => {
+    const result = await dialog.showOpenDialog(mainWindow!, {
+      properties: ['openDirectory']
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+
+    const folderPath = result.filePaths[0]
+    const db = getDatabase()
+    db.prepare('INSERT OR IGNORE INTO music_folders (path) VALUES (?)').run(folderPath)
+    return folderPath
+  })
+
+  ipcMain.on('settings:removeFolder', (_event, folderPath: string) => {
+    const db = getDatabase()
+    db.prepare('DELETE FROM music_folders WHERE path = ?').run(folderPath)
+  })
+
   // macOS：点击 dock 图标时重新创建窗口
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

@@ -14,7 +14,7 @@ import PlayerBar from './components/PlayerBar'
 import MiniPlayer from './components/MiniPlayer'
 import { useTheme } from './hooks/useTheme'
 import { useAudioSync } from './hooks/useAudioSync'
-import { restorePlayerState } from './stores/playerStore'
+import { restorePlayerState, usePlayerStore } from './stores/playerStore'
 import { useUIStore } from './stores/uiStore'
 import type { Theme } from './types'
 
@@ -38,19 +38,34 @@ function App() {
     window.electronAPI.send('window:set-mini-mode', isMiniMode)
   }, [isMiniMode])
 
-  // 启动时恢复播放状态 + 主题设置
+  // 启动时恢复播放状态 + 主题设置 + 歌词偏移量 + 淡入淡出
   useEffect(() => {
     async function hydrate() {
       try {
-        // 并行恢复：播放状态 + 主题设置
-        const [, savedTheme] = await Promise.all([
+        // 并行恢复：播放状态 + 主题设置 + 歌词偏移量 + 淡入淡出
+        const [, savedTheme, savedLyricOffset, savedFadeEnabled] = await Promise.all([
           restorePlayerState(),
           window.electronAPI.invoke('settings:get', { key: 'theme' }) as Promise<string | null>,
+          window.electronAPI.invoke('settings:get', { key: 'lyricOffset' }) as Promise<string | null>,
+          window.electronAPI.invoke('settings:get', { key: 'fadeEnabled' }) as Promise<string | null>,
         ])
 
         // 恢复主题（如果有保存的值）
         if (savedTheme && ['dark', 'light', 'system'].includes(savedTheme)) {
           useUIStore.getState().setTheme(savedTheme as Theme)
+        }
+
+        // 恢复歌词偏移量
+        if (savedLyricOffset) {
+          const offset = parseFloat(savedLyricOffset)
+          if (!isNaN(offset)) {
+            usePlayerStore.getState().setLyricOffset(offset)
+          }
+        }
+
+        // 恢复淡入淡出设置
+        if (savedFadeEnabled) {
+          usePlayerStore.getState().setFadeEnabled(savedFadeEnabled === 'true')
         }
       } catch (e) {
         console.error('[App] 水合失败:', e)
