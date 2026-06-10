@@ -6,8 +6,8 @@
 .lyrics-page {
   display: flex;
   height: 100%;
-  gap: 24px;
-  padding: 24px;
+  gap: 3vw;
+  padding: 3vh 3vw;
   overflow: hidden;
 }
 
@@ -15,7 +15,7 @@
   align-items: center;
   justify-content: center;
   color: var(--text-secondary);
-  font-size: 16px;
+  font-size: 2vw;
 }
 
 /* 左侧：封面 + 歌曲信息 */
@@ -25,16 +25,16 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 20px;
+  gap: 2.5vh;
 }
 
-/* 封面 */
+/* 封面（随视口缩放） */
 .lyrics-page__cover {
-  width: 280px;
-  height: 280px;
-  border-radius: 12px;
+  width: min(32vw, 50vh);
+  height: min(32vw, 50vh);
+  border-radius: 1.5vw;
   overflow: hidden;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 1vh 3vh rgba(0, 0, 0, 0.3);
 }
 
 .lyrics-page__cover-img {
@@ -50,7 +50,7 @@
   align-items: center;
   justify-content: center;
   background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
-  font-size: 64px;
+  font-size: 6vw;
   color: var(--text-muted);
 }
 
@@ -60,24 +60,24 @@
 }
 
 .lyrics-page__title {
-  font-size: 20px;
+  font-size: 2.2vw;
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 8px;
-  max-width: 280px;
+  margin-bottom: 0.8vh;
+  max-width: 32vw;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .lyrics-page__artist {
-  font-size: 14px;
+  font-size: 1.4vw;
   color: var(--text-secondary);
-  margin-bottom: 4px;
+  margin-bottom: 0.4vh;
 }
 
 .lyrics-page__album {
-  font-size: 12px;
+  font-size: 1.1vw;
   color: var(--text-muted);
 }
 
@@ -85,16 +85,16 @@
 .lyrics-page__offset {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 1vw;
 }
 
 .lyrics-page__offset-btn {
-  padding: 4px 12px;
+  padding: 0.4vh 1vw;
   border: 1.5px solid var(--border);
-  border-radius: 6px;
+  border-radius: 0.6vw;
   background: var(--bg-secondary);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 1.1vw;
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -105,9 +105,9 @@
 }
 
 .lyrics-page__offset-label {
-  font-size: 12px;
+  font-size: 1.1vw;
   color: var(--text-muted);
-  min-width: 60px;
+  min-width: 5vw;
   text-align: center;
 }
 
@@ -139,7 +139,7 @@
 
 .lyrics-panel__hint {
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: 1.5vw;
 }
 
 /* 上下留白（让歌词能滚动到中间） */
@@ -150,8 +150,8 @@
 
 /* 歌词行（统一字号，靠透明度区分层次） */
 .lyrics-panel__line {
-  padding: 12px 0;
-  font-size: 26px;
+  padding: 1.2vh 0;
+  font-size: 2.5vw;
   font-weight: 500;
   color: var(--text-secondary);
   text-align: center;
@@ -167,9 +167,22 @@
 
 /* 当前播放行：白色加粗 */
 .lyrics-panel__line--active {
-  font-size: 26px;
+  font-size: 2.5vw;
   font-weight: 700;
   color: var(--text-primary);
+}
+
+/* 双语歌词文本 */
+.lyrics-panel__text {
+  line-height: 1.5;
+}
+
+/* 双语歌词翻译行 */
+.lyrics-panel__translation {
+  font-size: 0.85em;
+  opacity: 0.7;
+  margin-top: 0.3vh;
+  line-height: 1.5;
 }
 
 /* 播放栏封面可点击 */
@@ -202,20 +215,20 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 1.5vh;
   width: 100%;
-  max-width: 280px;
+  max-width: 32vw;
 }
 
 .lyrics-page__buttons {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 2vw;
 }
 
 .lyrics-page__btn {
-  width: 40px;
-  height: 40px;
+  width: 4vw;
+  height: 4vw;
   border: none;
   border-radius: 50%;
   background: transparent;
@@ -233,8 +246,8 @@
 }
 
 .lyrics-page__btn--play {
-  width: 48px;
-  height: 48px;
+  width: 5vw;
+  height: 5vw;
   color: var(--text-primary);
 }
 
@@ -246,22 +259,22 @@
 .lyrics-page__progress-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 1vw;
   width: 100%;
 }
 
 .lyrics-page__time {
-  font-size: 11px;
+  font-size: 1.1vw;
   color: var(--text-muted);
-  min-width: 35px;
+  min-width: 4vw;
   text-align: center;
 }
 
 .lyrics-page__progress-bar {
   flex: 1;
-  height: 4px;
+  height: 0.4vh;
   background: var(--bg-tertiary);
-  border-radius: 2px;
+  border-radius: 0.2vh;
   position: relative;
   cursor: pointer;
 }
@@ -269,7 +282,7 @@
 .lyrics-page__progress-fill {
   height: 100%;
   background: var(--accent);
-  border-radius: 2px;
+  border-radius: 0.2vh;
   transition: width 0.1s linear;
 }
 
@@ -277,8 +290,8 @@
   position: absolute;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: 12px;
-  height: 12px;
+  width: 1.2vw;
+  height: 1.2vw;
   background: var(--accent);
   border-radius: 50%;
   opacity: 0;
