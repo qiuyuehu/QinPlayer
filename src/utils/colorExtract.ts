@@ -1,20 +1,40 @@
 // =============================================================================
 // QinPlayer — 封面主色提取
 // =============================================================================
-// 职责：从封面图片提取一个主色，作为歌词界面背景
+// 职责：从封面图片提取核心主色，作为歌词界面背景
 // 设计要点：
 //   - ⚠️ 暗礁 2：缩小到 50x50 离屏 Canvas 采样，计算量降低 99%
 //   - ⚠️ 暗礁 2：crossOrigin='anonymous' 防止 Canvas 污染
-//   - 只提取一个主色（频率最高的颜色）
+//   - 自动排除白色、银色等类白色（歌词是浅色文字，背景太浅看不清）
+//   - 提取核心颜色：排除类白色后，取频率最高的颜色
 //   - 降级：无封面或提取失败时返回默认中性灰黑
 // =============================================================================
 
 /**
- * 从封面图片 URL 提取一个主色
+ * 判断颜色是否是类白色（白色、银色等浅色）
+ * 规则：RGB 值都很高，且接近
+ */
+function isWhitish(r: number, g: number, b: number): boolean {
+  // 所有通道都 > 200，且最大值和最小值差距 < 50
+  const min = Math.min(r, g, b)
+  const max = Math.max(r, g, b)
+  return min > 200 && (max - min) < 50
+}
+
+/**
+ * 判断颜色是否太暗（接近黑色）
+ * 规则：RGB 值都很低
+ */
+function isBlackish(r: number, g: number, b: number): boolean {
+  return r < 30 && g < 30 && b < 30
+}
+
+/**
+ * 从封面图片 URL 提取核心主色
  * ⚠️ 暗礁 2：缩小到 50x50 采样 + crossOrigin='anonymous'
  *
  * @param imageUrl 封面图片 URL（qinplayer://cover 或 blob:）
- * @returns 主色的 RGB 字符串
+ * @returns 核心主色的 RGB 字符串
  */
 export async function extractMainColor(imageUrl: string): Promise<string> {
   return new Promise((resolve) => {
@@ -40,7 +60,7 @@ export async function extractMainColor(imageUrl: string): Promise<string> {
         }
 
         // 颜色统计算法：统计像素颜色频率
-        const colorMap = new Map<string, number>()
+        const colorMap = new Map<string, { count: number; r: number; g: number; b: number }>()
 
         for (let i = 0; i < imageData.length; i += 4) {
           const r = imageData[i]
@@ -51,27 +71,37 @@ export async function extractMainColor(imageUrl: string): Promise<string> {
           // 跳过透明像素
           if (a < 128) continue
 
+          // 排除类白色（白色、银色等）
+          if (isWhitish(r, g, b)) continue
+
+          // 排除太暗的颜色（接近黑色）
+          if (isBlackish(r, g, b)) continue
+
           // 量化颜色（减少颜色种类，提高统计效率）
           const qr = Math.round(r / 32) * 32
           const qg = Math.round(g / 32) * 32
           const qb = Math.round(b / 32) * 32
 
           const key = `${qr},${qg},${qb}`
-          colorMap.set(key, (colorMap.get(key) || 0) + 1)
+          const existing = colorMap.get(key)
+          if (existing) {
+            existing.count++
+          } else {
+            colorMap.set(key, { count: 1, r: qr, g: qg, b: qb })
+          }
         }
 
-        // 按频率排序，取第一个（最高频）
+        // 按频率排序
         const sorted = Array.from(colorMap.entries())
-          .sort((a, b) => b[1] - a[1])
+          .sort((a, b) => b[1].count - a[1].count)
 
         if (sorted.length === 0) {
           resolve(getDefaultColor())
           return
         }
 
-        // 返回最高频的颜色
-        const [key] = sorted[0]
-        const [r, g, b] = key.split(',').map(Number)
+        // 返回频率最高的颜色
+        const [, { r, g, b }] = sorted[0]
         resolve(`rgb(${r}, ${g}, ${b})`)
       } catch (err) {
         console.warn('[ColorExtract] Canvas 提取失败:', err)

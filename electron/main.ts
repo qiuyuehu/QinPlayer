@@ -152,6 +152,26 @@ function registerWindowIPC(): void {
       })
     }
   })
+
+  // 标题栏按钮显隐（歌词界面时隐藏）
+  ipcMain.on('titlebar:set-visible', (_event, visible: boolean) => {
+    if (!mainWindow) return
+    if (visible) {
+      // 显示原生按钮
+      mainWindow.setTitleBarOverlay({
+        color: '#1a1a1a',
+        symbolColor: '#e8e8ef',
+        height: 36
+      })
+    } else {
+      // 隐藏原生按钮（设置 height: 0）
+      mainWindow.setTitleBarOverlay({
+        color: '#1a1a1a',
+        symbolColor: '#e8e8ef',
+        height: 0
+      })
+    }
+  })
 }
 
 // ---------------------------------------------------------------------------
