@@ -1834,6 +1834,9 @@ html, body {
 /* 双语歌词文本 */
 .lyrics-panel__text {
   line-height: 1.5;
+  white-space: nowrap;  /* 防止歌词被强制换行 */
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* 双语歌词第二行（翻译）稍微小一点 */
