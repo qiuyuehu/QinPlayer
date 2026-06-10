@@ -144,7 +144,7 @@
 
 /* 上下留白（让歌词能滚动到中间） */
 .lyrics-panel__spacer {
-  height: 20vh;
+  height: 0vh;
   flex-shrink: 0;
 }
 
