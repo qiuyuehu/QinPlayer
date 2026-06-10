@@ -1,0 +1,102 @@
+/* =============================================================================
+   QinPlayer — 基础样式（重置、布局、骨架屏、滚动条）
+   ============================================================================= */
+
+/* 重置默认样式 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* 根元素 */
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* React 根节点 */
+#root {
+  width: 100%;
+  height: 100%;
+}
+
+/* 应用容器：纵向三段式 */
+.app {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 主体区域：横向两栏（占满剩余空间） */
+.app__main {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* 骨架屏 */
+.app__skeleton {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.app__skeleton-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background-color: var(--bg-secondary);
+  border-right: 1px solid var(--border);
+}
+
+.app__skeleton-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 24px;
+}
+
+.app__skeleton-bar {
+  height: 16px;
+  background-color: var(--bg-tertiary);
+  border-radius: 4px;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+/* 禁止文本选中（桌面应用不需要） */
+* {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}

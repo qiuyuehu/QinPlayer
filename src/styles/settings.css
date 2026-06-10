@@ -1,0 +1,285 @@
+/* =============================================================================
+   设置页面
+   ============================================================================= */
+
+.settings-page {
+  max-width: 640px;
+}
+
+.settings-page__title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 24px;
+}
+
+/* 设置分区 */
+.settings-section {
+  margin-bottom: 24px;
+}
+
+.settings-section__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-section--placeholder {
+  opacity: 0.5;
+}
+
+/* 设置项：左侧信息 + 右侧控件 */
+.settings-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+}
+
+.settings-item__info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-item__label {
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.settings-item__desc {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.settings-item__control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* 下拉选择框 */
+.settings-select {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 13px;
+  min-width: 200px;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.settings-select:hover {
+  border-color: var(--accent);
+}
+
+.settings-select:focus {
+  border-color: var(--accent);
+}
+
+.settings-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 按钮 */
+.settings-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.settings-btn:hover {
+  background-color: var(--bg-tertiary);
+  border-color: var(--accent);
+}
+
+.settings-btn--icon {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+
+/* ===== 开关样式 ===== */
+
+.settings-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+
+.settings-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.settings-switch__slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--bg-tertiary);
+  transition: 0.3s;
+  border-radius: 24px;
+}
+
+.settings-switch__slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+}
+
+.settings-switch input:checked + .settings-switch__slider {
+  background-color: var(--accent);
+}
+
+.settings-switch input:checked + .settings-switch__slider:before {
+  transform: translateX(20px);
+}
+
+.settings-switch input:focus + .settings-switch__slider {
+  box-shadow: 0 0 1px var(--accent);
+}
+
+/* ===== 文件夹列表样式 ===== */
+
+.folder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.folder-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.folder-item--empty {
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.folder-item__path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.folder-item__remove {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  margin-left: 8px;
+  transition: all 0.2s ease;
+}
+
+.folder-item__remove:hover {
+  background: var(--bg-tertiary);
+  color: #ef4444;
+}
+
+/* ===== 歌词偏移量控件 ===== */
+
+.lyric-offset-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.lyric-offset-value {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  min-width: 50px;
+  text-align: center;
+}
+
+.settings-btn--small {
+  padding: 4px 12px;
+  font-size: 12px;
+}
+
+/* ===== 主题切换按钮组 ===== */
+
+.theme-options {
+  display: flex;
+  gap: 8px;
+}
+
+.theme-option {
+  padding: 6px 16px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.theme-option:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.theme-option--active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+
+.theme-option--active:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  color: #ffffff;
+}

@@ -1,0 +1,138 @@
+/* =============================================================================
+   歌曲列表
+   ============================================================================= */
+
+.song-list__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* 虚拟列表滚动容器 */
+.song-list__scroll {
+  height: calc(100vh - 260px);  /* 填满剩余空间（减去标题栏+导航+表头+播放条） */
+  overflow: auto;
+  border-radius: 0 0 8px 8px;
+  border: 1px solid var(--border);
+  border-top: none;
+}
+
+.song-list__header {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: var(--bg-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border);
+  border-radius: 8px 8px 0 0;
+}
+
+.song-list__row {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  height: 44px;  /* 与 ROW_HEIGHT 常量一致，虚拟列表需要精确高度 */
+  font-size: 13px;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background-color 0.1s;
+  box-sizing: border-box;
+}
+
+.song-list__row:last-child {
+  border-bottom: none;
+}
+
+.song-list__row:hover {
+  background-color: var(--bg-tertiary);
+}
+
+.song-list__row--active {
+  background-color: rgba(160, 160, 160, 0.08);
+}
+
+.song-list__row--active:hover {
+  background-color: rgba(160, 160, 160, 0.12);
+}
+
+.song-list__col {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 4px;
+  transition: color 0.15s;
+}
+
+.song-list__col--index {
+  width: 40px;
+  flex-shrink: 0;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.song-list__row--active .song-list__col--index {
+  color: var(--accent);
+}
+
+.song-list__col--title {
+  flex: 1;
+  min-width: 0;
+}
+
+.song-list__row--active .song-list__col--title {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.song-list__col--artist {
+  width: 140px;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.song-list__col--album {
+  width: 140px;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.song-list__col--duration {
+  width: 60px;
+  flex-shrink: 0;
+  text-align: right;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 收藏心形按钮 */
+.song-list__like {
+  width: 32px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  padding: 0;
+}
+
+.song-list__row:hover .song-list__like,
+.song-list__like--active {
+  opacity: 1;
+}

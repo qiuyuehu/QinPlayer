@@ -1,0 +1,33 @@
+/* =============================================================================
+   最近播放 / 我喜欢的 页面
+   ============================================================================= */
+
+.recent-page__title,
+.liked-page__title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 16px;
+}
+
+.recent-page__loading,
+.liked-page__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.recent-page__empty,
+.liked-page__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: var(--text-muted);
+  font-size: 13px;
+  gap: 4px;
+}

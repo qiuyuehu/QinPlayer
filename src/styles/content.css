@@ -1,0 +1,41 @@
+/* =============================================================================
+   右侧内容区
+   ============================================================================= */
+
+.content {
+  flex: 1;
+  background-color: var(--bg-primary);
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+
+/* 导航切换时内容区淡入动画 */
+.content__fade-wrapper {
+  animation: contentFadeIn 0.2s ease;
+}
+
+@keyframes contentFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* 页面占位 */
+.page-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.page-placeholder__title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.page-placeholder__desc {
+  font-size: 13px;
+  color: var(--text-muted);
+}
