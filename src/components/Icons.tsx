@@ -15,7 +15,7 @@ interface IconProps {
 export function IconPlay({ width = 20, height = 20, className }: IconProps) {
   return (
     <svg width={width} height={height} viewBox="0 0 20 20" fill="currentColor" className={className}>
-      <path d="M6 4.5v11l9-5.5L6 4.5z" />
+      <path d="M5.5 3.5v13l11-6.5L5.5 3.5z" />
     </svg>
   )
 }
@@ -24,8 +24,8 @@ export function IconPlay({ width = 20, height = 20, className }: IconProps) {
 export function IconPause({ width = 20, height = 20, className }: IconProps) {
   return (
     <svg width={width} height={height} viewBox="0 0 20 20" fill="currentColor" className={className}>
-      <rect x="5" y="4" width="3" height="12" rx="0.5" />
-      <rect x="12" y="4" width="3" height="12" rx="0.5" />
+      <rect x="4.5" y="3" width="3.5" height="14" rx="0.75" />
+      <rect x="12" y="3" width="3.5" height="14" rx="0.75" />
     </svg>
   )
 }
@@ -34,8 +34,8 @@ export function IconPause({ width = 20, height = 20, className }: IconProps) {
 export function IconPrev({ width = 20, height = 20, className }: IconProps) {
   return (
     <svg width={width} height={height} viewBox="0 0 20 20" fill="currentColor" className={className}>
-      <path d="M13 5v10L6 10l7-5z" />
-      <rect x="5" y="5" width="1.5" height="10" rx="0.25" />
+      <path d="M13 4v12L5.5 10 13 4z" />
+      <rect x="4" y="4" width="2" height="12" rx="0.5" />
     </svg>
   )
 }
@@ -44,8 +44,8 @@ export function IconPrev({ width = 20, height = 20, className }: IconProps) {
 export function IconNext({ width = 20, height = 20, className }: IconProps) {
   return (
     <svg width={width} height={height} viewBox="0 0 20 20" fill="currentColor" className={className}>
-      <path d="M7 5v10l7-5-7-5z" />
-      <rect x="13.5" y="5" width="1.5" height="10" rx="0.25" />
+      <path d="M7 4v12l7.5-6L7 4z" />
+      <rect x="14" y="4" width="2" height="12" rx="0.5" />
     </svg>
   )
 }

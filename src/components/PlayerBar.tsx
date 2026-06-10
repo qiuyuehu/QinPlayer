@@ -237,7 +237,7 @@ function PlayerBar() {
       <div className="player-bar__controls">
         <div className="player-bar__buttons">
           <button className="player-bar__btn" onClick={handlePrev} title="上一首">
-            <IconPrev width={20} height={20} />
+            <IconPrev width={22} height={22} />
           </button>
           <button
             className={`player-bar__btn player-bar__play-btn ${playPulse ? 'player-bar__play-btn--pulse' : ''}`}
@@ -245,12 +245,12 @@ function PlayerBar() {
             title={isPlaying ? '暂停' : '播放'}
           >
             {isPlaying
-              ? <IconPause width={24} height={24} />
-              : <IconPlay width={24} height={24} />
+              ? <IconPause width={28} height={28} />
+              : <IconPlay width={28} height={28} />
             }
           </button>
           <button className="player-bar__btn" onClick={handleNext} title="下一首">
-            <IconNext width={20} height={20} />
+            <IconNext width={22} height={22} />
           </button>
         </div>
         <div className="player-bar__progress-row">
