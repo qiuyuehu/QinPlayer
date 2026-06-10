@@ -42,6 +42,10 @@ function Settings() {
   // --- 音乐文件夹状态 ---
   const [folders, setFolders] = useState<string[]>([])
 
+  // --- 导入导出状态 ---
+  const [exporting, setExporting] = useState(false)   // 导出中
+  const [importing, setImporting] = useState(false)    // 导入中
+
   // ---------------------------------------------------------------------------
   // 主题切换
   // ---------------------------------------------------------------------------
@@ -155,6 +159,58 @@ function Settings() {
     window.electronAPI.send('settings:removeFolder', folderPath)
     setFolders(prev => prev.filter(f => f !== folderPath))
   }, [])
+
+  // ---------------------------------------------------------------------------
+  // 数据导入/导出
+  // ---------------------------------------------------------------------------
+
+  // 导出备份
+  const handleExport = useCallback(async () => {
+    if (exporting) return
+    setExporting(true)
+    try {
+      const result = await window.electronAPI.invoke('db:export') as { success: boolean; canceled?: boolean; error?: string }
+      if (result.canceled) return
+      if (result.success) {
+        alert('备份导出成功！')
+      } else {
+        alert('导出失败：' + (result.error || '未知错误'))
+      }
+    } catch (err) {
+      alert('导出失败：' + String(err))
+    } finally {
+      setExporting(false)
+    }
+  }, [exporting])
+
+  // 导入备份（两步：选文件 → 确认 → 替换并重启）
+  const handleImport = useCallback(async () => {
+    if (importing) return
+    try {
+      // 第一步：选择备份文件
+      const backupPath = await window.electronAPI.invoke('db:import-select') as string | null
+      if (!backupPath) return
+
+      // 第二步：确认（会覆盖现有数据）
+      const confirmed = window.confirm(
+        '导入备份将替换当前所有数据（歌单、播放记录、设置等），且应用会自动重启。\n\n确定继续吗？'
+      )
+      if (!confirmed) return
+
+      setImporting(true)
+
+      // 第三步：替换数据库并重启
+      const result = await window.electronAPI.invoke('db:import-apply', backupPath) as { success: boolean; error?: string }
+      if (!result.success) {
+        alert('导入失败：' + (result.error || '未知错误'))
+        setImporting(false)
+      }
+      // 成功的话应用会自动重启，不需要处理
+    } catch (err) {
+      alert('导入失败：' + String(err))
+      setImporting(false)
+    }
+  }, [importing])
 
   return (
     <div className="settings-page">
@@ -335,6 +391,45 @@ function Settings() {
                 +0.1s
               </button>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ===== 数据管理区域 ===== */}
+      <section className="settings-section">
+        <h3 className="settings-section__title">数据</h3>
+
+        {/* 导出备份 */}
+        <div className="settings-item">
+          <div className="settings-item__info">
+            <span className="settings-item__label">导出备份</span>
+            <span className="settings-item__desc">将数据库导出为 .db 文件</span>
+          </div>
+          <div className="settings-item__control">
+            <button
+              className="settings-btn"
+              onClick={handleExport}
+              disabled={exporting}
+            >
+              {exporting ? '导出中...' : '导出备份'}
+            </button>
+          </div>
+        </div>
+
+        {/* 导入备份 */}
+        <div className="settings-item">
+          <div className="settings-item__info">
+            <span className="settings-item__label">导入备份</span>
+            <span className="settings-item__desc">从 .db 文件恢复数据（会覆盖当前数据，应用将自动重启）</span>
+          </div>
+          <div className="settings-item__control">
+            <button
+              className="settings-btn"
+              onClick={handleImport}
+              disabled={importing}
+            >
+              {importing ? '导入中...' : '导入备份'}
+            </button>
           </div>
         </div>
       </section>

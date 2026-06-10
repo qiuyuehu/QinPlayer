@@ -138,6 +138,89 @@ function registerWindowIPC(): void {
     shell.showItemInFolder(filePath)
   })
 
+  // --- 导出数据库备份 ---
+  // 1. 弹出保存对话框让用户选择路径
+  // 2. WAL checkpoint 确保所有数据落盘（⚠️ 暗礁 3）
+  // 3. 复制 .db 文件到目标路径
+  ipcMain.handle('db:export', async () => {
+    try {
+      const result = await dialog.showSaveDialog(mainWindow!, {
+        title: '导出备份',
+        defaultPath: 'QinPlayer-备份.db',
+        filters: [{ name: '数据库文件', extensions: ['db'] }]
+      })
+      if (result.canceled || !result.filePath) return { success: false, canceled: true }
+
+      const db = getDatabase()
+      // 强制 WAL 日志合并到主 .db 文件，防止导出后丢数据
+      db.pragma('wal_checkpoint(TRUNCATE)')
+
+      const fs = require('fs') as typeof import('fs')
+      const dbPath = join(app.getPath('userData'), 'qinplayer.db')
+      fs.copyFileSync(dbPath, result.filePath)
+
+      console.log('[备份] 导出成功:', result.filePath)
+      return { success: true, path: result.filePath }
+    } catch (err) {
+      console.error('[备份] 导出失败:', err)
+      return { success: false, error: String(err) }
+    }
+  })
+
+  // --- 导入数据库备份（第一步：选择文件） ---
+  // 弹出打开对话框，让用户选择 .db 文件
+  ipcMain.handle('db:import-select', async () => {
+    const result = await dialog.showOpenDialog(mainWindow!, {
+      title: '导入备份',
+      filters: [{ name: '数据库文件', extensions: ['db'] }],
+      properties: ['openFile']
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+    return result.filePaths[0]
+  })
+
+  // --- 导入数据库备份（第二步：替换并重启） ---
+  // 关闭当前数据库 → 替换 .db 文件 → 重启应用
+  ipcMain.handle('db:import-apply', (_event, backupPath: string) => {
+    try {
+      const fs = require('fs') as typeof import('fs')
+      const dbPath = join(app.getPath('userData'), 'qinplayer.db')
+
+      // 关闭当前数据库连接
+      closeDatabase()
+
+      // 用备份文件替换当前数据库
+      fs.copyFileSync(backupPath, dbPath)
+
+      // 删除 WAL 和 SHM 残留文件（旧数据库的，防止恢复后数据混乱）
+      // 如果被锁住就跳过，initDatabase() 会自动处理
+      const walPath = dbPath + '-wal'
+      const shmPath = dbPath + '-shm'
+      try { if (fs.existsSync(walPath)) fs.unlinkSync(walPath) } catch { /* 忽略 */ }
+      try { if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath) } catch { /* 忽略 */ }
+
+      // 重新初始化数据库连接（替换后的文件）
+      initDatabase()
+
+      console.log('[备份] 导入成功，正在重启...')
+
+      // 开发模式：重新加载页面（不杀 Vite dev server）
+      // 打包后：真正重启应用
+      if (app.isPackaged) {
+        app.relaunch()
+        app.exit(0)
+      } else {
+        // 开发模式下重新加载渲染进程
+        mainWindow?.webContents.reload()
+      }
+
+      return { success: true }
+    } catch (err) {
+      console.error('[备份] 导入失败:', err)
+      return { success: false, error: String(err) }
+    }
+  })
+
   // 读取 .lrc 歌词文件内容
   ipcMain.handle('read-lrc-file', async (_event, lrcPath: string): Promise<string | null> => {
     const fs = require('fs') as typeof import('fs')
