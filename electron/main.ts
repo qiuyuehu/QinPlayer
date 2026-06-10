@@ -3,14 +3,27 @@
 // =============================================================================
 // 职责：应用生命周期管理、窗口创建、协议注册、IPC 路由
 // 注意：主进程通过 electron-vite 编译为 CommonJS，但源码用 TypeScript 编写
+//
+// 模块拆分：
+//   electron/ipc/protocol.ts — qinplayer:// 协议拦截
+//   electron/ipc/window.ts   — 窗口控制、数据库导入导出、迷你模式
+//   electron/ipc/scan.ts     — 文件夹扫描、Worker 管理、增量扫描
+//   electron/ipc/songs.ts    — 歌曲 CRUD、收藏、最近播放
+//   electron/ipc/playlists.ts — 歌单管理
+//   electron/ipc/settings.ts — 设置、音乐文件夹管理
+//   electron/tray.ts         — 系统托盘
+//   electron/db/database.ts  — SQLite 数据库
 // =============================================================================
 
-import { app, BrowserWindow, ipcMain, protocol, dialog, shell, nativeTheme } from 'electron'
+import { app, BrowserWindow, ipcMain, protocol, nativeTheme } from 'electron'
 import { join } from 'path'
-import { initDatabase, closeDatabase, getDatabase } from './db/database'
+import { initDatabase, closeDatabase } from './db/database'
 import { registerSongsIPC } from './ipc/songs'
 import { registerPlaylistsIPC } from './ipc/playlists'
 import { registerSettingsIPC } from './ipc/settings'
+import { registerWindowIPC } from './ipc/window'
+import { registerProtocol } from './ipc/protocol'
+import { registerScanIPC, startIncrementalScan } from './ipc/scan'
 import { createTray, updateMenu, destroyTray } from './tray'
 
 // ---------------------------------------------------------------------------
@@ -20,10 +33,12 @@ import { createTray, updateMenu, destroyTray } from './tray'
 let mainWindow: BrowserWindow | null = null
 let isPlaying = false  // 播放状态（托盘菜单需要）
 
-// ---------------------------------------------------------------------------
-// 获取播放状态（托盘模块调用）
-// ---------------------------------------------------------------------------
+/** 获取主窗口引用（供各 IPC 模块使用） */
+function getMainWindow(): BrowserWindow | null {
+  return mainWindow
+}
 
+/** 获取播放状态（托盘模块调用） */
 function getIsPlaying(): boolean {
   return isPlaying
 }
@@ -98,497 +113,10 @@ function createWindow(): void {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
-  // 窗口关闭时的处理（Phase 3 实现托盘后改为最小化到托盘）
+  // 窗口关闭时的处理
   mainWindow.on('closed', () => {
     mainWindow = null
   })
-}
-
-// ---------------------------------------------------------------------------
-// 窗口控制 IPC
-// ---------------------------------------------------------------------------
-
-function registerWindowIPC(): void {
-  // 最小化窗口
-  ipcMain.on('window:minimize', () => {
-    mainWindow?.minimize()
-  })
-
-  // 最大化/还原切换
-  ipcMain.on('window:maximize', () => {
-    if (mainWindow?.isMaximized()) {
-      mainWindow.unmaximize()
-    } else {
-      mainWindow?.maximize()
-    }
-  })
-
-  // 关闭窗口（Phase 3 改为最小化到托盘）
-  ipcMain.on('window:close', () => {
-    mainWindow?.close()
-  })
-
-  // 打开文件夹（用系统资源管理器）
-  ipcMain.handle('open-folder', async (_event, folderPath: string) => {
-    await shell.openPath(folderPath)
-  })
-
-  // 打开文件所在目录并选中文件（歌曲信息弹窗用）
-  ipcMain.handle('open-file-location', (_event, filePath: string) => {
-    shell.showItemInFolder(filePath)
-  })
-
-  // --- 导出数据库备份 ---
-  // 1. 弹出保存对话框让用户选择路径
-  // 2. WAL checkpoint 确保所有数据落盘（⚠️ 暗礁 3）
-  // 3. 复制 .db 文件到目标路径
-  ipcMain.handle('db:export', async () => {
-    try {
-      const result = await dialog.showSaveDialog(mainWindow!, {
-        title: '导出备份',
-        defaultPath: 'QinPlayer-备份.db',
-        filters: [{ name: '数据库文件', extensions: ['db'] }]
-      })
-      if (result.canceled || !result.filePath) return { success: false, canceled: true }
-
-      const db = getDatabase()
-      // 强制 WAL 日志合并到主 .db 文件，防止导出后丢数据
-      db.pragma('wal_checkpoint(TRUNCATE)')
-
-      const fs = require('fs') as typeof import('fs')
-      const dbPath = join(app.getPath('userData'), 'qinplayer.db')
-      fs.copyFileSync(dbPath, result.filePath)
-
-      console.log('[备份] 导出成功:', result.filePath)
-      return { success: true, path: result.filePath }
-    } catch (err) {
-      console.error('[备份] 导出失败:', err)
-      return { success: false, error: String(err) }
-    }
-  })
-
-  // --- 导入数据库备份（第一步：选择文件） ---
-  // 弹出打开对话框，让用户选择 .db 文件
-  ipcMain.handle('db:import-select', async () => {
-    const result = await dialog.showOpenDialog(mainWindow!, {
-      title: '导入备份',
-      filters: [{ name: '数据库文件', extensions: ['db'] }],
-      properties: ['openFile']
-    })
-    if (result.canceled || result.filePaths.length === 0) return null
-    return result.filePaths[0]
-  })
-
-  // --- 导入数据库备份（第二步：替换并重启） ---
-  // 关闭当前数据库 → 替换 .db 文件 → 重启应用
-  ipcMain.handle('db:import-apply', (_event, backupPath: string) => {
-    try {
-      const fs = require('fs') as typeof import('fs')
-      const dbPath = join(app.getPath('userData'), 'qinplayer.db')
-
-      // 关闭当前数据库连接
-      closeDatabase()
-
-      // 用备份文件替换当前数据库
-      fs.copyFileSync(backupPath, dbPath)
-
-      // 删除 WAL 和 SHM 残留文件（旧数据库的，防止恢复后数据混乱）
-      // 如果被锁住就跳过，initDatabase() 会自动处理
-      const walPath = dbPath + '-wal'
-      const shmPath = dbPath + '-shm'
-      try { if (fs.existsSync(walPath)) fs.unlinkSync(walPath) } catch { /* 忽略 */ }
-      try { if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath) } catch { /* 忽略 */ }
-
-      // 重新初始化数据库连接（替换后的文件）
-      initDatabase()
-
-      console.log('[备份] 导入成功，正在重启...')
-
-      // 开发模式：重新加载页面（不杀 Vite dev server）
-      // 打包后：真正重启应用
-      if (app.isPackaged) {
-        app.relaunch()
-        app.exit(0)
-      } else {
-        // 开发模式下重新加载渲染进程
-        mainWindow?.webContents.reload()
-      }
-
-      return { success: true }
-    } catch (err) {
-      console.error('[备份] 导入失败:', err)
-      return { success: false, error: String(err) }
-    }
-  })
-
-  // 读取 .lrc 歌词文件内容
-  ipcMain.handle('read-lrc-file', async (_event, lrcPath: string): Promise<string | null> => {
-    const fs = require('fs') as typeof import('fs')
-    try {
-      if (fs.existsSync(lrcPath)) {
-        return fs.readFileSync(lrcPath, 'utf-8')
-      }
-      return null
-    } catch (err) {
-      console.error('[IPC] 读取歌词文件失败:', lrcPath, err)
-      return null
-    }
-  })
-
-  // 主题切换 → 通知渲染进程（不再需要更新 titleBarOverlay）
-  ipcMain.on('theme-changed', (_event, theme: 'dark' | 'light') => {
-    // frame: false 模式下没有原生按钮，不需要 setTitleBarOverlay
-    console.log('[Main] 主题切换:', theme)
-  })
-
-  // 迷你模式切换
-  ipcMain.on('window:set-mini-mode', (_event, isMini: boolean) => {
-    if (!mainWindow) return
-    if (isMini) {
-      // 进入迷你模式
-      mainWindow.setAlwaysOnTop(true, 'screen-saver')  // 置顶
-      mainWindow.setMinimumSize(350, 150)               // 解除最小尺寸限制
-      mainWindow.setSize(350, 150)                      // 缩小窗口
-    } else {
-      // 退出迷你模式
-      mainWindow.setAlwaysOnTop(false)
-      mainWindow.setMinimumSize(800, 600)              // 恢复最小尺寸
-      mainWindow.setSize(1000, 680)                    // 恢复主窗口大小
-      mainWindow.center()                              // 居中显示
-    }
-  })
-}
-
-// ---------------------------------------------------------------------------
-// 协议拦截（在 app.whenReady 中注册）
-// ---------------------------------------------------------------------------
-// qinplayer://audio?path=xxx → 主进程拦截 → 读取本地文件 → 返回音频流
-// 支持 Range Requests（拖动进度条需要 206 响应）
-// ---------------------------------------------------------------------------
-
-function registerProtocol(): void {
-  protocol.handle('qinplayer', (request) => {
-    try {
-      const url = new URL(request.url)
-      const filePath = decodeURIComponent(url.searchParams.get('path') || '')
-      const host = url.hostname  // 'audio' 或 'cover'
-
-      const fs = require('fs') as typeof import('fs')
-      const { Readable } = require('stream') as typeof import('stream')
-
-      if (!filePath || !fs.existsSync(filePath)) {
-        return new Response('Not Found', { status: 404 })
-      }
-
-      const stat = fs.statSync(filePath)
-
-      // 根据类型确定 Content-Type
-      let contentType: string
-      if (host === 'cover') {
-        // 封面图片
-        const ext = filePath.toLowerCase()
-        if (ext.endsWith('.png')) contentType = 'image/png'
-        else contentType = 'image/jpeg'
-      } else {
-        // 音频文件
-        const ext = filePath.toLowerCase()
-        if (ext.endsWith('.flac')) contentType = 'audio/flac'
-        else if (ext.endsWith('.wav')) contentType = 'audio/wav'
-        else if (ext.endsWith('.ogg')) contentType = 'audio/ogg'
-        else if (ext.endsWith('.m4a') || ext.endsWith('.aac')) contentType = 'audio/mp4'
-        else contentType = 'audio/mpeg'
-      }
-
-      const range = request.headers.get('range')
-
-      if (range) {
-        // ---- Range Request（拖动进度条 / 缓冲）----
-        const parts = range.replace(/bytes=/, '').split('-')
-        const start = parseInt(parts[0], 10)
-        const end = parts[1] ? parseInt(parts[1], 10) : stat.size - 1
-        const chunkSize = (end - start) + 1
-
-        const stream = fs.createReadStream(filePath, { start, end })
-        const webStream = Readable.toWeb(stream) as ReadableStream
-
-        return new Response(webStream, {
-          status: 206,
-          headers: {
-            'Content-Range': `bytes ${start}-${end}/${stat.size}`,
-            'Accept-Ranges': 'bytes',
-            'Content-Length': chunkSize.toString(),
-            'Content-Type': contentType
-          }
-        })
-      } else {
-        // ---- 完整文件请求 ----
-        const stream = fs.createReadStream(filePath)
-        const webStream = Readable.toWeb(stream) as ReadableStream
-
-        return new Response(webStream, {
-          headers: {
-            'Content-Length': stat.size.toString(),
-            'Content-Type': contentType
-          }
-        })
-      }
-    } catch (err) {
-      console.error('[Protocol] 处理异常:', err)
-      return new Response('Internal Error', { status: 500 })
-    }
-  })
-}
-
-// ---------------------------------------------------------------------------
-// 文件夹扫描 IPC（使用 Worker Threads）
-// ---------------------------------------------------------------------------
-// ⚠️ 绝对不要在主进程主线程同步读取和解析大量音频文件的 ID3 标签！
-// 使用 Worker Threads 在独立线程中扫描，通过 postMessage 传递结果
-// ---------------------------------------------------------------------------
-
-import { Worker } from 'worker_threads'
-
-let scanWorker: Worker | null = null
-
-function registerScanIPC(): void {
-  // 打开文件夹选择对话框
-  ipcMain.handle('select-folder', async () => {
-    const result = await dialog.showOpenDialog(mainWindow!, {
-      properties: ['openDirectory']
-    })
-    if (result.canceled) return null
-    return result.filePaths[0]
-  })
-
-  // 启动 Worker 扫描文件夹
-  ipcMain.handle('scan-folder', async (_event, folderPath: string) => {
-    try {
-      const db = getDatabase()
-
-      // 保存文件夹到数据库
-      db.prepare('INSERT OR IGNORE INTO music_folders (path) VALUES (?)').run(folderPath)
-
-      // 封面缓存目录
-      const coversDir = join(app.getPath('userData'), 'covers')
-
-      // 创建 Worker 线程（用户手动扫描 = 全量模式）
-      const workerPath = join(__dirname, 'scanner.js')
-      scanWorker = new Worker(workerPath, {
-        workerData: {
-          folderPaths: [folderPath],
-          coversDir,
-          mode: 'full',           // 用户手动选择文件夹时走全量扫描
-          existingFiles: {}        // 全量模式不需要已有文件映射
-        }
-      })
-
-      // 监听 Worker 消息
-      scanWorker.on('message', (msg: { type: string; data: unknown }) => {
-        switch (msg.type) {
-          case 'song':
-            // Worker 解析完一首歌，写入数据库
-            insertSong(msg.data as ScanResult)
-            // 推送给渲染进程更新 UI
-            mainWindow?.webContents.send('scan:song-found', msg.data)
-            break
-
-          case 'progress':
-            // 推送扫描进度
-            mainWindow?.webContents.send('scan:progress', msg.data)
-            break
-
-          case 'done':
-            // 扫描完成
-            mainWindow?.webContents.send('scan:done', msg.data)
-            scanWorker = null
-            break
-
-          case 'error':
-            // 扫描错误
-            console.error('[Scanner] 错误:', msg.data)
-            mainWindow?.webContents.send('scan:error', msg.data)
-            break
-
-          case 'log':
-            console.log('[Scanner]', msg.data)
-            break
-        }
-      })
-
-      scanWorker.on('error', (err) => {
-        console.error('[Scanner] Worker 异常:', err)
-        mainWindow?.webContents.send('scan:error', { message: err.message })
-        scanWorker = null
-      })
-
-      return { success: true }
-    } catch (e) {
-      return { success: false, error: String(e) }
-    }
-  })
-}
-
-// ---------------------------------------------------------------------------
-// 数据库写入辅助函数
-// ---------------------------------------------------------------------------
-
-interface ScanResult {
-  filePath: string
-  fileName: string
-  title: string | null
-  artist: string | null
-  album: string | null
-  duration: number | null
-  coverPath: string | null
-  mtime: number
-}
-
-/**
- * 将 Worker 解析的歌曲数据写入数据库
- * 使用 upsert：新歌插入，已有歌曲更新元数据和封面（保留 play_count）
- */
-function insertSong(song: ScanResult): void {
-  const db = getDatabase()
-  db.prepare(`
-    INSERT INTO songs (file_path, file_name, title, artist, album, duration, cover_path, mtime)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(file_path) DO UPDATE SET
-      title = excluded.title,
-      artist = excluded.artist,
-      album = excluded.album,
-      duration = excluded.duration,
-      cover_path = COALESCE(excluded.cover_path, songs.cover_path),
-      mtime = excluded.mtime
-  `).run(
-    song.filePath,
-    song.fileName,
-    song.title,
-    song.artist,
-    song.album,
-    song.duration,
-    song.coverPath,
-    song.mtime
-  )
-}
-
-// ---------------------------------------------------------------------------
-// 增量扫描相关辅助函数
-// ---------------------------------------------------------------------------
-
-/**
- * 从数据库获取所有歌曲的 file_path + mtime（增量对比用）
- * 返回 Map<filePath, mtime>
- */
-function getExistingSongs(): Record<string, number> {
-  const db = getDatabase()
-  const rows = db.prepare('SELECT file_path, mtime FROM songs').all() as { file_path: string; mtime: number }[]
-  const map: Record<string, number> = {}
-  for (const row of rows) {
-    map[row.file_path] = row.mtime
-  }
-  return map
-}
-
-/**
- * 清理已删除的歌曲记录
- * 对比数据库中的 file_path 和文件系统实际存在的文件，删除不存在的记录
- */
-function cleanDeletedSongs(existingPaths: string[]): number {
-  const db = getDatabase()
-  const dbSongs = db.prepare('SELECT id, file_path FROM songs').all() as { id: number; file_path: string }[]
-  const pathSet = new Set(existingPaths)
-
-  let deletedCount = 0
-  const deleteStmt = db.prepare('DELETE FROM songs WHERE id = ?')
-  for (const song of dbSongs) {
-    if (!pathSet.has(song.file_path)) {
-      deleteStmt.run(song.id)
-      deletedCount++
-    }
-  }
-
-  if (deletedCount > 0) {
-    console.log(`[增量扫描] 已清理 ${deletedCount} 条已删除文件的记录`)
-  }
-  return deletedCount
-}
-
-/**
- * 启动增量扫描（应用启动时自动调用）
- * 从数据库读取已注册的音乐文件夹和已有歌曲，启动 Worker 做增量扫描
- */
-function startIncrementalScan(): void {
-  try {
-    const db = getDatabase()
-
-    // 1. 读取已注册的音乐文件夹
-    const folders = db.prepare('SELECT path FROM music_folders ORDER BY id').all() as { path: string }[]
-    if (folders.length === 0) {
-      console.log('[增量扫描] 没有已注册的音乐文件夹，跳过')
-      return
-    }
-
-    const folderPaths = folders.map(f => f.path)
-
-    // 2. 读取已有歌曲的 file_path + mtime
-    const existingFiles = getExistingSongs()
-    console.log(`[增量扫描] 启动：${folderPaths.length} 个文件夹，${Object.keys(existingFiles).length} 首已有歌曲`)
-
-    // 3. 封面缓存目录
-    const coversDir = join(app.getPath('userData'), 'covers')
-
-    // 4. 创建增量扫描 Worker
-    const workerPath = join(__dirname, 'scanner.js')
-    const worker = new Worker(workerPath, {
-      workerData: {
-        folderPaths,
-        coversDir,
-        mode: 'incremental',
-        existingFiles
-      }
-    })
-
-    // 5. 监听 Worker 消息（复用已有 IPC 事件，渲染进程无需改动）
-    worker.on('message', (msg: { type: string; data: unknown }) => {
-      switch (msg.type) {
-        case 'song':
-          // 新增/更新的歌曲，写入数据库
-          insertSong(msg.data as ScanResult)
-          // 推送给渲染进程
-          mainWindow?.webContents.send('scan:song-found', msg.data)
-          break
-
-        case 'progress':
-          mainWindow?.webContents.send('scan:progress', msg.data)
-          break
-
-        case 'existing-paths':
-          // Worker 发送了文件系统中实际存在的所有文件路径，清理已删除的记录
-          const { paths } = msg.data as { paths: string[] }
-          cleanDeletedSongs(paths)
-          break
-
-        case 'done':
-          console.log('[增量扫描] 完成')
-          mainWindow?.webContents.send('scan:done', msg.data)
-          break
-
-        case 'error':
-          console.error('[增量扫描] 错误:', msg.data)
-          break
-
-        case 'log':
-          console.log('[增量扫描]', msg.data)
-          break
-      }
-    })
-
-    worker.on('error', (err) => {
-      console.error('[增量扫描] Worker 异常:', err)
-    })
-  } catch (err) {
-    console.error('[增量扫描] 启动失败:', err)
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -602,34 +130,28 @@ app.whenReady().then(() => {
   // 2. 注册自定义协议拦截
   registerProtocol()
 
-  // 3. 注册窗口控制 IPC
-  registerWindowIPC()
-
-  // 4. 注册文件夹扫描 IPC
-  registerScanIPC()
-
-  // 5. 注册数据库相关 IPC（歌曲/歌单/设置）
+  // 3. 注册各模块 IPC 通道
+  registerWindowIPC(getMainWindow)
+  registerScanIPC(getMainWindow)
   registerSongsIPC()
   registerPlaylistsIPC()
-  registerSettingsIPC(() => mainWindow)
+  registerSettingsIPC(getMainWindow)
 
-  // 6. 创建主窗口
+  // 4. 创建主窗口
   createWindow()
 
-  // 7. 启动增量扫描（后台自动检测新增/修改的歌曲）
-  // 窗口创建后再启动，确保渲染进程已准备好接收事件
-  startIncrementalScan()
+  // 5. 启动增量扫描（后台自动检测新增/修改的歌曲）
+  startIncrementalScan(getMainWindow)
 
-  // 8. 监听系统主题变化（nativeTheme），主动通知渲染进程
-  // 渲染进程的 matchMedia 也能监听，但主进程监听更可靠（双重保险）
+  // 6. 监听系统主题变化（nativeTheme），主动通知渲染进程
   nativeTheme.on('updated', () => {
     const systemTheme = nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
     mainWindow?.webContents.send('theme:system-changed', systemTheme)
   })
 
-  // 9. 创建系统托盘
+  // 7. 创建系统托盘
   createTray(
-    () => mainWindow,
+    getMainWindow,
     getIsPlaying,
     () => {
       // 播放/暂停：切换状态并通知渲染进程
@@ -662,10 +184,6 @@ app.whenReady().then(() => {
     app.setLoginItemSettings({ openAtLogin: enabled })
   })
 
-
-
-
-
   // macOS：点击 dock 图标时重新创建窗口
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -674,13 +192,10 @@ app.whenReady().then(() => {
   })
 })
 
-// 所有窗口关闭时退出（macOS 除外，Phase 3 加入托盘后行为会变）
+// 所有窗口关闭时退出（macOS 除外）
 app.on('window-all-closed', () => {
-  // 关闭数据库连接
   closeDatabase()
-  // 销毁托盘
   destroyTray()
-  // 退出应用
   if (process.platform !== 'darwin') {
     app.quit()
   }
