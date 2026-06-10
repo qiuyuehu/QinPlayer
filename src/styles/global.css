@@ -1820,3 +1820,25 @@ html, body {
 .lyrics-page__progress-bar:hover .lyrics-page__progress-thumb {
   opacity: 1;
 }
+
+/* 隐藏歌词面板滚动条（保留滚动功能） */
+.lyrics-panel::-webkit-scrollbar {
+  display: none;
+}
+
+.lyrics-panel {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* 双语歌词文本 */
+.lyrics-panel__text {
+  line-height: 1.5;
+}
+
+/* 双语歌词第二行（翻译）稍微小一点 */
+.lyrics-panel__text + .lyrics-panel__text {
+  font-size: 0.85em;
+  opacity: 0.7;
+  margin-top: 2px;
+}
