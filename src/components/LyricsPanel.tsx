@@ -70,8 +70,8 @@ function LyricsPanel({ lyrics, currentTime, offset = 0, onLineClick }: LyricsPan
     const elementTop = currentElement.offsetTop
     const elementHeight = currentElement.offsetHeight
 
-    // 计算偏移量：让当前行居中
-    const targetScroll = elementTop - containerHeight / 2 + elementHeight / 2
+    // 计算偏移量：让当前行居中，但整体上移 15% 让歌词和封面对齐
+    const targetScroll = elementTop - containerHeight * 0.35 + elementHeight / 2
 
     // 使用 CSS transform 实现 GPU 加速滚动（不用 scrollTop）
     container.style.transform = `translateY(${-targetScroll}px)`
