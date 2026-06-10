@@ -11,12 +11,22 @@ import { initDatabase, closeDatabase, getDatabase } from './db/database'
 import { registerSongsIPC } from './ipc/songs'
 import { registerPlaylistsIPC } from './ipc/playlists'
 import { registerSettingsIPC } from './ipc/settings'
+import { createTray, updateMenu, destroyTray } from './tray'
 
 // ---------------------------------------------------------------------------
 // 全局引用
 // ---------------------------------------------------------------------------
 
 let mainWindow: BrowserWindow | null = null
+let isPlaying = false  // 播放状态（托盘菜单需要）
+
+// ---------------------------------------------------------------------------
+// 获取播放状态（托盘模块调用）
+// ---------------------------------------------------------------------------
+
+function getIsPlaying(): boolean {
+  return isPlaying
+}
 
 // ---------------------------------------------------------------------------
 // 自定义协议注册（必须在 app.whenReady 之前！）
@@ -70,6 +80,14 @@ function createWindow(): void {
   })
   mainWindow.on('unmaximize', () => {
     mainWindow?.webContents.send('window:maximized', false)
+  })
+
+  // 关闭窗口时隐藏到托盘（不退出）
+  mainWindow.on('close', (e) => {
+    if (!(app as any).isQuitting) {
+      e.preventDefault()
+      mainWindow?.hide()
+    }
   })
 
   // 开发模式加载 Vite 开发服务器，打包后加载本地文件
@@ -521,6 +539,32 @@ app.whenReady().then(() => {
     mainWindow?.webContents.send('theme:system-changed', systemTheme)
   })
 
+  // 9. 创建系统托盘
+  createTray(
+    () => mainWindow,
+    getIsPlaying,
+    () => {
+      // 播放/暂停：切换状态并通知渲染进程
+      isPlaying = !isPlaying
+      mainWindow?.webContents.send('tray:play-pause')
+      updateMenu()
+    },
+    () => {
+      // 上一首
+      mainWindow?.webContents.send('tray:prev')
+    },
+    () => {
+      // 下一首
+      mainWindow?.webContents.send('tray:next')
+    }
+  )
+
+  // 10. 播放状态同步（渲染进程通知主进程）
+  ipcMain.on('player:playing-changed', (_event, playing: boolean) => {
+    isPlaying = playing
+    updateMenu()
+  })
+
   // macOS：点击 dock 图标时重新创建窗口
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -533,7 +577,9 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   // 关闭数据库连接
   closeDatabase()
-
+  // 销毁托盘
+  destroyTray()
+  // 退出应用
   if (process.platform !== 'darwin') {
     app.quit()
   }

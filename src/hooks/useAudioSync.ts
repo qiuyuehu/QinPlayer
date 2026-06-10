@@ -229,4 +229,35 @@ export function useAudioSync() {
     setCurrentTime(seekTime)
     setSeekTime(null)
   }, [seekTime, setCurrentTime, setSeekTime])
+
+  // ---------------------------------------------------------------------------
+  // 播放状态变化 → 通知主进程（托盘菜单需要）
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    window.electronAPI.send('player:playing-changed', isPlaying)
+  }, [isPlaying])
+
+  // ---------------------------------------------------------------------------
+  // 监听托盘事件（托盘右键菜单的播放控制）
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    const unsubPlayPause = window.electronAPI.on('tray:play-pause', () => {
+      const current = usePlayerStore.getState().isPlaying
+      usePlayerStore.getState().setPlaying(!current)
+    })
+
+    const unsubPrev = window.electronAPI.on('tray:prev', () => {
+      usePlayerStore.getState().prevTrack()
+    })
+
+    const unsubNext = window.electronAPI.on('tray:next', () => {
+      usePlayerStore.getState().nextTrack()
+    })
+
+    return () => {
+      unsubPlayPause()
+      unsubPrev()
+      unsubNext()
+    }
+  }, [])
 }
