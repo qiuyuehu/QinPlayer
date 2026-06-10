@@ -38,7 +38,7 @@ function parseTimestamp(minutes: string, seconds: string, ms: string): number {
 /**
  * 检测并拆分双语歌词
  * 1. 优先用 ｜ 分隔
- * 2. 自动检测：外文 + 空格 + 中文
+ * 2. 自动检测：找到第一个 CJK 字符，往前找空格作为分界点
  */
 function detectBilingual(raw: string): { text: string; translation?: string } {
   // 1. 优先用 ｜ 分隔
@@ -50,19 +50,24 @@ function detectBilingual(raw: string): { text: string; translation?: string } {
     }
   }
 
-  // 2. 自动检测：用空格分隔
-  const lastSpace = raw.lastIndexOf(' ')
-  if (lastSpace > 0 && lastSpace < raw.length - 1) {
-    const left = raw.substring(0, lastSpace)
-    const right = raw.substring(lastSpace + 1)
-
-    // 一侧主要是拉丁/假名，另一侧纯 CJK → 双语（左侧为原文）
-    if ((hasLatin(left) || hasKana(left)) && hasCJK(right) && !hasLatin(right) && !hasKana(right)) {
-      return { text: left, translation: right }
+  // 2. 自动检测：找到第一个中文字符的位置
+  const firstCJKIndex = raw.search(/[\u4e00-\u9fff]/)
+  if (firstCJKIndex > 0) {
+    // 往前找空格，作为原文和翻译的分界点
+    let splitIndex = firstCJKIndex
+    while (splitIndex > 0 && raw[splitIndex - 1] !== ' ') {
+      splitIndex--
     }
-    // 两侧都有 CJK → 日文假名在左 = "日文 中文翻译"
-    if (hasKana(left) && hasCJK(right) && !hasKana(right)) {
-      return { text: left, translation: right }
+
+    // 如果找到了有效的分界点（空格不在开头）
+    if (splitIndex > 0 && splitIndex < raw.length) {
+      const left = raw.substring(0, splitIndex).trim()
+      const right = raw.substring(splitIndex).trim()
+
+      // 验证：左侧主要是外文（拉丁/假名），右侧是中文
+      if (left && right && (hasLatin(left) || hasKana(left)) && hasCJK(right)) {
+        return { text: left, translation: right }
+      }
     }
   }
 
