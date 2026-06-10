@@ -98,21 +98,32 @@ function LyricsPanel({ lyrics, currentTime, offset = 0, onLineClick }: LyricsPan
       {/* 顶部留白（让第一行歌词能滚动到中间） */}
       <div className="lyrics-panel__spacer" />
 
-      {lyrics.map((line, index) => (
-        <div
-          key={`${line.time}-${index}`}
-          ref={(el) => { itemRefs.current[index] = el }}
-          className={`lyrics-panel__line ${
-            index === currentIndex ? 'lyrics-panel__line--active' : ''
-          }`}
-          onClick={() => handleLineClick(line.time)}
-        >
-          <div className="lyrics-panel__text">{line.text || '♪'}</div>
-          {line.translation && (
-            <div className="lyrics-panel__translation">{line.translation}</div>
-          )}
-        </div>
-      ))}
+      {lyrics.map((line, index) => {
+        // 计算当前行与激活行的距离（渐进式披露核心）
+        const distance = Math.abs(index - currentIndex)
+        // 距离越远，越小越透明
+        const scale = distance === 0 ? 1.15 : distance === 1 ? 1 : distance === 2 ? 0.92 : 0.85
+        const opacity = distance === 0 ? 1 : distance === 1 ? 0.65 : distance === 2 ? 0.4 : 0.25
+        const isActive = index === currentIndex
+
+        return (
+          <div
+            key={`${line.time}-${index}`}
+            ref={(el) => { itemRefs.current[index] = el }}
+            className={`lyrics-panel__line ${isActive ? 'lyrics-panel__line--active' : ''}`}
+            onClick={() => handleLineClick(line.time)}
+            style={{
+              transform: `scale(${scale})`,
+              opacity,
+            }}
+          >
+            <div className="lyrics-panel__text">{line.text || '♪'}</div>
+            {line.translation && (
+              <div className="lyrics-panel__translation">{line.translation}</div>
+            )}
+          </div>
+        )
+      })}
 
       {/* 底部留白 */}
       <div className="lyrics-panel__spacer" />

@@ -150,12 +150,16 @@
 
 /* 歌词行 */
 .lyrics-panel__line {
-  padding: 8px 0;
-  font-size: 16px;
+  padding: 10px 0;
+  font-size: 18px;
   color: var(--text-secondary);
   text-align: center;
-  transition: all 0.3s ease;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+              color 0.3s ease;
   cursor: pointer;
+  transform-origin: center center;
+  will-change: transform, opacity;
 }
 
 .lyrics-panel__line:hover {
@@ -164,10 +168,9 @@
 
 /* 当前播放行 */
 .lyrics-panel__line--active {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 600;
   color: var(--text-primary);
-  transform: scale(1.05);
 }
 
 /* 播放栏封面可点击 */
