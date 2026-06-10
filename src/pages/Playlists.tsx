@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import SongList from '../components/SongList'
 import CreatePlaylistDialog from '../components/CreatePlaylistDialog'
+import { IconList, IconClose } from '../components/Icons'
 import type { Track, Playlist } from '../types'
 
 /**
@@ -182,7 +183,7 @@ function Playlists() {
               // 点击卡片进入该歌单详情视图
               onClick={() => setSelectedPlaylist(pl)}
             >
-              <div className="playlists__card-icon">📋</div>
+              <div className="playlists__card-icon"><IconList width={32} height={32} /></div>
               <div className="playlists__card-name">{pl.name}</div>
               <div className="playlists__card-count">{pl.songCount || 0} 首</div>
               {/* 删除按钮：stopPropagation 防止触发卡片的点击事件（进入详情） */}
@@ -194,7 +195,7 @@ function Playlists() {
                 }}
                 title="删除歌单"
               >
-                ✕
+                <IconClose width={11} height={11} />
               </button>
             </div>
           ))}
