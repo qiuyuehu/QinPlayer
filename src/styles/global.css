@@ -1843,3 +1843,32 @@ html, body {
   margin-top: 2px;
   line-height: 1.5;
 }
+
+/* 歌词页面有渐变背景时，调整文字颜色确保可读 */
+.lyrics-page--immersive[style] .lyrics-page__title,
+.lyrics-page--immersive[style] .lyrics-page__artist,
+.lyrics-page--immersive[style] .lyrics-page__album {
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.lyrics-page--immersive[style] .lyrics-panel__text {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.lyrics-page--immersive[style] .lyrics-panel__line--active .lyrics-panel__text {
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.lyrics-page--immersive[style] .lyrics-panel__translation {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.lyrics-page--immersive[style] .lyrics-page__btn {
+  color: #ffffff;
+}
+
+.lyrics-page--immersive[style] .lyrics-page__time {
+  color: rgba(255, 255, 255, 0.6);
+}

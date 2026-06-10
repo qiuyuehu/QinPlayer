@@ -14,6 +14,7 @@ import { usePlayerStore } from '../stores/playerStore'
 import { useUIStore } from '../stores/uiStore'
 import LyricsPanel from '../components/LyricsPanel'
 import { parseLrc } from '../utils/lrcParser'
+import { extractColors, generateGradient } from '../utils/colorExtract'
 import type { LyricLine } from '../types'
 
 function Lyrics() {
@@ -32,6 +33,7 @@ function Lyrics() {
 
   // --- 歌词状态 ---
   const [lyrics, setLyrics] = useState<LyricLine[]>([])
+  const [bgGradient, setBgGradient] = useState('')
 
   // --- 进度条拖拽 ---
   const progressRef = useRef<HTMLDivElement>(null)
@@ -80,6 +82,16 @@ function Lyrics() {
       .catch(() => {
         setLyrics([])
       })
+
+    // 提取封面主色生成渐变背景（⚠️ 暗礁 2：50x50 Canvas 采样）
+    if (currentTrack.coverPath) {
+      const coverUrl = window.electronAPI.getCoverUrl(currentTrack.coverPath)
+      extractColors(coverUrl).then((colors) => {
+        setBgGradient(generateGradient(colors))
+      })
+    } else {
+      setBgGradient('')
+    }
   }, [currentTrack])
 
   // ---------------------------------------------------------------------------
@@ -149,7 +161,10 @@ function Lyrics() {
   const progressPercent = duration > 0 ? (displayTime / duration) * 100 : 0
 
   return (
-    <div className="lyrics-page lyrics-page--immersive">
+    <div
+      className="lyrics-page lyrics-page--immersive"
+      style={bgGradient ? { background: bgGradient } : undefined}
+    >
       {/* 左侧：封面 + 歌曲信息 + 播放控制 */}
       <div className="lyrics-page__left">
         {/* 封面 */}
