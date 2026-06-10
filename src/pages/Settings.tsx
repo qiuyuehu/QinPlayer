@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getAudioEngine } from '../utils/AudioEngine'
 import { useUIStore } from '../stores/uiStore'
+import { usePlayerStore } from '../stores/playerStore'
 import type { Theme } from '../types'
 
 // 主题选项配置
@@ -26,6 +27,13 @@ function Settings() {
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
   const [currentDeviceId, setCurrentDeviceId] = useState<string>('default')
   const [switching, setSwitching] = useState(false)  // 切换中标记（防止重复点击）
+
+  // --- 开机自启动状态 ---
+  const [autoLaunch, setAutoLaunch] = useState(false)
+
+  // --- 淡入淡出状态（从 Zustand 读取） ---
+  const fadeEnabled = usePlayerStore((s) => s.fadeEnabled)
+  const setFadeEnabled = usePlayerStore((s) => s.setFadeEnabled)
 
   // ---------------------------------------------------------------------------
   // 主题切换
@@ -78,6 +86,33 @@ function Settings() {
     await loadDevices()
   }, [loadDevices])
 
+  // ---------------------------------------------------------------------------
+  // 开机自启动
+  // ---------------------------------------------------------------------------
+
+  // 加载开机自启动状态
+  useEffect(() => {
+    window.electronAPI.invoke('get-auto-launch').then((enabled: boolean) => {
+      setAutoLaunch(enabled)
+    })
+  }, [])
+
+  // 切换开机自启动
+  const handleAutoLaunchChange = useCallback(async (enabled: boolean) => {
+    setAutoLaunch(enabled)
+    window.electronAPI.send('set-auto-launch', enabled)
+  }, [])
+
+  // ---------------------------------------------------------------------------
+  // 淡入淡出开关
+  // ---------------------------------------------------------------------------
+
+  const handleFadeChange = useCallback((enabled: boolean) => {
+    setFadeEnabled(enabled)
+    // 持久化到数据库
+    window.electronAPI.invoke('settings:set', { key: 'fadeEnabled', value: String(enabled) })
+  }, [setFadeEnabled])
+
   return (
     <div className="settings-page">
       <h2 className="settings-page__title">设置</h2>
@@ -106,6 +141,24 @@ function Settings() {
                 </button>
               ))}
             </div>
+          </div>
+        </div>
+
+        {/* 开机自启动 */}
+        <div className="settings-item">
+          <div className="settings-item__info">
+            <span className="settings-item__label">开机自启动</span>
+            <span className="settings-item__desc">开机时自动启动 QinPlayer</span>
+          </div>
+          <div className="settings-item__control">
+            <label className="settings-switch">
+              <input
+                type="checkbox"
+                checked={autoLaunch}
+                onChange={(e) => handleAutoLaunchChange(e.target.checked)}
+              />
+              <span className="settings-switch__slider" />
+            </label>
           </div>
         </div>
       </section>
@@ -152,6 +205,24 @@ function Settings() {
             >
               ↻
             </button>
+          </div>
+        </div>
+
+        {/* 淡入淡出开关 */}
+        <div className="settings-item">
+          <div className="settings-item__info">
+            <span className="settings-item__label">淡入淡出</span>
+            <span className="settings-item__desc">切歌时音量平滑过渡</span>
+          </div>
+          <div className="settings-item__control">
+            <label className="settings-switch">
+              <input
+                type="checkbox"
+                checked={fadeEnabled}
+                onChange={(e) => handleFadeChange(e.target.checked)}
+              />
+              <span className="settings-switch__slider" />
+            </label>
           </div>
         </div>
       </section>

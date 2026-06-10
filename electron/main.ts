@@ -559,10 +559,19 @@ app.whenReady().then(() => {
     }
   )
 
-  // 10. 播放状态同步（渲染进程通知主进程）
+  // 播放状态同步（渲染进程通知主进程）
   ipcMain.on('player:playing-changed', (_event, playing: boolean) => {
     isPlaying = playing
     updateMenu()
+  })
+
+  // 开机自启动
+  ipcMain.handle('get-auto-launch', () => {
+    return app.getLoginItemSettings().openAtLogin
+  })
+
+  ipcMain.on('set-auto-launch', (_event, enabled: boolean) => {
+    app.setLoginItemSettings({ openAtLogin: enabled })
   })
 
   // macOS：点击 dock 图标时重新创建窗口

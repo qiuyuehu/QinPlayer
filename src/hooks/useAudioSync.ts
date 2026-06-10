@@ -33,7 +33,7 @@ export function useAudioSync() {
   // 标记：音频加载完毕后需要自动播放
   const pendingAutoPlay = useRef(false)
   const pendingSeekRef = useRef<number | null>(null)  // 启动时恢复的 seek 位置
-  const fadeEnabled = useRef(true)  // 淡入淡出开关（默认开启，后续可从设置读取）
+  const fadeEnabled = usePlayerStore((s) => s.fadeEnabled)  // 淡入淡出开关
 
   // 标记：引擎事件是否已注册
   const eventsRegistered = useRef(false)
@@ -156,7 +156,7 @@ export function useAudioSync() {
     updateMediaSession(currentTrack)
 
     // 根据 fadeEnabled 决定是否使用淡入淡出
-    if (fadeEnabled.current && isPlaying) {
+    if (fadeEnabled && isPlaying) {
       // 淡入淡出模式：fadeOut → load → play → fadeIn
       engine.loadWithFade(url, 500).catch((err) => {
         if (err.name !== 'AbortError') {
