@@ -133,6 +133,11 @@ function registerWindowIPC(): void {
     await shell.openPath(folderPath)
   })
 
+  // 打开文件所在目录并选中文件（歌曲信息弹窗用）
+  ipcMain.handle('open-file-location', (_event, filePath: string) => {
+    shell.showItemInFolder(filePath)
+  })
+
   // 读取 .lrc 歌词文件内容
   ipcMain.handle('read-lrc-file', async (_event, lrcPath: string): Promise<string | null> => {
     const fs = require('fs') as typeof import('fs')

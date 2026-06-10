@@ -57,7 +57,13 @@ function SongInfoDialog({ track, onClose }: SongInfoDialogProps) {
           </div>
           <div className="song-info__row">
             <span className="song-info__label">路径</span>
-            <span className="song-info__value song-info__value--path">{formatPath(track.filePath)}</span>
+            <span
+              className="song-info__value song-info__value--path song-info__value--clickable"
+              onClick={() => window.electronAPI.invoke('open-file-location', track.filePath)}
+              title="点击打开文件所在目录"
+            >
+              {formatPath(track.filePath)}
+            </span>
           </div>
         </div>
 

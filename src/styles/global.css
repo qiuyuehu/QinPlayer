@@ -683,6 +683,19 @@ html, body {
   font-family: monospace;
 }
 
+/* 路径可点击（打开文件所在目录） */
+.song-info__value--clickable {
+  cursor: pointer;
+  transition: color 0.15s;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+}
+
+.song-info__value--clickable:hover {
+  color: var(--accent);
+  text-decoration-color: var(--accent);
+}
+
 /* =============================================================================
    本地音乐页面
    ============================================================================= */
