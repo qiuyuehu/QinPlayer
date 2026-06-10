@@ -1834,14 +1834,12 @@ html, body {
 /* 双语歌词文本 */
 .lyrics-panel__text {
   line-height: 1.5;
-  white-space: nowrap;  /* 防止歌词被强制换行 */
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-/* 双语歌词第二行（翻译）稍微小一点 */
-.lyrics-panel__text + .lyrics-panel__text {
+/* 双语歌词翻译行 */
+.lyrics-panel__translation {
   font-size: 0.85em;
   opacity: 0.7;
   margin-top: 2px;
+  line-height: 1.5;
 }

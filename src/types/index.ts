@@ -51,7 +51,8 @@ export interface Album {
 
 export interface LyricLine {
   time: number             // 时间戳（秒）
-  text: string             // 歌词文本
+  text: string             // 歌词文本（原文）
+  translation?: string     // 翻译文本（可选，双语歌词时存在）
 }
 
 // ---------------------------------------------------------------------------

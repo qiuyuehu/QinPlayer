@@ -107,12 +107,10 @@ function LyricsPanel({ lyrics, currentTime, offset = 0, onLineClick }: LyricsPan
           }`}
           onClick={() => handleLineClick(line.time)}
         >
-          {/* 双语歌词：用换行符分隔，渲染为多行 */}
-          {line.text.split('\n').map((text, i) => (
-            <div key={i} className="lyrics-panel__text">
-              {text}
-            </div>
-          ))}
+          <div className="lyrics-panel__text">{line.text || '♪'}</div>
+          {line.translation && (
+            <div className="lyrics-panel__translation">{line.translation}</div>
+          )}
         </div>
       ))}
 
