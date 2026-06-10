@@ -122,5 +122,14 @@ export function registerSongsIPC(): void {
     return !!row
   })
 
+  // --- songs:deleteAll — 清空所有歌曲 ---
+  ipcMain.handle('songs:deleteAll', () => {
+    const db = getDatabase()
+    // 外键 CASCADE 会自动清理歌单关联、收藏、播放记录
+    const result = db.prepare('DELETE FROM songs').run()
+    console.log('[IPC] 已清空所有歌曲:', result.changes, '首')
+    return { deleted: result.changes }
+  })
+
   console.log('[IPC] 歌曲相关通道已注册')
 }

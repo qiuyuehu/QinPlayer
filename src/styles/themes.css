@@ -17,9 +17,9 @@
   --text-secondary: #999999;
   --text-muted: #666666;
 
-  /* 强调色 */
-  --accent: #6366f1;
-  --accent-hover: #818cf8;
+  /* 强调色（中性银灰，不偏蓝） */
+  --accent: #a0a0a0;
+  --accent-hover: #c0c0c0;
 
   /* 边框 */
   --border: #2a2a2a;
@@ -41,8 +41,8 @@
   --text-secondary: #86868b;
   --text-muted: #aeaeb2;
 
-  --accent: #6366f1;
-  --accent-hover: #4f46e5;
+  --accent: #6b6b6b;
+  --accent-hover: #555555;
 
   --border: #d2d2d7;
 

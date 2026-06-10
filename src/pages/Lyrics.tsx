@@ -16,6 +16,7 @@ import LyricsPanel from '../components/LyricsPanel'
 import { parseLrc } from '../utils/lrcParser'
 import { extractMainColor } from '../utils/colorExtract'
 import type { LyricLine } from '../types'
+import { IconPlay, IconPause, IconPrev, IconNext, IconBack } from '../components/Icons'
 
 function Lyrics() {
   // --- 播放状态 ---
@@ -169,13 +170,13 @@ function Lyrics() {
       {/* 顶部拖拽区域 */}
       <div className="lyrics-page__drag-area" />
 
-      {/* 右上角菜单按钮（点击回到主页面） */}
+      {/* 右上角返回按钮（点击回到主页面） */}
       <button
         className="lyrics-page__back-btn"
         onClick={() => setActiveNav('local')}
         title="返回"
       >
-        ☰
+        <IconBack width={18} height={18} />
       </button>
 
       {/* 左侧：封面 + 歌曲信息 + 播放控制 */}
@@ -203,14 +204,22 @@ function Lyrics() {
         {/* 播放控制 */}
         <div className="lyrics-page__controls">
           <div className="lyrics-page__buttons">
-            <button className="lyrics-page__btn" onClick={prevTrack}>⏮</button>
+            <button className="lyrics-page__btn" onClick={prevTrack} title="上一首">
+              <IconPrev width={20} height={20} />
+            </button>
             <button
               className="lyrics-page__btn lyrics-page__btn--play"
               onClick={() => setPlaying(!isPlaying)}
+              title={isPlaying ? '暂停' : '播放'}
             >
-              {isPlaying ? '⏸' : '▶'}
+              {isPlaying
+                ? <IconPause width={22} height={22} />
+                : <IconPlay width={22} height={22} />
+              }
             </button>
-            <button className="lyrics-page__btn" onClick={nextTrack}>⏭</button>
+            <button className="lyrics-page__btn" onClick={nextTrack} title="下一首">
+              <IconNext width={20} height={20} />
+            </button>
           </div>
 
           {/* 小进度条 */}

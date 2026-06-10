@@ -9,13 +9,18 @@ import { useRef, useCallback, useState, useEffect } from 'react'   // React Hook
 import { usePlayerStore, togglePlayMode } from '../stores/playerStore'  // Zustand 状态
 import { useUIStore } from '../stores/uiStore'  // UI 状态（导航切换、迷你模式）
 import type { PlayMode } from '../types'  // 播放模式类型
+import {
+  IconPlay, IconPause, IconPrev, IconNext,
+  IconVolumeHigh, IconVolumeLow, IconVolumeMuted,
+  IconRepeat, IconRepeatOne, IconShuffle,
+  IconMenu, IconMinimize,
+} from './Icons'  // SVG 图标组件
 
-// 播放模式图标映射
-// 用简洁文字 + 符号区分，避免 emoji 在不同系统显示不一致
-const PLAY_MODE_ICONS: Record<PlayMode, string> = {
-  sequential: '↻',    // 顺序：循环箭头
-  loop: '↻₁',         // 单曲循环：循环箭头 + 下标 1
-  shuffle: '⤮',       // 随机：交叉箭头
+// 播放模式对应的图标组件
+const PLAY_MODE_ICON: Record<PlayMode, React.ComponentType<{ width?: number; height?: number }>> = {
+  sequential: IconRepeat,
+  loop: IconRepeatOne,
+  shuffle: IconShuffle,
 }
 
 // 播放模式 tooltip 文字
@@ -176,6 +181,11 @@ function PlayerBar() {
   // 进度百分比：拖拽中用预览时间，否则用真实播放时间
   const progressPercent = duration > 0 ? (displayTime / duration) * 100 : 0
 
+  // 音量图标：根据音量大小选择
+  const VolumeIcon = volume === 0 ? IconVolumeMuted : volume < 0.5 ? IconVolumeLow : IconVolumeHigh
+  // 播放模式图标
+  const ModeIcon = PLAY_MODE_ICON[playMode]
+
   return (
     <div className="player-bar">
       {/* 左侧：封面缩略图 + 歌名 + 歌手 */}
@@ -202,14 +212,22 @@ function PlayerBar() {
       {/* 中间：上一首/播放/下一首 + 进度条（可拖拽） */}
       <div className="player-bar__controls">
         <div className="player-bar__buttons">
-          <button className="player-bar__btn" onClick={handlePrev}>⏮</button>
+          <button className="player-bar__btn" onClick={handlePrev} title="上一首">
+            <IconPrev width={18} height={18} />
+          </button>
           <button
             className={`player-bar__btn player-bar__play-btn ${playPulse ? 'player-bar__play-btn--pulse' : ''}`}
             onClick={handlePlayPause}
+            title={isPlaying ? '暂停' : '播放'}
           >
-            {isPlaying ? '⏸' : '▶'}
+            {isPlaying
+              ? <IconPause width={20} height={20} />
+              : <IconPlay width={20} height={20} />
+            }
           </button>
-          <button className="player-bar__btn" onClick={handleNext}>⏭</button>
+          <button className="player-bar__btn" onClick={handleNext} title="下一首">
+            <IconNext width={18} height={18} />
+          </button>
         </div>
         <div className="player-bar__progress-row">
           <span className="player-bar__time">{formatTime(displayTime)}</span>
@@ -238,10 +256,12 @@ function PlayerBar() {
           onClick={handleToggleMode}
           title={PLAY_MODE_LABELS[playMode]}
         >
-          {PLAY_MODE_ICONS[playMode]}
+          <ModeIcon width={16} height={16} />
         </button>
         <div className="player-bar__volume-row">
-          <span className="player-bar__volume-icon">🔊</span>
+          <span className="player-bar__volume-icon">
+            <VolumeIcon width={16} height={16} />
+          </span>
           <div
             className="player-bar__volume-bar"
             ref={volumeBarRef}
@@ -268,13 +288,13 @@ function PlayerBar() {
             )}
           </div>
         </div>
-        {/* 汉堡菜单按钮：点击进入歌词界面 */}
+        {/* 菜单按钮：点击进入歌词界面 */}
         <button
           className="player-bar__btn player-bar__btn--menu"
           onClick={() => setActiveNav('lyrics')}
           title="歌词"
         >
-          ☰
+          <IconMenu width={16} height={16} />
         </button>
         {/* 迷你模式按钮 */}
         <button
@@ -282,7 +302,7 @@ function PlayerBar() {
           onClick={() => setMiniMode(true)}
           title="迷你模式"
         >
-          ⊟
+          <IconMinimize width={16} height={16} />
         </button>
       </div>
     </div>

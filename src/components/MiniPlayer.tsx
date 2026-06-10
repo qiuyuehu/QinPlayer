@@ -9,6 +9,11 @@
 import { useRef, useCallback, useState } from 'react'
 import { usePlayerStore } from '../stores/playerStore'
 import { useUIStore } from '../stores/uiStore'
+import {
+  IconPlay, IconPause, IconPrev, IconNext,
+  IconVolumeHigh, IconVolumeMuted,
+  IconClose, IconExpand,
+} from './Icons'
 
 function MiniPlayer() {
   // --- 播放状态 ---
@@ -161,7 +166,7 @@ function MiniPlayer() {
           onClick={handleClose}
           title="关闭"
         >
-          ×
+          <IconClose width={14} height={14} />
         </button>
       </div>
 
@@ -193,12 +198,15 @@ function MiniPlayer() {
           onClick={handleVolumeClick}
           title={isMuted ? '取消静音' : '静音'}
         >
-          {isMuted ? '🔇' : '🔊'}
+          {isMuted
+            ? <IconVolumeMuted width={14} height={14} />
+            : <IconVolumeHigh width={14} height={14} />
+          }
         </button>
 
         {/* 上一首 */}
         <button className="mini-player__btn" onClick={prevTrack} title="上一首">
-          ⏮
+          <IconPrev width={16} height={16} />
         </button>
 
         {/* 播放/暂停 */}
@@ -207,12 +215,15 @@ function MiniPlayer() {
           onClick={handlePlayPause}
           title={isPlaying ? '暂停' : '播放'}
         >
-          {isPlaying ? '⏸' : '▶'}
+          {isPlaying
+            ? <IconPause width={18} height={18} />
+            : <IconPlay width={18} height={18} />
+          }
         </button>
 
         {/* 下一首 */}
         <button className="mini-player__btn" onClick={nextTrack} title="下一首">
-          ⏭
+          <IconNext width={16} height={16} />
         </button>
 
         {/* 展开按钮 */}
@@ -221,7 +232,7 @@ function MiniPlayer() {
           onClick={handleExpand}
           title="展开"
         >
-          ⤢
+          <IconExpand width={14} height={14} />
         </button>
       </div>
     </div>

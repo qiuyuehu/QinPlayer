@@ -45,6 +45,7 @@ function Settings() {
   // --- 导入导出状态 ---
   const [exporting, setExporting] = useState(false)   // 导出中
   const [importing, setImporting] = useState(false)    // 导入中
+  const [clearing, setClearing] = useState(false)      // 清空中
 
   // ---------------------------------------------------------------------------
   // 主题切换
@@ -155,8 +156,8 @@ function Settings() {
   }, [])
 
   // 删除文件夹
-  const handleRemoveFolder = useCallback((folderPath: string) => {
-    window.electronAPI.send('settings:removeFolder', folderPath)
+  const handleRemoveFolder = useCallback(async (folderPath: string) => {
+    await window.electronAPI.invoke('settings:removeFolder', { path: folderPath })
     setFolders(prev => prev.filter(f => f !== folderPath))
   }, [])
 
@@ -211,6 +212,28 @@ function Settings() {
       setImporting(false)
     }
   }, [importing])
+
+  // ---------------------------------------------------------------------------
+  // 清空歌曲库
+  // ---------------------------------------------------------------------------
+
+  const handleClearSongs = useCallback(async () => {
+    if (clearing) return
+    const confirmed = window.confirm(
+      '确定要清空所有歌曲吗？\n\n此操作不可撤销，歌曲数据、播放记录、收藏都会被清除。'
+    )
+    if (!confirmed) return
+
+    setClearing(true)
+    try {
+      const result = await window.electronAPI.invoke('songs:deleteAll') as { deleted: number }
+      alert(`已清空 ${result.deleted} 首歌曲`)
+    } catch (err) {
+      alert('清空失败：' + String(err))
+    } finally {
+      setClearing(false)
+    }
+  }, [clearing])
 
   return (
     <div className="settings-page">
@@ -429,6 +452,23 @@ function Settings() {
               disabled={importing}
             >
               {importing ? '导入中...' : '导入备份'}
+            </button>
+          </div>
+        </div>
+
+        {/* 清空歌曲库 */}
+        <div className="settings-item">
+          <div className="settings-item__info">
+            <span className="settings-item__label">清空歌曲库</span>
+            <span className="settings-item__desc">删除所有歌曲数据（不可撤销）</span>
+          </div>
+          <div className="settings-item__control">
+            <button
+              className="settings-btn"
+              onClick={handleClearSongs}
+              disabled={clearing}
+            >
+              {clearing ? '清空中...' : '清空歌曲库'}
             </button>
           </div>
         </div>

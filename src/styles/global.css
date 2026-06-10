@@ -1088,11 +1088,11 @@ html, body {
 }
 
 .song-list__row--active {
-  background-color: rgba(99, 102, 241, 0.08);
+  background-color: rgba(160, 160, 160, 0.08);
 }
 
 .song-list__row--active:hover {
-  background-color: rgba(99, 102, 241, 0.12);
+  background-color: rgba(160, 160, 160, 0.12);
 }
 
 .song-list__col {
@@ -1256,15 +1256,17 @@ html, body {
   border: none;
   color: var(--text-secondary);
   cursor: pointer;
-  font-size: 16px;
-  padding: 4px;
-  border-radius: 4px;
+  padding: 6px;
+  border-radius: 50%;
   transition: color 0.15s, transform 0.1s;
-  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .player-bar__btn:hover {
   color: var(--text-primary);
+  background-color: rgba(255, 255, 255, 0.08);
 }
 
 .player-bar__btn:active {
@@ -1272,17 +1274,15 @@ html, body {
 }
 
 .player-bar__play-btn {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  background-color: var(--accent);
-  color: #ffffff;
-  font-size: 16px;
+  color: var(--text-primary);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0;
-  transition: color 0.15s, transform 0.1s, background-color 0.15s;
+  transition: color 0.15s, transform 0.1s;
 }
 
 /* 播放/暂停切换时的脉冲动画 */
@@ -1297,8 +1297,7 @@ html, body {
 }
 
 .player-bar__play-btn:hover {
-  background-color: var(--accent-hover);
-  color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.12);
 }
 
 /* 进度条行 */
@@ -1927,8 +1926,7 @@ html, body {
   border: none;
   border-radius: 50%;
   background: transparent;
-  color: var(--text-primary);
-  font-size: 18px;
+  color: var(--text-secondary);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -1937,19 +1935,18 @@ html, body {
 }
 
 .lyrics-page__btn:hover {
-  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .lyrics-page__btn--play {
   width: 48px;
   height: 48px;
-  font-size: 22px;
-  background: var(--accent);
-  color: #ffffff;
+  color: var(--text-primary);
 }
 
 .lyrics-page__btn--play:hover {
-  background: var(--accent-hover);
+  background: rgba(255, 255, 255, 0.12);
 }
 
 /* 小进度条 */
@@ -2264,8 +2261,7 @@ html, body {
   border: none;
   border-radius: 50%;
   background: transparent;
-  color: var(--text-primary);
-  font-size: 14px;
+  color: var(--text-secondary);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -2274,17 +2270,16 @@ html, body {
 }
 
 .mini-player__btn:hover {
-  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .mini-player__btn--play {
   width: 36px;
   height: 36px;
-  font-size: 16px;
-  background: var(--accent);
-  color: #ffffff;
+  color: var(--text-primary);
 }
 
 .mini-player__btn--play:hover {
-  background: var(--accent-hover);
+  background: rgba(255, 255, 255, 0.12);
 }
