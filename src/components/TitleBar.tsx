@@ -49,14 +49,24 @@ function TitleBar() {
   }, [])
 
   return (
-    <div className="title-bar">
+    <div className={`title-bar ${isLyricsMode ? 'title-bar--lyrics' : ''}`}>
       {/* 左侧：应用名称（可拖拽区域） */}
       <div className="title-bar__drag-area">
         <span className="title-bar__text">QinPlayer</span>
       </div>
 
-      {/* 右侧：窗口控制按钮（歌词界面时隐藏） */}
-      {!isLyricsMode && (
+      {/* 右侧：窗口控制按钮 或 歌词界面的菜单按钮 */}
+      {isLyricsMode ? (
+        // 歌词界面：显示菜单按钮（点击回到主页面）
+        <button
+          className="title-bar__btn title-bar__btn--menu"
+          onClick={() => useUIStore.getState().setActiveNav('local')}
+          title="返回"
+        >
+          ☰
+        </button>
+      ) : (
+        // 主界面：显示窗口控制按钮
         <div className="title-bar__controls">
           {/* 最小化按钮 */}
           <button
@@ -76,13 +86,11 @@ function TitleBar() {
             title={isMaximized ? '还原' : '最大化'}
           >
             {isMaximized ? (
-              // 还原图标（两个重叠的方块）
               <svg width="12" height="12" viewBox="0 0 12 12">
                 <rect x="3" y="1" width="8" height="8" rx="1" fill="none" stroke="currentColor" strokeWidth="1" />
                 <rect x="1" y="3" width="8" height="8" rx="1" fill="var(--bg-primary)" stroke="currentColor" strokeWidth="1" />
               </svg>
             ) : (
-              // 最大化图标（方块）
               <svg width="12" height="12" viewBox="0 0 12 12">
                 <rect x="1" y="1" width="10" height="10" rx="1" fill="none" stroke="currentColor" strokeWidth="1" />
               </svg>

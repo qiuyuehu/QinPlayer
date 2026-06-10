@@ -76,8 +76,8 @@ function App() {
 
   return (
     <div className="app">
-      {/* 自定义标题栏（拖拽区 + 窗口控制按钮） */}
-      <TitleBar />
+      {/* 自定义标题栏（歌词界面时不渲染） */}
+      {!isLyricsMode && <TitleBar />}
 
       {/* 主体区域：左侧导航栏 + 右侧内容区 */}
       <div className="app__main">

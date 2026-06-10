@@ -165,6 +165,18 @@ function Lyrics() {
       className="lyrics-page lyrics-page--immersive"
       style={bgColor ? { background: bgColor } : undefined}
     >
+      {/* 顶部拖拽区域 */}
+      <div className="lyrics-page__drag-area" />
+
+      {/* 右上角菜单按钮（点击回到主页面） */}
+      <button
+        className="lyrics-page__back-btn"
+        onClick={() => setActiveNav('local')}
+        title="返回"
+      >
+        ☰
+      </button>
+
       {/* 左侧：封面 + 歌曲信息 + 播放控制 */}
       <div className="lyrics-page__left">
         {/* 封面 */}
