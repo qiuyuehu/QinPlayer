@@ -239,6 +239,14 @@ function PlayerBar() {
             />
           </div>
         </div>
+        {/* 汉堡菜单按钮：点击进入歌词界面 */}
+        <button
+          className="player-bar__btn player-bar__btn--menu"
+          onClick={() => setActiveNav('lyrics')}
+          title="歌词"
+        >
+          ☰
+        </button>
       </div>
     </div>
   )

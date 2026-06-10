@@ -14,7 +14,7 @@ import { usePlayerStore } from '../stores/playerStore'
 import { useUIStore } from '../stores/uiStore'
 import LyricsPanel from '../components/LyricsPanel'
 import { parseLrc } from '../utils/lrcParser'
-import { extractColors, generateGradient } from '../utils/colorExtract'
+import { extractMainColor } from '../utils/colorExtract'
 import type { LyricLine } from '../types'
 
 function Lyrics() {
@@ -33,8 +33,7 @@ function Lyrics() {
 
   // --- 歌词状态 ---
   const [lyrics, setLyrics] = useState<LyricLine[]>([])
-  const [bgGradient, setBgGradient] = useState('')
-  const [isLightBg, setIsLightBg] = useState(false)  // 是否亮色背景
+  const [bgColor, setBgColor] = useState('')
 
   // --- 进度条拖拽 ---
   const progressRef = useRef<HTMLDivElement>(null)
@@ -84,16 +83,14 @@ function Lyrics() {
         setLyrics([])
       })
 
-    // 提取封面主色生成渐变背景（⚠️ 暗礁 2：50x50 Canvas 采样）
+    // 提取封面主色作为背景（⚠️ 暗礁 2：50x50 Canvas 采样）
     if (currentTrack.coverPath) {
       const coverUrl = window.electronAPI.getCoverUrl(currentTrack.coverPath)
-      extractColors(coverUrl).then((result) => {
-        setBgGradient(generateGradient(result.colors))
-        setIsLightBg(result.isLight)
+      extractMainColor(coverUrl).then((color) => {
+        setBgColor(color)
       })
     } else {
-      setBgGradient('')
-      setIsLightBg(false)
+      setBgColor('')
     }
   }, [currentTrack])
 
@@ -165,8 +162,8 @@ function Lyrics() {
 
   return (
     <div
-      className={`lyrics-page lyrics-page--immersive ${isLightBg ? 'lyrics-page--light-bg' : ''}`}
-      style={bgGradient ? { background: bgGradient } : undefined}
+      className="lyrics-page lyrics-page--immersive"
+      style={bgColor ? { background: bgColor } : undefined}
     >
       {/* 左侧：封面 + 歌曲信息 + 播放控制 */}
       <div className="lyrics-page__left">
