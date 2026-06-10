@@ -3,8 +3,10 @@
 // =============================================================================
 // 职责：根据当前选中的导航项，渲染对应的页面组件
 // 设计：简单的条件渲染路由（不需要 react-router，功能简单够用）
+// 动画：导航切换时内容区淡入（opacity 0→1，200ms）
 // =============================================================================
 
+import { useState, useEffect } from 'react'
 import { useUIStore } from '../stores/uiStore'
 import Search from '../pages/Search'
 import RecentlyPlayed from '../pages/RecentlyPlayed'
@@ -21,6 +23,12 @@ import Settings from '../pages/Settings'
 
 function Content() {
   const activeNav = useUIStore((state) => state.activeNav)
+  const [fadeKey, setFadeKey] = useState(0)   // 每次导航切换递增，触发淡入
+
+  // 导航切换时触发淡入动画
+  useEffect(() => {
+    setFadeKey(prev => prev + 1)
+  }, [activeNav])
 
   // 根据导航项渲染对应页面
   const renderPage = () => {
@@ -48,7 +56,9 @@ function Content() {
 
   return (
     <main className="content">
-      {renderPage()}
+      <div key={fadeKey} className="content__fade-wrapper">
+        {renderPage()}
+      </div>
     </main>
   )
 }

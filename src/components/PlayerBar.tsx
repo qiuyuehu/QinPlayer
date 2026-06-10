@@ -5,7 +5,7 @@
 // 设计：只读/写 Zustand 状态，不直接操作 AudioEngine（由 useAudioSync 统一驱动）
 // =============================================================================
 
-import { useRef, useCallback, useState } from 'react'   // React Hooks
+import { useRef, useCallback, useState, useEffect } from 'react'   // React Hooks
 import { usePlayerStore, togglePlayMode } from '../stores/playerStore'  // Zustand 状态
 import { useUIStore } from '../stores/uiStore'  // UI 状态（导航切换、迷你模式）
 import type { PlayMode } from '../types'  // 播放模式类型
@@ -55,12 +55,26 @@ function PlayerBar() {
   // --- 音量条拖拽（与进度条同理，但不需要 ref，因为没有延迟回调） ---
   // 拖拽音量条 → 实时更新 volume 状态 → useAudioSync 立即驱动 AudioEngine
   const volumeBarRef = useRef<HTMLDivElement>(null)
+  const [volumeHover, setVolumeHover] = useState(false)  // 音量条 hover 状态（显示气泡）
 
   // --- 播放/暂停切换（只改状态，useAudioSync 会驱动 AudioEngine） ---
   // 切换 isPlaying 状态 → useAudioSync 检测到变化 → 调用 engine.play()/pause()
   const handlePlayPause = useCallback(() => {
     setPlaying(!isPlaying)  // 取反：播放→暂停，暂停→播放
   }, [isPlaying, setPlaying])
+
+  // --- 播放按钮脉冲动画（切换时触发 scale 动画） ---
+  const [playPulse, setPlayPulse] = useState(false)
+  const prevPlayingRef = useRef(isPlaying)
+
+  useEffect(() => {
+    if (prevPlayingRef.current !== isPlaying) {
+      prevPlayingRef.current = isPlaying
+      setPlayPulse(true)
+      const timer = setTimeout(() => setPlayPulse(false), 200)
+      return () => clearTimeout(timer)
+    }
+  }, [isPlaying])
 
   // --- 上一首/下一首（切歌逻辑在 playerStore.nextTrack/prevTrack） ---
   // 切歌后 playerStore 自动更新 currentTrack → useAudioSync 检测到变化 → 加载新歌曲
@@ -189,7 +203,10 @@ function PlayerBar() {
       <div className="player-bar__controls">
         <div className="player-bar__buttons">
           <button className="player-bar__btn" onClick={handlePrev}>⏮</button>
-          <button className="player-bar__btn player-bar__play-btn" onClick={handlePlayPause}>
+          <button
+            className={`player-bar__btn player-bar__play-btn ${playPulse ? 'player-bar__play-btn--pulse' : ''}`}
+            onClick={handlePlayPause}
+          >
             {isPlaying ? '⏸' : '▶'}
           </button>
           <button className="player-bar__btn" onClick={handleNext}>⏭</button>
@@ -229,6 +246,8 @@ function PlayerBar() {
             className="player-bar__volume-bar"
             ref={volumeBarRef}
             onMouseDown={handleVolumeMouseDown}
+            onMouseEnter={() => setVolumeHover(true)}
+            onMouseLeave={() => setVolumeHover(false)}
           >
             <div
               className="player-bar__volume-fill"
@@ -238,6 +257,15 @@ function PlayerBar() {
               className="player-bar__volume-thumb"
               style={{ left: `${volume * 100}%` }}
             />
+            {/* 音量数值气泡（hover 时显示） */}
+            {volumeHover && (
+              <div
+                className="player-bar__volume-tooltip"
+                style={{ left: `${volume * 100}%` }}
+              >
+                {Math.round(volume * 100)}
+              </div>
+            )}
           </div>
         </div>
         {/* 汉堡菜单按钮：点击进入歌词界面 */}
