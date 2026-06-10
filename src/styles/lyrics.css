@@ -144,14 +144,14 @@
 
 /* 上下留白（让歌词能滚动到中间） */
 .lyrics-panel__spacer {
-  height: 40vh;
+  height: 30vh;
   flex-shrink: 0;
 }
 
 /* 歌词行（统一字号，靠透明度区分层次） */
 .lyrics-panel__line {
   padding: 12px 0;
-  font-size: 22px;
+  font-size: 26px;
   font-weight: 500;
   color: var(--text-secondary);
   text-align: center;
@@ -167,7 +167,7 @@
 
 /* 当前播放行：白色加粗 */
 .lyrics-panel__line--active {
-  font-size: 22px;
+  font-size: 26px;
   font-weight: 700;
   color: var(--text-primary);
 }
