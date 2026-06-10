@@ -34,6 +34,7 @@ function Lyrics() {
   // --- 歌词状态 ---
   const [lyrics, setLyrics] = useState<LyricLine[]>([])
   const [bgGradient, setBgGradient] = useState('')
+  const [isLightBg, setIsLightBg] = useState(false)  // 是否亮色背景
 
   // --- 进度条拖拽 ---
   const progressRef = useRef<HTMLDivElement>(null)
@@ -86,11 +87,13 @@ function Lyrics() {
     // 提取封面主色生成渐变背景（⚠️ 暗礁 2：50x50 Canvas 采样）
     if (currentTrack.coverPath) {
       const coverUrl = window.electronAPI.getCoverUrl(currentTrack.coverPath)
-      extractColors(coverUrl).then((colors) => {
-        setBgGradient(generateGradient(colors))
+      extractColors(coverUrl).then((result) => {
+        setBgGradient(generateGradient(result.colors))
+        setIsLightBg(result.isLight)
       })
     } else {
       setBgGradient('')
+      setIsLightBg(false)
     }
   }, [currentTrack])
 
@@ -162,7 +165,7 @@ function Lyrics() {
 
   return (
     <div
-      className="lyrics-page lyrics-page--immersive"
+      className={`lyrics-page lyrics-page--immersive ${isLightBg ? 'lyrics-page--light-bg' : ''}`}
       style={bgGradient ? { background: bgGradient } : undefined}
     >
       {/* 左侧：封面 + 歌曲信息 + 播放控制 */}
