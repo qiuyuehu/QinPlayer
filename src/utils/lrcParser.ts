@@ -38,7 +38,7 @@ function parseTimestamp(minutes: string, seconds: string, ms: string): number {
 /**
  * 检测并拆分双语歌词
  * 1. 优先用 ｜ 分隔
- * 2. 自动检测：找到第一个 CJK 字符，往前找空格作为分界点
+ * 2. 自动检测：找到日文假名的最后位置，往后找空格作为分界点
  */
 function detectBilingual(raw: string): { text: string; translation?: string } {
   // 1. 优先用 ｜ 分隔
@@ -50,22 +50,23 @@ function detectBilingual(raw: string): { text: string; translation?: string } {
     }
   }
 
-  // 2. 自动检测：找到第一个中文字符的位置
-  const firstCJKIndex = raw.search(/[\u4e00-\u9fff]/)
-  if (firstCJKIndex > 0) {
-    // 往前找空格，作为原文和翻译的分界点
-    let splitIndex = firstCJKIndex
-    while (splitIndex > 0 && raw[splitIndex - 1] !== ' ') {
-      splitIndex--
+  // 2. 自动检测：找到最后一个日文假名的位置
+  // 日文假名（平假名 \u3040-\u309f，片假名 \u30a0-\u30ff）是日文独有的
+  const lastKanaIndex = raw.search(/[\u3040-\u309f\u30a0-\u30ff](?!.*[\u3040-\u309f\u30a0-\u30ff])/)
+  if (lastKanaIndex >= 0) {
+    // 从最后一个假名往后找空格
+    let splitIndex = lastKanaIndex + 1
+    while (splitIndex < raw.length && raw[splitIndex] !== ' ') {
+      splitIndex++
     }
 
-    // 如果找到了有效的分界点（空格不在开头）
-    if (splitIndex > 0 && splitIndex < raw.length) {
+    // 如果找到了空格，且后面有内容
+    if (splitIndex < raw.length && splitIndex < raw.length - 1) {
       const left = raw.substring(0, splitIndex).trim()
-      const right = raw.substring(splitIndex).trim()
+      const right = raw.substring(splitIndex + 1).trim()
 
-      // 验证：左侧主要是外文（拉丁/假名），右侧是中文
-      if (left && right && (hasLatin(left) || hasKana(left)) && hasCJK(right)) {
+      // 验证：左侧有日文假名，右侧有中文
+      if (left && right && hasKana(left) && hasCJK(right)) {
         return { text: left, translation: right }
       }
     }
