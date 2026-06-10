@@ -170,3 +170,76 @@ export function IconHeart({ width = 20, height = 20, filled = false, className }
     </svg>
   )
 }
+
+/** 时钟（最近播放） */
+export function IconClock({ width = 20, height = 20, className }: IconProps) {
+  return (
+    <svg width={width} height={height} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <circle cx="10" cy="10" r="7" />
+      <path d="M10 6.5V10l2.5 1.5" />
+    </svg>
+  )
+}
+
+/** 音符（本地音乐） */
+export function IconMusic({ width = 20, height = 20, className }: IconProps) {
+  return (
+    <svg width={width} height={height} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M6 15V5.5l9-2V13" />
+      <circle cx="4.5" cy="15" r="2.5" />
+      <circle cx="13.5" cy="13" r="2.5" />
+    </svg>
+  )
+}
+
+/** 光盘（专辑） */
+export function IconDisc({ width = 20, height = 20, className }: IconProps) {
+  return (
+    <svg width={width} height={height} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <circle cx="10" cy="10" r="7" />
+      <circle cx="10" cy="10" r="2" />
+    </svg>
+  )
+}
+
+/** 列表（歌单） */
+export function IconList({ width = 20, height = 20, className }: IconProps) {
+  return (
+    <svg width={width} height={height} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M5 5h10M5 10h10M5 15h10" />
+      <circle cx="3" cy="5" r="0.5" fill="currentColor" stroke="none" />
+      <circle cx="3" cy="10" r="0.5" fill="currentColor" stroke="none" />
+      <circle cx="3" cy="15" r="0.5" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
+/** 齿轮（设置） */
+export function IconGear({ width = 20, height = 20, className }: IconProps) {
+  return (
+    <svg width={width} height={height} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <circle cx="10" cy="10" r="2.5" />
+      <path d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.2 4.2l1.4 1.4M14.4 14.4l1.4 1.4M15.8 4.2l-1.4 1.4M5.6 14.4l-1.4 1.4" />
+    </svg>
+  )
+}
+
+/** 文件夹 */
+export function IconFolder({ width = 20, height = 20, className }: IconProps) {
+  return (
+    <svg width={width} height={height} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M3 5.5A1.5 1.5 0 014.5 4h3.3a1.5 1.5 0 011.2.6L10 6h5.5A1.5 1.5 0 0117 7.5v7a1.5 1.5 0 01-1.5 1.5h-11A1.5 1.5 0 013 14.5v-9z" />
+    </svg>
+  )
+}
+
+/** 信息（i） */
+export function IconInfo({ width = 20, height = 20, className }: IconProps) {
+  return (
+    <svg width={width} height={height} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <circle cx="10" cy="10" r="7" />
+      <path d="M10 9v5" />
+      <circle cx="10" cy="6.5" r="0.5" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}

@@ -19,7 +19,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 
 export interface MenuItem {
   label: string
-  icon?: string            // 菜单项图标（emoji 或字符）
+  icon?: React.ReactNode       // 菜单项图标（支持 SVG 组件或字符）
   disabled?: boolean       // 禁用状态，点击无效且样式变灰
   children?: MenuItem[]    // 子菜单数据，有值时显示展开箭头
   action?: () => void      // 点击菜单项执行的回调

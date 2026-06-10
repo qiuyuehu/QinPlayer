@@ -12,6 +12,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'     // 虚拟列表：�
 import { usePlayerStore } from '../stores/playerStore'        // 全局播放状态（当前歌曲、播放列表、播放状态）
 import ContextMenu from './ContextMenu'                       // 通用右键菜单组件
 import SongInfoDialog from './SongInfoDialog'                 // 歌曲详情弹窗
+import { IconPlay, IconList, IconClose, IconFolder, IconInfo, IconHeart } from './Icons'
 import type { MenuItem } from './ContextMenu'
 import type { Track, Playlist } from '../types'
 
@@ -128,12 +129,12 @@ function SongList({ tracks, showIndex = true, showAlbum = false, playlistId, onR
     const items: MenuItem[] = [
       {
         label: '播放',
-        icon: '▶',
+        icon: <IconPlay width={14} height={14} />,
         action: () => handlePlay(track)
       },
       {
         label: '添加到歌单',               // 有子菜单的项，hover 时展开歌单列表
-        icon: '📋',
+        icon: <IconList width={14} height={14} />,
         children: playlists.length > 0     // 空歌单时显示"暂无歌单"占位
           ? playlists.map(pl => ({
               label: pl.name,
@@ -153,7 +154,7 @@ function SongList({ tracks, showIndex = true, showAlbum = false, playlistId, onR
     if (playlistId && onRemoveFromPlaylist) {
       items.push({
         label: '从歌单移除',
-        icon: '✕',
+        icon: <IconClose width={14} height={14} />,
         action: () => onRemoveFromPlaylist(track.id)
       })
     }
@@ -161,7 +162,7 @@ function SongList({ tracks, showIndex = true, showAlbum = false, playlistId, onR
     items.push(
       {
         label: '打开文件所在目录',
-        icon: '📁',
+        icon: <IconFolder width={14} height={14} />,
         action: () => {
           // 通过最后一个反斜杠截取目录路径（Windows 路径格式）
           const dir = track.filePath.substring(0, track.filePath.lastIndexOf('\\'))
@@ -170,7 +171,7 @@ function SongList({ tracks, showIndex = true, showAlbum = false, playlistId, onR
       },
       {
         label: '歌曲信息',
-        icon: 'ℹ',
+        icon: <IconInfo width={14} height={14} />,
         action: () => setSongInfoTrack(track)
       }
     )
@@ -266,7 +267,7 @@ function SongList({ tracks, showIndex = true, showAlbum = false, playlistId, onR
                   onClick={(e) => toggleLike(e, track)}
                   title={likedIds.has(track.id) ? '取消收藏' : '收藏'}  // tooltip 提示当前状态
                 >
-                  {likedIds.has(track.id) ? '❤️' : '🤍'}
+                  <IconHeart width={14} height={14} filled={likedIds.has(track.id)} />
                 </button>
               </div>
             )

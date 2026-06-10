@@ -7,15 +7,16 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useUIStore } from '../stores/uiStore'
+import { IconClock, IconMusic, IconDisc, IconList, IconHeart, IconGear } from './Icons'
 
-// 导航项定义
+// 导航项定义（使用 SVG 图标组件，统一扁平 stroke 风格）
 const NAV_ITEMS = [
-  { id: 'recent',      label: '最近播放', icon: '🕐' },
-  { id: 'local',       label: '本地音乐', icon: '🎵' },
-  { id: 'albums',      label: '专辑',     icon: '💿' },
-  { id: 'playlists',   label: '歌单',     icon: '📋' },
-  { id: 'liked',       label: '我喜欢的', icon: '❤️' },
-  { id: 'settings',    label: '设置',     icon: '⚙️' },
+  { id: 'recent',      label: '最近播放', Icon: IconClock },
+  { id: 'local',       label: '本地音乐', Icon: IconMusic },
+  { id: 'albums',      label: '专辑',     Icon: IconDisc },
+  { id: 'playlists',   label: '歌单',     Icon: IconList },
+  { id: 'liked',       label: '我喜欢的', Icon: IconHeart },
+  { id: 'settings',    label: '设置',     Icon: IconGear },
 ]
 
 function Sidebar() {
@@ -98,7 +99,7 @@ function Sidebar() {
               className={`sidebar__item ${activeNav === item.id ? 'sidebar__item--active' : ''}`}
               onClick={() => handleNavClick(item.id)}
             >
-              <span className="sidebar__icon">{item.icon}</span>
+              <span className="sidebar__icon"><item.Icon width={16} height={16} /></span>
               <span className="sidebar__label">{item.label}</span>
             </button>
           </li>
