@@ -15,7 +15,7 @@
 //   electron/db/database.ts  — SQLite 数据库
 // =============================================================================
 
-import { app, BrowserWindow, ipcMain, protocol, nativeTheme } from 'electron'
+import { app, BrowserWindow, ipcMain, protocol, nativeTheme, nativeImage } from 'electron'
 import { join } from 'path'
 import { initDatabase, closeDatabase } from './db/database'
 import { registerSongsIPC } from './ipc/songs'
@@ -73,6 +73,7 @@ function createWindow(): void {
     minWidth: 800,
     minHeight: 600,
     title: 'QinPlayer',
+    icon: nativeImage.createFromPath(join(__dirname, '../../assets/icon.ico')),
     backgroundColor: '#1a1a1a',  // 暗色背景，防止窗口加载时闪白
 
     // 完全无边框窗口（不使用 titleBarOverlay，避免原生按钮）
