@@ -50,15 +50,9 @@ function createWindow(): void {
     title: 'QinPlayer',
     backgroundColor: '#1a1a1a',  // 暗色背景，防止窗口加载时闪白
 
-    // 无边框窗口 + 暗色标题栏覆盖
-    // nativeTheme.themeSource='dark' 对 Windows 原生标题栏不生效，
-    // 必须用 titleBarStyle:'hidden' + titleBarOverlay 自定义
+    // 完全无边框窗口（不使用 titleBarOverlay，避免原生按钮）
+    frame: false,
     titleBarStyle: 'hidden',
-    titleBarOverlay: {
-      color: '#1a1a1a',        // 标题栏背景色（与暗色主题一致）
-      symbolColor: '#e8e8ef',  // 最小化/最大化/关闭按钮颜色
-      height: 36               // 标题栏高度
-    },
 
     webPreferences: {
       nodeIntegration: false,   // 禁用 Node.js 集成（安全）
@@ -135,42 +129,10 @@ function registerWindowIPC(): void {
     }
   })
 
-  // 主题切换 → 更新标题栏颜色（Windows 原生 overlay）
+  // 主题切换 → 通知渲染进程（不再需要更新 titleBarOverlay）
   ipcMain.on('theme-changed', (_event, theme: 'dark' | 'light') => {
-    if (!mainWindow) return
-    if (theme === 'light') {
-      mainWindow.setTitleBarOverlay({
-        color: '#f5f5f7',
-        symbolColor: '#1d1d1f',
-        height: 36
-      })
-    } else {
-      mainWindow.setTitleBarOverlay({
-        color: '#1a1a1a',
-        symbolColor: '#e8e8ef',
-        height: 36
-      })
-    }
-  })
-
-  // 标题栏按钮显隐（歌词界面时隐藏）
-  ipcMain.on('titlebar:set-visible', (_event, visible: boolean) => {
-    if (!mainWindow) return
-    if (visible) {
-      // 显示原生按钮
-      mainWindow.setTitleBarOverlay({
-        color: '#1a1a1a',
-        symbolColor: '#e8e8ef',
-        height: 36
-      })
-    } else {
-      // 隐藏原生按钮（设置 height: 0）
-      mainWindow.setTitleBarOverlay({
-        color: '#1a1a1a',
-        symbolColor: '#e8e8ef',
-        height: 0
-      })
-    }
+    // frame: false 模式下没有原生按钮，不需要 setTitleBarOverlay
+    console.log('[Main] 主题切换:', theme)
   })
 }
 

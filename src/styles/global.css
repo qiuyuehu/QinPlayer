@@ -1899,7 +1899,7 @@ html, body {
   -webkit-app-region: drag;
 }
 
-/* 歌词界面返回按钮 */
+/* 歌词界面返回按钮（frame: false 无原生按钮，贴右上角边缘） */
 .lyrics-page__back-btn {
   position: absolute;
   top: 0;
@@ -1916,6 +1916,7 @@ html, body {
   align-items: center;
   justify-content: center;
   -webkit-app-region: no-drag;
+  transition: background 0.2s ease;
 }
 
 .lyrics-page__back-btn:hover {

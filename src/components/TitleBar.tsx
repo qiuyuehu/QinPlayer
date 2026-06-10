@@ -21,11 +21,6 @@ function TitleBar() {
   const activeNav = useUIStore((state) => state.activeNav)
   const isLyricsMode = activeNav === 'lyrics'
 
-  // 歌词界面时通知主进程隐藏原生按钮
-  useEffect(() => {
-    window.electronAPI.send('titlebar:set-visible', !isLyricsMode)
-  }, [isLyricsMode])
-
   // 监听窗口最大化/还原事件（主进程推送）
   useEffect(() => {
     const unsubscribe = window.electronAPI.on('window:maximized', (maximized: unknown) => {
