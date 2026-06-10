@@ -134,6 +134,23 @@ function registerWindowIPC(): void {
     // frame: false 模式下没有原生按钮，不需要 setTitleBarOverlay
     console.log('[Main] 主题切换:', theme)
   })
+
+  // 迷你模式切换
+  ipcMain.on('window:set-mini-mode', (_event, isMini: boolean) => {
+    if (!mainWindow) return
+    if (isMini) {
+      // 进入迷你模式
+      mainWindow.setAlwaysOnTop(true, 'screen-saver')  // 置顶
+      mainWindow.setMinimumSize(350, 150)               // 解除最小尺寸限制
+      mainWindow.setSize(350, 150)                      // 缩小窗口
+    } else {
+      // 退出迷你模式
+      mainWindow.setAlwaysOnTop(false)
+      mainWindow.setMinimumSize(800, 600)              // 恢复最小尺寸
+      mainWindow.setSize(1000, 680)                    // 恢复主窗口大小
+      mainWindow.center()                              // 居中显示
+    }
+  })
 }
 
 // ---------------------------------------------------------------------------

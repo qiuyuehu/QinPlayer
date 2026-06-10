@@ -11,6 +11,7 @@ import TitleBar from './components/TitleBar'
 import Sidebar from './components/Sidebar'
 import Content from './components/Content'
 import PlayerBar from './components/PlayerBar'
+import MiniPlayer from './components/MiniPlayer'
 import { useTheme } from './hooks/useTheme'
 import { useAudioSync } from './hooks/useAudioSync'
 import { restorePlayerState } from './stores/playerStore'
@@ -24,12 +25,18 @@ function App() {
   // 当前导航项（歌词界面时隐藏导航栏和播放栏）
   const activeNav = useUIStore((state) => state.activeNav)
   const isLyricsMode = activeNav === 'lyrics'
+  const isMiniMode = useUIStore((state) => state.isMiniMode)
 
   // 初始化主题系统
   useTheme()
 
   // 初始化音频同步
   useAudioSync()
+
+  // 迷你模式切换时通知主进程调整窗口尺寸
+  useEffect(() => {
+    window.electronAPI.send('window:set-mini-mode', isMiniMode)
+  }, [isMiniMode])
 
   // 启动时恢复播放状态 + 主题设置
   useEffect(() => {
@@ -76,18 +83,25 @@ function App() {
 
   return (
     <div className="app">
-      {/* 自定义标题栏（歌词界面时不渲染） */}
-      {!isLyricsMode && <TitleBar />}
+      {/* 迷你模式：只显示 MiniPlayer */}
+      {isMiniMode ? (
+        <MiniPlayer />
+      ) : (
+        <>
+          {/* 自定义标题栏（歌词界面时不渲染） */}
+          {!isLyricsMode && <TitleBar />}
 
-      {/* 主体区域：左侧导航栏 + 右侧内容区 */}
-      <div className="app__main">
-        {/* 歌词界面时隐藏导航栏 */}
-        {!isLyricsMode && <Sidebar />}
-        <Content />
-      </div>
+          {/* 主体区域：左侧导航栏 + 右侧内容区 */}
+          <div className="app__main">
+            {/* 歌词界面时隐藏导航栏 */}
+            {!isLyricsMode && <Sidebar />}
+            <Content />
+          </div>
 
-      {/* 底部播放控制条（歌词界面时隐藏） */}
-      {!isLyricsMode && <PlayerBar />}
+          {/* 底部播放控制条（歌词界面时隐藏） */}
+          {!isLyricsMode && <PlayerBar />}
+        </>
+      )}
     </div>
   )
 }
