@@ -91,7 +91,7 @@ export function registerSongsIPC(): void {
     return rows.map(rowToTrack)
   })
 
-  // --- songs:getRecent — 获取最近播放（50 首）---
+  // --- songs:getRecent — 获取最近播放（50 首，song_id 已 UNIQUE 去重）---
   ipcMain.handle('songs:getRecent', () => {
     const db = getDatabase()
     const rows = db.prepare(`
@@ -109,10 +109,22 @@ export function registerSongsIPC(): void {
     db.prepare('UPDATE songs SET play_count = play_count + 1 WHERE id = ?').run(songId)
   })
 
-  // --- songs:recordPlay — 记录最近播放 ---
+  // --- songs:recordPlay — 记录最近播放（去重：同一首歌只保留一条，更新时间戳） ---
   ipcMain.handle('songs:recordPlay', (_event, { songId }: { songId: number }) => {
     const db = getDatabase()
-    db.prepare('INSERT INTO recently_played (song_id) VALUES (?)').run(songId)
+    // UPSERT：song_id 已存在则更新 played_at，不存在则插入
+    db.prepare(`
+      INSERT INTO recently_played (song_id, played_at)
+      VALUES (?, CURRENT_TIMESTAMP)
+      ON CONFLICT(song_id) DO UPDATE SET played_at = CURRENT_TIMESTAMP
+    `).run(songId)
+    // 保留最近 50 条，删除最旧的
+    db.prepare(`
+      DELETE FROM recently_played
+      WHERE id NOT IN (
+        SELECT id FROM recently_played ORDER BY played_at DESC LIMIT 50
+      )
+    `).run()
   })
 
   // --- songs:isLiked — 检查是否已收藏 ---

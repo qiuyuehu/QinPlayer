@@ -132,6 +132,15 @@ function createTables(db: Database.Database): void {
     )
   `)
 
+  // 迁移：清理 recently_played 脏数据（同一首歌只保留最新一条），然后加 UNIQUE 约束
+  db.exec(`
+    DELETE FROM recently_played
+    WHERE id NOT IN (
+      SELECT MAX(id) FROM recently_played GROUP BY song_id
+    )
+  `)
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_recently_played_song_id ON recently_played(song_id)`)
+
   // 我喜欢的表：收藏标记
   db.exec(`
     CREATE TABLE IF NOT EXISTS liked_songs (
