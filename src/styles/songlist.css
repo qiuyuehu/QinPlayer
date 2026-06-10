@@ -69,12 +69,15 @@
   white-space: nowrap;
   padding: 0 4px;
   transition: color 0.15s;
+  display: flex;
+  align-items: center;
 }
 
 .song-list__col--index {
   width: 40px;
   flex-shrink: 0;
   text-align: center;
+  justify-content: center;
   color: var(--text-muted);
   font-size: 12px;
 }
@@ -114,6 +117,12 @@
   color: var(--text-muted);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
+}
+
+/* 表头中的爱心占位列（与数据行的 like 按钮等宽） */
+.song-list__col--like {
+  width: 32px;
+  flex-shrink: 0;
 }
 
 /* 收藏心形按钮 */

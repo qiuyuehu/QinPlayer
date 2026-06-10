@@ -237,7 +237,7 @@ function PlayerBar() {
       <div className="player-bar__controls">
         <div className="player-bar__buttons">
           <button className="player-bar__btn" onClick={handlePrev} title="上一首">
-            <IconPrev width={18} height={18} />
+            <IconPrev width={20} height={20} />
           </button>
           <button
             className={`player-bar__btn player-bar__play-btn ${playPulse ? 'player-bar__play-btn--pulse' : ''}`}
@@ -245,12 +245,12 @@ function PlayerBar() {
             title={isPlaying ? '暂停' : '播放'}
           >
             {isPlaying
-              ? <IconPause width={20} height={20} />
-              : <IconPlay width={20} height={20} />
+              ? <IconPause width={24} height={24} />
+              : <IconPlay width={24} height={24} />
             }
           </button>
           <button className="player-bar__btn" onClick={handleNext} title="下一首">
-            <IconNext width={18} height={18} />
+            <IconNext width={20} height={20} />
           </button>
         </div>
         <div className="player-bar__progress-row">
@@ -280,11 +280,11 @@ function PlayerBar() {
           onClick={handleToggleMode}
           title={PLAY_MODE_LABELS[playMode]}
         >
-          <ModeIcon width={16} height={16} />
+          <ModeIcon width={18} height={18} />
         </button>
         <div className="player-bar__volume-row">
           <span className="player-bar__volume-icon">
-            <VolumeIcon width={16} height={16} />
+            <VolumeIcon width={18} height={18} />
           </span>
           <div
             className="player-bar__volume-bar"
@@ -318,7 +318,7 @@ function PlayerBar() {
           onClick={() => setActiveNav('lyrics')}
           title="歌词"
         >
-          <IconMenu width={16} height={16} />
+          <IconMenu width={18} height={18} />
         </button>
         {/* 迷你模式按钮 */}
         <button
@@ -326,7 +326,7 @@ function PlayerBar() {
           onClick={() => setMiniMode(true)}
           title="迷你模式"
         >
-          <IconMinimize width={16} height={16} />
+          <IconMinimize width={18} height={18} />
         </button>
       </div>
     </div>

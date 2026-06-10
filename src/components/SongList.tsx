@@ -199,11 +199,12 @@ function SongList({ tracks, showIndex = true, showAlbum = false, playlistId, onR
     <div className="song-list">
       {/* 表头（固定不滚动） */}
       <div className="song-list__header">
-        {showIndex && <span className="song-list__col song-list__col--index">#</span>}
+        {showIndex && <span className="song-list__col song-list__col--index">&nbsp;</span>}
         <span className="song-list__col song-list__col--title">歌名</span>
         <span className="song-list__col song-list__col--artist">歌手</span>
         {showAlbum && <span className="song-list__col song-list__col--album">专辑</span>}
         <span className="song-list__col song-list__col--duration">时长</span>
+        <span className="song-list__col song-list__col--like"></span>
       </div>
 
       {/* 虚拟滚动容器 */}
