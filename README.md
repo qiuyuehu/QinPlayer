@@ -2,8 +2,6 @@
 
 > 纯本地音乐播放器 — 不联网，不打扰，只属于你的音乐空间。
 
-<p align="center">
-  <img src="build/icon.png" width="128" alt="QinPlayer Logo">
 </p>
 
 ---
