@@ -155,8 +155,12 @@ export function useAudioSync() {
     // ⚠️ 暗礁 1：更新 Media Session（封面图需转 Blob URL）
     updateMediaSession(currentTrack)
 
+    // ⚠️ 用 getState() 实时读取，避免闭包陷阱
+    // 依赖数组只有 [currentTrack]，fadeEnabled/isPlaying 可能是旧值
+    const { fadeEnabled: currentFade, isPlaying: currentPlaying } = usePlayerStore.getState()
+
     // 根据 fadeEnabled 决定是否使用淡入淡出
-    if (fadeEnabled && isPlaying) {
+    if (currentFade && currentPlaying) {
       // 淡入淡出模式：fadeOut → load → play → fadeIn
       engine.loadWithFade(url, 500).catch((err) => {
         if (err.name !== 'AbortError') {
@@ -171,7 +175,7 @@ export function useAudioSync() {
       engine.load(url)
 
       // 如果当前应该播放，标记加载完后自动播放
-      if (isPlaying) {
+      if (currentPlaying) {
         pendingAutoPlay.current = true
       }
     }
