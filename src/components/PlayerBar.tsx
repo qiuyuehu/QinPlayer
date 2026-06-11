@@ -1,3 +1,4 @@
+import { formatTime } from "../utils/formatTime"
 // =============================================================================
 // QinPlayer — 底部播放控制条
 // =============================================================================
@@ -167,14 +168,6 @@ function PlayerBar() {
   // 工具函数
   // ---------------------------------------------------------------------------
 
-  /** 格式化秒数为 mm:ss（用于进度条两侧时间显示） */
-  // 注意：此函数被 RAF 循环调用，不能依赖任何 React state
-  const formatTime = (seconds: number): string => {
-    if (!isFinite(seconds) || seconds < 0) return '0:00'
-    const m = Math.floor(seconds / 60)
-    const s = Math.floor(seconds % 60)
-    return `${m}:${s.toString().padStart(2, '0')}`
-  }
 
   // ---------------------------------------------------------------------------
   // RAF 循环：直接操作进度条 DOM，不触发 React re-render
