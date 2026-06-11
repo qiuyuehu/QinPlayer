@@ -6,6 +6,8 @@
 // =============================================================================
 
 import { protocol } from 'electron'
+import * as fs from 'fs'
+import { Readable } from 'stream'
 
 /**
  * 注册 qinplayer:// 协议拦截器
@@ -14,22 +16,29 @@ import { protocol } from 'electron'
  * 用法：
  *   qinplayer://audio?path=xxx  → 返回音频流
  *   qinplayer://cover?path=xxx  → 返回封面图片
+ *
+ * ⚠️ 使用异步 I/O 避免阻塞主线程
  */
 export function registerProtocol(): void {
-  protocol.handle('qinplayer', (request) => {
+  protocol.handle('qinplayer', async (request) => {
     try {
       const url = new URL(request.url)
       const filePath = decodeURIComponent(url.searchParams.get('path') || '')
       const host = url.hostname  // 'audio' 或 'cover'
 
-      const fs = require('fs') as typeof import('fs')
-      const { Readable } = require('stream') as typeof import('stream')
-
-      if (!filePath || !fs.existsSync(filePath)) {
+      if (!filePath) {
         return new Response('Not Found', { status: 404 })
       }
 
-      const stat = fs.statSync(filePath)
+      // 异步检查文件是否存在（替代 existsSync）
+      try {
+        await fs.promises.access(filePath, fs.constants.R_OK)
+      } catch {
+        return new Response('Not Found', { status: 404 })
+      }
+
+      // 异步获取文件信息（替代 statSync）
+      const stat = await fs.promises.stat(filePath)
 
       // 根据类型确定 Content-Type
       let contentType: string
