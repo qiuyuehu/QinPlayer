@@ -221,6 +221,14 @@ export class AudioEngine {
     }
 
     try {
+      // "default" 设备 ID 不被 Electron AudioContext 识别，跳过 setSinkId
+      // 此时使用系统默认设备，不需要显式设置
+      if (deviceId === 'default') {
+        console.log('[AudioEngine] 使用系统默认输出设备')
+        localStorage.setItem('qinplayer-output-device', deviceId)
+        return
+      }
+
       // Web Audio API 已接入时，用 AudioContext.setSinkId()
       // 因为此时音频输出由 AudioContext 控制，HTMLAudioElement.setSinkId() 无效
       if (this.audioContext && this.webAudioConnected) {

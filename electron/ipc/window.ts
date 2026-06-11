@@ -166,11 +166,13 @@ export function registerWindowIPC(getMainWindow: () => BrowserWindow | null): vo
       // 进入迷你模式
       mainWindow.setAlwaysOnTop(true, 'screen-saver')
       mainWindow.setMinimumSize(350, 150)
+      mainWindow.setResizable(false)  // 禁止拉伸，避免 Windows 显示尺寸提示
       mainWindow.setSize(350, 150)
     } else {
       // 退出迷你模式
       mainWindow.setAlwaysOnTop(false)
       mainWindow.setMinimumSize(800, 600)
+      mainWindow.setResizable(true)  // 恢复可拉伸
       mainWindow.setSize(1000, 680)
       mainWindow.center()
     }
