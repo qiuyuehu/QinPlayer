@@ -8,7 +8,7 @@
 
 import { parentPort, workerData } from 'worker_threads'
 import { readdir, stat, writeFile, access } from 'fs/promises'
-import { join, extname, basename } from 'path'
+import { join, extname, basename, dirname } from 'path'
 import { createHash } from 'crypto'
 
 // ---------------------------------------------------------------------------
@@ -178,8 +178,9 @@ const COVER_EXTS = ['.jpg', '.jpeg', '.png']
 
 async function findLocalCover(audioFilePath: string): Promise<string | null> {
   try {
-    const dir = audioFilePath.substring(0, audioFilePath.lastIndexOf('\\'))
-    const fileName = audioFilePath.substring(audioFilePath.lastIndexOf('\\') + 1)
+    // 用 path 模块替代硬编码的 '\\' 分隔符（跨平台兼容）
+    const dir = dirname(audioFilePath)
+    const fileName = basename(audioFilePath)
     const nameWithoutExt = fileName.substring(0, fileName.lastIndexOf('.'))
 
     sendMessage('log', `[封面查找] 目录: ${dir}`)
