@@ -32,24 +32,35 @@ export function initDatabase(): Database.Database {
   const dbPath = join(app.getPath('userData'), 'qinplayer.db')
   console.log('[Database] 数据库路径:', dbPath)
 
-  db = new Database(dbPath)
+  try {
+    db = new Database(dbPath)
 
-  // 开启 WAL 模式：读写分离，性能提升
-  db.pragma('journal_mode = WAL')
-  console.log('[Database] WAL 模式已开启')
+    // 开启 WAL 模式：读写分离，性能提升
+    db.pragma('journal_mode = WAL')
+    console.log('[Database] WAL 模式已开启')
 
-  // 开启外键约束（默认是关闭的）
-  db.pragma('foreign_keys = ON')
+    // 开启外键约束（默认是关闭的）
+    db.pragma('foreign_keys = ON')
 
-  // 创建表结构
-  createTables(db)
+    // 创建表结构
+    createTables(db)
 
-  // 创建封面缓存目录
-  const coversDir = join(app.getPath('userData'), 'covers')
-  mkdirSync(coversDir, { recursive: true })
-  console.log('[Database] 封面缓存目录:', coversDir)
+    // 创建封面缓存目录
+    const coversDir = join(app.getPath('userData'), 'covers')
+    mkdirSync(coversDir, { recursive: true })
+    console.log('[Database] 封面缓存目录:', coversDir)
 
-  return db
+    return db
+  } catch (err) {
+    console.error('[Database] 初始化失败:', err)
+    // 弹出错误对话框，告诉用户出了什么问题
+    const { dialog } = require('electron') as typeof import('electron')
+    dialog.showErrorBox(
+      '数据库初始化失败',
+      `QinPlayer 无法初始化数据库，可能是磁盘空间不足或文件权限问题。\n\n路径: ${dbPath}\n错误: ${String(err)}`
+    )
+    throw err  // 向上传播，让 main.ts 知道初始化失败
+  }
 }
 
 /**
