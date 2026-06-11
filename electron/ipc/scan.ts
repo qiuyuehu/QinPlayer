@@ -206,9 +206,9 @@ export function startIncrementalScan(getMainWindow: () => BrowserWindow | null):
     // 3. 封面缓存目录
     const coversDir = join(app.getPath('userData'), 'covers')
 
-    // 4. 创建增量扫描 Worker
+    // 4. 创建增量扫描 Worker（赋值给模块级变量，防止引用丢失）
     const workerPath = join(__dirname, 'scanner.js')
-    const worker = new Worker(workerPath, {
+    scanWorker = new Worker(workerPath, {
       workerData: {
         folderPaths,
         coversDir,
@@ -218,7 +218,7 @@ export function startIncrementalScan(getMainWindow: () => BrowserWindow | null):
     })
 
     // 5. 监听 Worker 消息（复用已有 IPC 事件，渲染进程无需改动）
-    worker.on('message', (msg: { type: string; data: unknown }) => {
+    scanWorker.on('message', (msg: { type: string; data: unknown }) => {
       const mainWindow = getMainWindow()
       switch (msg.type) {
         case 'song':
@@ -246,7 +246,7 @@ export function startIncrementalScan(getMainWindow: () => BrowserWindow | null):
       }
     })
 
-    worker.on('error', (err) => {
+    scanWorker.on('error', (err) => {
       console.error('[增量扫描] Worker 异常:', err)
     })
   } catch (err) {
