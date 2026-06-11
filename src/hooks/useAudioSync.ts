@@ -39,64 +39,72 @@ export function useAudioSync() {
   const eventsRegistered = useRef(false)
 
   // ---------------------------------------------------------------------------
+  // 注册 AudioEngine 事件（抽取为公共函数，消除重复）
+  // ---------------------------------------------------------------------------
+  // ⚠️ 用函数封装事件注册逻辑，避免在两个 useEffect 中重复 ~60 行代码
+  // ---------------------------------------------------------------------------
+  const registerEngineEvents = (engine: ReturnType<typeof getAudioEngine>) => {
+    engine.onTimeUpdate((time, dur) => {
+      currentTimeRef.current = time    // 写入共享 ref，不触发 re-render
+      if (dur > 0) setDuration(dur)
+    })
+
+    engine.onLoadedMetadata((dur) => {
+      setDuration(dur)
+      // 音频加载完毕，如果有待播放标记，立即播放
+      if (pendingAutoPlay.current) {
+        pendingAutoPlay.current = false
+        engine.play().catch((err) => {
+          if (err.name !== 'AbortError') setIsPlaying(false)
+        })
+      }
+    })
+
+    engine.onEnded(() => {
+      const mode = usePlayerStore.getState().playMode
+      if (mode === 'loop') {
+        engine.currentTime = 0
+        engine.play().catch(() => {})
+      } else {
+        setIsPlaying(false)
+        nextTrack()
+      }
+    })
+
+    // 注册 Media Session 动作回调（键盘多媒体键、任务栏按钮）
+    registerMediaSessionActions({
+      play: () => usePlayerStore.getState().setPlaying(true),
+      pause: () => usePlayerStore.getState().setPlaying(false),
+      prevTrack: () => usePlayerStore.getState().prevTrack(),
+      nextTrack: () => usePlayerStore.getState().nextTrack(),
+      seekTo: (time) => usePlayerStore.getState().setSeekTime(time)
+    })
+  }
+
+  // ---------------------------------------------------------------------------
   // 注册 AudioEngine 事件（只注册一次）
   // ---------------------------------------------------------------------------
   useEffect(() => {
     // 轮询等待引擎创建（可能由 SongList 的点击创建）
-    const registerEvents = () => {
+    const tryRegister = () => {
       if (eventsRegistered.current) return true
       if (!hasAudioEngine()) return false
 
       eventsRegistered.current = true
       const engine = getAudioEngine()
-
-      engine.onTimeUpdate((time, dur) => {
-        currentTimeRef.current = time    // 写入共享 ref，不触发 re-render
-        if (dur > 0) setDuration(dur)
-      })
-
-      engine.onLoadedMetadata((dur) => {
-        setDuration(dur)
-        // 音频加载完毕，如果有待播放标记，立即播放
-        if (pendingAutoPlay.current) {
-          pendingAutoPlay.current = false
-          engine.play().catch((err) => {
-            if (err.name !== 'AbortError') setIsPlaying(false)
-          })
-        }
-      })
-
-      engine.onEnded(() => {
-        const mode = usePlayerStore.getState().playMode
-        if (mode === 'loop') {
-          engine.currentTime = 0
-          engine.play().catch(() => {})
-        } else {
-          setIsPlaying(false)
-          nextTrack()
-        }
-      })
-
-      // 注册 Media Session 动作回调（键盘多媒体键、任务栏按钮）
-      registerMediaSessionActions({
-        play: () => usePlayerStore.getState().setPlaying(true),
-        pause: () => usePlayerStore.getState().setPlaying(false),
-        prevTrack: () => usePlayerStore.getState().prevTrack(),
-        nextTrack: () => usePlayerStore.getState().nextTrack(),
-        seekTo: (time) => usePlayerStore.getState().setSeekTime(time)
-      })
-
+      registerEngineEvents(engine)
       return true
     }
 
-    if (registerEvents()) return
+    if (tryRegister()) return
 
     const timer = setInterval(() => {
-      if (registerEvents()) clearInterval(timer)
+      if (tryRegister()) clearInterval(timer)
     }, 300)
 
     return () => clearInterval(timer)
-  }, [setDuration, setIsPlaying, nextTrack])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // ---------------------------------------------------------------------------
   // currentTrack 变化 → 加载音频
@@ -109,44 +117,7 @@ export function useAudioSync() {
     if (!eventsRegistered.current) {
       // 如果事件还没注册，先注册
       eventsRegistered.current = true
-      engine.onTimeUpdate((time, dur) => {
-        currentTimeRef.current = time    // 写入共享 ref，不触发 re-render
-        if (dur > 0) setDuration(dur)
-      })
-      engine.onLoadedMetadata((dur) => {
-        setDuration(dur)
-        // 应用启动时恢复的 seek 位置
-        if (pendingSeekRef.current !== null) {
-          engine.currentTime = pendingSeekRef.current
-          currentTimeRef.current = pendingSeekRef.current
-          pendingSeekRef.current = null
-        }
-        if (pendingAutoPlay.current) {
-          pendingAutoPlay.current = false
-          engine.play().catch((err) => {
-            if (err.name !== 'AbortError') setIsPlaying(false)
-          })
-        }
-      })
-      engine.onEnded(() => {
-        const mode = usePlayerStore.getState().playMode
-        if (mode === 'loop') {
-          engine.currentTime = 0
-          engine.play().catch(() => {})
-        } else {
-          setIsPlaying(false)
-          nextTrack()
-        }
-      })
-
-      // 注册 Media Session 动作回调
-      registerMediaSessionActions({
-        play: () => usePlayerStore.getState().setPlaying(true),
-        pause: () => usePlayerStore.getState().setPlaying(false),
-        prevTrack: () => usePlayerStore.getState().prevTrack(),
-        nextTrack: () => usePlayerStore.getState().nextTrack(),
-        seekTo: (time) => usePlayerStore.getState().setSeekTime(time)
-      })
+      registerEngineEvents(engine)
     }
 
     const url = window.electronAPI.getAudioUrl(currentTrack.filePath)
