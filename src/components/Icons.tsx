@@ -142,6 +142,15 @@ export function IconExpand({ width = 20, height = 20, className }: IconProps) {
   )
 }
 
+/** 四角收缩（退出全屏） */
+export function IconCompress({ width = 20, height = 20, className }: IconProps) {
+  return (
+    <svg width={width} height={height} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M8 5v3H5M12 5v3h3M8 15v-3H5M12 15v-3h3" />
+    </svg>
+  )
+}
+
 /** 关闭（X） */
 export function IconClose({ width = 20, height = 20, className }: IconProps) {
   return (

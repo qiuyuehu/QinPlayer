@@ -19,7 +19,7 @@ import LyricsPanel from '../components/LyricsPanel'
 import { parseLrc } from '../utils/lrcParser'
 import { extractMainColor } from '../utils/colorExtract'
 import type { LyricLine } from '../types'
-import { IconPlay, IconPause, IconPrev, IconNext, IconBack } from '../components/Icons'
+import { IconPlay, IconPause, IconPrev, IconNext, IconBack, IconExpand, IconCompress } from '../components/Icons'
 
 function Lyrics() {
   // --- 播放状态 ---
@@ -38,6 +38,7 @@ function Lyrics() {
   // --- 歌词状态 ---
   const [lyrics, setLyrics] = useState<LyricLine[]>([])
   const [bgColor, setBgColor] = useState('')
+  const [isFullscreen, setIsFullscreen] = useState(false)
 
   // --- 进度条拖拽 ---
   const progressRef = useRef<HTMLDivElement>(null)
@@ -65,6 +66,26 @@ function Lyrics() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [setActiveNav])
+
+  // ---------------------------------------------------------------------------
+  // 全屏切换
+  // ---------------------------------------------------------------------------
+  const toggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen()
+    } else {
+      document.exitFullscreen()
+    }
+  }, [])
+
+  // 监听全屏状态变化（F11 / Esc 退出时同步状态）
+  useEffect(() => {
+    const handleChange = () => {
+      setIsFullscreen(!!document.fullscreenElement)
+    }
+    document.addEventListener('fullscreenchange', handleChange)
+    return () => document.removeEventListener('fullscreenchange', handleChange)
+  }, [])
 
   // ---------------------------------------------------------------------------
   // 切歌时加载 .lrc 文件
@@ -208,14 +229,26 @@ function Lyrics() {
       {/* 顶部拖拽区域 */}
       <div className="lyrics-page__drag-area" />
 
-      {/* 右上角返回按钮（点击回到主页面） */}
-      <button
-        className="lyrics-page__back-btn"
-        onClick={() => setActiveNav('local')}
-        title="返回"
-      >
-        <IconBack width={18} height={18} />
-      </button>
+      {/* 右上角按钮：全屏 + 返回 */}
+      <div className="lyrics-page__top-actions">
+        <button
+          className="lyrics-page__action-btn"
+          onClick={toggleFullscreen}
+          title={isFullscreen ? '退出全屏' : '全屏'}
+        >
+          {isFullscreen
+            ? <IconCompress width={16} height={16} />
+            : <IconExpand width={16} height={16} />
+          }
+        </button>
+        <button
+          className="lyrics-page__back-btn"
+          onClick={() => setActiveNav('local')}
+          title="返回"
+        >
+          <IconBack width={18} height={18} />
+        </button>
+      </div>
 
       {/* 左侧：封面 + 歌曲信息 + 播放控制 */}
       <div className="lyrics-page__left">
@@ -243,20 +276,20 @@ function Lyrics() {
         <div className="lyrics-page__controls">
           <div className="lyrics-page__buttons">
             <button className="lyrics-page__btn" onClick={prevTrack} title="上一首">
-              <IconPrev width={20} height={20} />
+              <IconPrev width={18} height={18} />
             </button>
             <button
-              className="lyrics-page__btn lyrics-page__btn--play"
+              className="lyrics-page__btn"
               onClick={() => setPlaying(!isPlaying)}
               title={isPlaying ? '暂停' : '播放'}
             >
               {isPlaying
-                ? <IconPause width={22} height={22} />
-                : <IconPlay width={22} height={22} />
+                ? <IconPause width={18} height={18} />
+                : <IconPlay width={18} height={18} />
               }
             </button>
             <button className="lyrics-page__btn" onClick={nextTrack} title="下一首">
-              <IconNext width={20} height={20} />
+              <IconNext width={18} height={18} />
             </button>
           </div>
 

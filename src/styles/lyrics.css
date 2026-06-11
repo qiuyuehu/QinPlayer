@@ -220,15 +220,17 @@
   max-width: 32vw;
 }
 
+/* 播放按钮组：三个胶囊按钮 */
 .lyrics-page__buttons {
   display: flex;
   align-items: center;
-  gap: 2vw;
+  gap: 1.5vw;
 }
 
+/* 胶囊按钮：统一样式 */
 .lyrics-page__btn {
-  width: 4vw;
-  height: 4vw;
+  width: min(4vw, 48px);
+  height: min(2.8vw, 32px);
   border: none;
   border-radius: 50%;
   background: transparent;
@@ -245,15 +247,6 @@
   background: rgba(255, 255, 255, 0.08);
 }
 
-.lyrics-page__btn--play {
-  width: 5vw;
-  height: 5vw;
-  color: var(--text-primary);
-}
-
-.lyrics-page__btn--play:hover {
-  background: rgba(255, 255, 255, 0.12);
-}
 
 /* 小进度条 */
 .lyrics-page__progress-row {
@@ -380,11 +373,36 @@
   -webkit-app-region: drag;
 }
 
-/* 歌词界面返回按钮（frame: false 无原生按钮，贴右上角边缘） */
-.lyrics-page__back-btn {
+/* 右上角按钮组（全屏 + 返回） */
+.lyrics-page__top-actions {
   position: absolute;
   top: 0;
   right: 0;
+  z-index: 20;
+  display: flex;
+  -webkit-app-region: no-drag;
+}
+
+/* 全屏按钮 */
+.lyrics-page__action-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  color: #ffffff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease;
+}
+
+.lyrics-page__action-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* 返回按钮 */
+.lyrics-page__back-btn {
   z-index: 20;
   width: 36px;
   height: 36px;
