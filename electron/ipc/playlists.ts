@@ -100,10 +100,11 @@ export function registerPlaylistsIPC(): void {
   })
 
   // --- playlists:getSongs — 获取歌单内歌曲（支持排序）---
-  ipcMain.handle('playlists:getSongs', (_event, { id, sortBy, order }: { id: number; sortBy: string; order: string }) => {
+  // ⚠️ sortBy/order 用联合类型约束，防止 SQL 注入
+  ipcMain.handle('playlists:getSongs', (_event, { id, sortBy, order }: { id: number; sortBy: 'default' | 'playCount'; order: 'asc' | 'desc' }) => {
     const db = getDatabase()
 
-    // 根据排序方式构建 SQL
+    // 根据排序方式构建 SQL（白名单映射，不直接拼接用户输入）
     let orderBy: string
     if (sortBy === 'playCount') {
       orderBy = order === 'asc' ? 's.play_count ASC' : 's.play_count DESC'
