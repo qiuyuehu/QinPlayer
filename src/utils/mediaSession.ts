@@ -10,6 +10,11 @@
 
 import type { Track } from '../types'
 
+// ---------------------------------------------------------------------------
+// 内存管理：记录上一个 Blob URL，切歌时 revoke 防止内存泄漏
+// ---------------------------------------------------------------------------
+let lastArtworkBlobUrl: string | null = null
+
 /**
  * 将封面图转换为 Blob URL
  * ⚠️ 暗礁 1：OS 原生媒体服务不认识 qinplayer:// 协议
@@ -45,7 +50,12 @@ async function getArtworkUrl(coverPath: string | null): Promise<string> {
     }
 
     // ⚠️ blob:http://localhost:xxx/... — OS 能识别这种格式
+    // revoke 旧的 Blob URL 防止内存泄漏
+    if (lastArtworkBlobUrl) {
+      URL.revokeObjectURL(lastArtworkBlobUrl)
+    }
     const blobUrl = URL.createObjectURL(blob)
+    lastArtworkBlobUrl = blobUrl
     console.log('[MediaSession] 封面 Blob URL:', blobUrl)
     return blobUrl
   } catch (err) {
