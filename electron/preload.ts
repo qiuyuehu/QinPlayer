@@ -16,12 +16,15 @@ import { contextBridge, ipcRenderer } from 'electron'
 const INVOKE_CHANNELS = new Set([
   // 设置
   'settings:get', 'settings:set',
+  'settings:getFolders', 'settings:addFolder', 'settings:removeFolder',
   // 歌曲
   'songs:getAll', 'songs:getLiked', 'songs:getRecent', 'songs:search',
   'songs:recordPlay', 'songs:updatePlayCount', 'songs:like', 'songs:unlike',
+  'songs:isLiked', 'songs:deleteAll',
   // 歌单
   'playlists:getAll', 'playlists:getSongs', 'playlists:create',
   'playlists:delete', 'playlists:addSong', 'playlists:removeSong',
+  'playlists:rename', 'playlists:isInPlaylist',
   // 文件/扫描
   'select-folder', 'scan-folder', 'open-folder', 'open-file-location',
   'read-lrc-file',
