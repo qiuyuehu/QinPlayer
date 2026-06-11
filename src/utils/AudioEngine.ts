@@ -25,6 +25,10 @@ export class AudioEngine {
   private _lastUpdateTime = 0
   private readonly _updateInterval = 250  // 每 250ms 更新一次（约 4fps，避免高频 setState）
 
+  // --- loadWithFade 竞态防护 ---
+  // 每次 loadWithFade 调用递增 generation ID，过期的 setTimeout 直接 return
+  private _fadeGeneration = 0
+
   constructor() {
     // 创建 HTMLAudioElement（基础播放用，不依赖 Web Audio API）
     // 注意：不能用 new HTMLAudioElement()，会报 Illegal constructor
@@ -298,11 +302,19 @@ export class AudioEngine {
    * @param fadeDuration 淡入淡出时长（毫秒），默认 500ms
    */
   async loadWithFade(protocolUrl: string, fadeDuration: number = 500): Promise<void> {
+    // 递增 generation ID，标识本次切歌
+    const myGeneration = ++this._fadeGeneration
+
     // 1. 淡出当前歌曲
     if (this.playing && this.webAudioConnected) {
       this.fadeOut(fadeDuration)
-      // 等淡出动画完成
+      // 等淡出动画完成（如果期间有新的 loadWithFade 调用，直接 return）
       await new Promise(resolve => setTimeout(resolve, fadeDuration))
+      // ⚠️ 竞态检查：如果期间有新的切歌，本次作废
+      if (this._fadeGeneration !== myGeneration) {
+        console.log('[AudioEngine] loadWithFade 被新切歌覆盖，跳过')
+        return
+      }
     }
 
     // 2. 加载新歌曲
@@ -311,7 +323,8 @@ export class AudioEngine {
     // 3. 播放
     await this.play()
 
-    // 4. 淡入新歌曲
+    // 4. 淡入新歌曲（再次检查 generation，防止极端情况）
+    if (this._fadeGeneration !== myGeneration) return
     if (this.webAudioConnected) {
       this.fadeIn(fadeDuration)
     }
