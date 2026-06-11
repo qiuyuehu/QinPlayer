@@ -11,14 +11,24 @@
 // =============================================================================
 
 /**
- * 判断颜色是否是类白色（白色、银色等浅色）
- * 规则：RGB 值都很高，且接近
+ * 判断颜色是否是类白色（白色、银色、浅灰色等）
+ * 规则：RGB 值都偏高，且接近（排除这些颜色避免和歌词撞色）
  */
 function isWhitish(r: number, g: number, b: number): boolean {
-  // 所有通道都 > 200，且最大值和最小值差距 < 50
   const min = Math.min(r, g, b)
   const max = Math.max(r, g, b)
-  return min > 200 && (max - min) < 50
+  const diff = max - min
+
+  // 纯白/接近白色：所有通道 > 200，差距 < 50
+  if (min > 200 && diff < 50) return true
+
+  // 银色/浅灰色：所有通道 > 160，差距 < 30
+  if (min > 160 && diff < 30) return true
+
+  // 浅灰色：所有通道 > 140，差距 < 20
+  if (min > 140 && diff < 20) return true
+
+  return false
 }
 
 /**
