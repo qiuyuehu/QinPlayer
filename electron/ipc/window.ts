@@ -138,11 +138,13 @@ export function registerWindowIPC(getMainWindow: () => BrowserWindow | null): vo
   ipcMain.handle('read-lrc-file', async (_event, lrcPath: string): Promise<string | null> => {
     const fs = require('fs') as typeof import('fs')
     try {
-      if (fs.existsSync(lrcPath)) {
-        return fs.readFileSync(lrcPath, 'utf-8')
-      }
-      return null
-    } catch (err) {
+      // 异步检查文件是否存在（替代 existsSync）
+      await fs.promises.access(lrcPath, fs.constants.R_OK)
+      // 异步读取文件内容（替代 readFileSync）
+      return await fs.promises.readFile(lrcPath, 'utf-8')
+    } catch (err: any) {
+      // 文件不存在返回 null（正常情况，歌曲可能没有歌词）
+      if (err.code === 'ENOENT') return null
       console.error('[IPC] 读取歌词文件失败:', lrcPath, err)
       return null
     }
