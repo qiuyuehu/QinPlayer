@@ -47,7 +47,13 @@
 ## 截图
 
 <p align="center">
-  <em>截图待补充</em>
+  <img src="screenshots/favorites.png" width="700" alt="我喜欢的 - 亮色主题">
+  <br><em>我喜欢的 · 亮色主题</em>
+</p>
+
+<p align="center">
+  <img src="screenshots/albums.png" width="700" alt="专辑网格 - 暗色主题">
+  <br><em>专辑网格 · 暗色主题</em>
 </p>
 
 ---
