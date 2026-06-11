@@ -8,6 +8,45 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
 // ---------------------------------------------------------------------------
+// IPC 通道白名单（安全防护）
+// ---------------------------------------------------------------------------
+// invoke/send/on 只允许调用白名单内的通道，防止 XSS 注入后任意调用主进程
+// ---------------------------------------------------------------------------
+
+const INVOKE_CHANNELS = new Set([
+  // 设置
+  'settings:get', 'settings:set',
+  // 歌曲
+  'songs:getAll', 'songs:getLiked', 'songs:getRecent', 'songs:search',
+  'songs:recordPlay', 'songs:updatePlayCount', 'songs:like', 'songs:unlike',
+  // 歌单
+  'playlists:getAll', 'playlists:getSongs', 'playlists:create',
+  'playlists:delete', 'playlists:addSong', 'playlists:removeSong',
+  // 文件/扫描
+  'select-folder', 'scan-folder', 'open-folder', 'open-file-location',
+  'read-lrc-file',
+  // 数据库
+  'db:export', 'db:import-select', 'db:import-apply',
+  // 其他
+  'get-auto-launch',
+])
+
+const SEND_CHANNELS = new Set([
+  'window:minimize', 'window:maximize', 'window:close',
+  'window:set-mini-mode',
+  'player:playing-changed',
+  'theme-changed',
+  'set-auto-launch',
+])
+
+const ON_CHANNELS = new Set([
+  'window:maximized',
+  'tray:play-pause', 'tray:prev', 'tray:next',
+  'theme:system-changed',
+  'scan:song-found', 'scan:progress', 'scan:done', 'scan:error',
+])
+
+// ---------------------------------------------------------------------------
 // 暴露给渲染进程的 API
 // ---------------------------------------------------------------------------
 // 渲染进程通过 window.electronAPI.xxx() 调用
@@ -35,16 +74,28 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // on: 监听主进程推送的消息
 
   invoke: (channel: string, ...args: unknown[]) => {
+    if (!INVOKE_CHANNELS.has(channel)) {
+      console.warn(`[Preload] invoke 通道不在白名单: ${channel}`)
+      return Promise.reject(new Error(`通道 ${channel} 不在白名单中`))
+    }
     return ipcRenderer.invoke(channel, ...args)
   },
 
   // 单向发送（渲染 → 主进程）
   send: (channel: string, ...args: unknown[]) => {
+    if (!SEND_CHANNELS.has(channel)) {
+      console.warn(`[Preload] send 通道不在白名单: ${channel}`)
+      return
+    }
     ipcRenderer.send(channel, ...args)
   },
 
   // 监听主进程推送的消息
   on: (channel: string, callback: (...args: unknown[]) => void) => {
+    if (!ON_CHANNELS.has(channel)) {
+      console.warn(`[Preload] on 通道不在白名单: ${channel}`)
+      return () => {}  // 返回空函数
+    }
     const subscription = (_event: Electron.IpcRendererEvent, ...args: unknown[]) => {
       callback(...args)
     }
