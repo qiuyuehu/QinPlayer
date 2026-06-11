@@ -89,6 +89,12 @@ export class AudioEngine {
       this.sourceNode.connect(this.gainNode)
     }
 
+    // ⚠️ 同步当前音量到 GainNode（防止接入 Web Audio 后音量断层）
+    // 接入前用 audioElement.volume 控制音量，接入后用 gainNode.gain
+    // 必须在 webAudioConnected = true 之前同步，否则 setVolume 会走错分支
+    const currentVol = this.audioElement.volume
+    this.gainNode.gain.setValueAtTime(currentVol, this.audioContext.currentTime)
+
     this.webAudioConnected = true
   }
 
