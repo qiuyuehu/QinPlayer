@@ -49,12 +49,10 @@ function LyricsPanel({ lyrics, currentIndex, onLineClick }: LyricsPanelProps) {
     }
   }, [onLineClick])
 
-  // 无歌词时显示提示
+  // 无歌词时显示空白面板
   if (lyrics.length === 0) {
     return (
-      <div className="lyrics-panel lyrics-panel--empty">
-        <p className="lyrics-panel__hint">暂无歌词</p>
-      </div>
+      <div className="lyrics-panel lyrics-panel--empty" />
     )
   }
 

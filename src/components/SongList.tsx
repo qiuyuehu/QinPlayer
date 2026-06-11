@@ -198,23 +198,21 @@ function SongList({ tracks, showIndex = true, showAlbum = false, playlistId, onR
 
   return (
     <div className="song-list">
-      {/* 表头（固定不滚动） */}
-      <div className="song-list__header">
-        {showIndex && <span className="song-list__col song-list__col--index">&nbsp;</span>}
-        <span className="song-list__col song-list__col--title">歌名</span>
-        <span className="song-list__col song-list__col--artist">歌手</span>
-        {showAlbum && <span className="song-list__col song-list__col--album">专辑</span>}
-        <span className="song-list__col song-list__col--duration">时长</span>
-        <span className="song-list__col song-list__col--like"></span>
-      </div>
-
-      {/* 虚拟滚动容器 */}
-      {/* 此 div 是虚拟列表的滚动容器，高度由 CSS 控制，overflow: auto 触发滚动 */}
+      {/* 虚拟滚动容器（表头 sticky 固定在内部，与数据行共享滚动条宽度） */}
       <div
         ref={parentRef}
         className="song-list__scroll"
         style={{ overflow: 'auto' }}
       >
+        {/* 表头：sticky 定位在滚动容器内，始终可见且与数据列对齐 */}
+        <div className="song-list__header">
+          {showIndex && <span className="song-list__col song-list__col--index">&nbsp;</span>}
+          <span className="song-list__col song-list__col--title">歌名</span>
+          <span className="song-list__col song-list__col--artist">歌手</span>
+          {showAlbum && <span className="song-list__col song-list__col--album">专辑</span>}
+          <span className="song-list__col song-list__col--duration">时长</span>
+          <span className="song-list__col song-list__col--like"></span>
+        </div>
         {/* 此占位 div 的高度等于所有行的总高度，撑出滚动条 */}
         <div
           style={{

@@ -5,38 +5,19 @@
 // 设计要点：
 //   - ⚠️ 暗礁 2：缩小到 50x50 离屏 Canvas 采样，计算量降低 99%
 //   - ⚠️ 暗礁 2：crossOrigin='anonymous' 防止 Canvas 污染
-//   - 自动排除白色、银色等类白色（歌词是浅色文字，背景太浅看不清）
-//   - 提取核心颜色：排除类白色后，取频率最高的颜色
+//   - 用 HSL 亮度（L）过滤浅色和深色，比纯 RGB 判断更准确
+//   - 提取后如果亮度仍然偏高，自动压暗到适合白色歌词的范围
 //   - 降级：无封面或提取失败时返回默认中性灰黑
 // =============================================================================
 
 /**
- * 判断颜色是否是类白色（白色、银色、浅灰色等）
- * 规则：RGB 值都偏高，且接近（排除这些颜色避免和歌词撞色）
+ * RGB 转 HSL，返回亮度 L（0~1）
+ * 亮度 = (max + min) / 2 / 255
  */
-function isWhitish(r: number, g: number, b: number): boolean {
-  const min = Math.min(r, g, b)
+function getLightness(r: number, g: number, b: number): number {
   const max = Math.max(r, g, b)
-  const diff = max - min
-
-  // 纯白/接近白色：所有通道 > 200，差距 < 50
-  if (min > 200 && diff < 50) return true
-
-  // 银色/浅灰色：所有通道 > 160，差距 < 30
-  if (min > 160 && diff < 30) return true
-
-  // 浅灰色：所有通道 > 140，差距 < 20
-  if (min > 140 && diff < 20) return true
-
-  return false
-}
-
-/**
- * 判断颜色是否太暗（接近黑色）
- * 规则：RGB 值都很低
- */
-function isBlackish(r: number, g: number, b: number): boolean {
-  return r < 30 && g < 30 && b < 30
+  const min = Math.min(r, g, b)
+  return (max + min) / (2 * 255)
 }
 
 /**
@@ -81,11 +62,10 @@ export async function extractMainColor(imageUrl: string): Promise<string> {
           // 跳过透明像素
           if (a < 128) continue
 
-          // 排除类白色（白色、银色等）
-          if (isWhitish(r, g, b)) continue
-
-          // 排除太暗的颜色（接近黑色）
-          if (isBlackish(r, g, b)) continue
+          // 用 HSL 亮度过滤：太浅（>0.7）或太暗（<0.08）的都跳过
+          const L = getLightness(r, g, b)
+          if (L > 0.70) continue   // 浅色：白色歌词在上面看不清
+          if (L < 0.08) continue   // 深色：接近纯黑
 
           // 量化颜色（减少颜色种类，提高统计效率）
           const qr = Math.round(r / 32) * 32
@@ -110,8 +90,18 @@ export async function extractMainColor(imageUrl: string): Promise<string> {
           return
         }
 
-        // 返回频率最高的颜色
-        const [, { r, g, b }] = sorted[0]
+        // 取频率最高的颜色
+        let { r, g, b } = sorted[0][1]
+
+        // 最终防线：如果提取出来的颜色还是偏浅，强制压暗
+        const finalL = getLightness(r, g, b)
+        if (finalL > 0.35) {
+          const ratio = 0.30 / finalL  // 压到亮度 ~0.30
+          r = Math.round(r * ratio)
+          g = Math.round(g * ratio)
+          b = Math.round(b * ratio)
+        }
+
         resolve(`rgb(${r}, ${g}, ${b})`)
       } catch (err) {
         console.warn('[ColorExtract] Canvas 提取失败:', err)

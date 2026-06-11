@@ -15,9 +15,8 @@
 .song-list__scroll {
   height: calc(100vh - 260px);  /* 填满剩余空间（减去标题栏+导航+表头+播放条） */
   overflow: auto;
-  border-radius: 0 0 8px 8px;
+  border-radius: 8px;
   border: 1px solid var(--border);
-  border-top: none;
 }
 
 .song-list__header {
@@ -32,6 +31,9 @@
   letter-spacing: 0.5px;
   border-bottom: 1px solid var(--border);
   border-radius: 8px 8px 0 0;
+  position: sticky;   /* 粘在滚动容器顶部，始终可见 */
+  top: 0;
+  z-index: 1;         /* 浮在数据行之上 */
 }
 
 .song-list__row {
@@ -97,7 +99,7 @@
 }
 
 .song-list__col--artist {
-  width: 140px;
+  width: 180px;
   flex-shrink: 0;
   color: var(--text-secondary);
   font-size: 12px;
@@ -111,12 +113,13 @@
 }
 
 .song-list__col--duration {
-  width: 60px;
+  width: 70px;
   flex-shrink: 0;
   text-align: right;
   color: var(--text-muted);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
+  margin-left: 12px;   /* 与歌手列拉开间距 */
 }
 
 /* 表头中的爱心占位列（与数据行的 like 按钮等宽） */

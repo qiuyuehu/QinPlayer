@@ -7,6 +7,7 @@
   background-color: var(--bg-primary);
   overflow-y: auto;
   padding: 20px 24px;
+  position: relative;   /* 歌词沉浸模式的定位基准 */
 }
 
 /* 导航切换时内容区淡入动画 */
