@@ -21,7 +21,14 @@
     },
     "files": [
       "out/**/*",
-      "assets/**/*"
+      "!assets/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "assets",
+        "to": "assets",
+        "filter": ["**/*"]
+      }
     ],
     "win": {
       "icon": "assets/icon.ico",
@@ -35,6 +42,7 @@
         }
       ]
     },
+    "afterPack": "./scripts/afterPack.js",
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,

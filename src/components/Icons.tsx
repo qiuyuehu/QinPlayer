@@ -169,13 +169,13 @@ export function IconBack({ width = 20, height = 20, className }: IconProps) {
   )
 }
 
-/** 心形（收藏） */
-export function IconHeart({ width = 20, height = 20, filled = false, className }: IconProps & { filled?: boolean }) {
+/** 五角星（收藏） */
+export function IconStar({ width = 20, height = 20, filled = false, className }: IconProps & { filled?: boolean }) {
   return (
     <svg width={width} height={height} viewBox="0 0 20 20" className={className}
       fill={filled ? 'currentColor' : 'none'}
-      stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M10 16.5s-6.5-4-6.5-8.2A3.5 3.5 0 0110 5.5a3.5 3.5 0 016.5 2.8c0 4.2-6.5 8.2-6.5 8.2z" />
+      stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
+      <path d="M10 2.5l2.47 5.01L18 8.27l-4 3.9.94 5.5L10 15.14l-4.94 2.53.94-5.5-4-3.9 5.53-.76L10 2.5z" />
     </svg>
   )
 }

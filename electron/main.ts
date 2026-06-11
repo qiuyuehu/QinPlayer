@@ -67,13 +67,20 @@ protocol.registerSchemesAsPrivileged([
 // ---------------------------------------------------------------------------
 
 function createWindow(): void {
+  // 打包后 assets 在 resources/assets/，开发时在项目根目录
+  const iconPath = app.isPackaged
+    ? join(process.resourcesPath, 'assets/icon.ico')
+    : join(__dirname, '../../assets/icon.ico')
+  
+  console.log('[Main] 图标路径:', iconPath, 'exists:', require('fs').existsSync(iconPath))
+
   mainWindow = new BrowserWindow({
     width: 1000,
     height: 680,
     minWidth: 800,
     minHeight: 600,
     title: 'QinPlayer',
-    icon: nativeImage.createFromPath(join(__dirname, '../../assets/icon.ico')),
+    icon: nativeImage.createFromPath(iconPath),
     backgroundColor: '#1a1a1a',  // 暗色背景，防止窗口加载时闪白
 
     // 完全无边框窗口（不使用 titleBarOverlay，避免原生按钮）

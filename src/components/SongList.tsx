@@ -12,7 +12,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'     // 虚拟列表：�
 import { usePlayerStore } from '../stores/playerStore'        // 全局播放状态（当前歌曲、播放列表、播放状态）
 import ContextMenu from './ContextMenu'                       // 通用右键菜单组件
 import SongInfoDialog from './SongInfoDialog'                 // 歌曲详情弹窗
-import { IconPlay, IconList, IconClose, IconFolder, IconInfo, IconHeart } from './Icons'
+import { IconPlay, IconList, IconClose, IconFolder, IconInfo, IconStar } from './Icons'
 import type { MenuItem } from './ContextMenu'
 import type { Track, Playlist } from '../types'
 
@@ -231,7 +231,7 @@ function SongList({ tracks, showIndex = true, showAlbum = false, playlistId, onR
               <div
                 key={track.id}
                 className={`song-list__row ${isActive ? 'song-list__row--active' : ''}`}
-                onClick={() => handlePlay(track)}              // 点击整行触发播放
+                onDoubleClick={() => handlePlay(track)}         // 双击整行触发播放（防误触）
                 onContextMenu={(e) => handleContextMenu(e, track)} // 右键打开菜单
                 style={{
                   position: 'absolute',
@@ -267,7 +267,7 @@ function SongList({ tracks, showIndex = true, showAlbum = false, playlistId, onR
                   onClick={(e) => toggleLike(e, track)}
                   title={likedIds.has(track.id) ? '取消收藏' : '收藏'}  // tooltip 提示当前状态
                 >
-                  <IconHeart width={14} height={14} filled={likedIds.has(track.id)} />
+                  <IconStar width={14} height={14} filled={likedIds.has(track.id)} />
                 </button>
               </div>
             )

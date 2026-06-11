@@ -38,7 +38,9 @@ export function createTray(
   onNext = nextHandler
 
   // 托盘图标路径
-  const iconPath = join(__dirname, '../../assets/tray-icon.png')
+  const iconPath = app.isPackaged
+    ? join(process.resourcesPath, 'assets/tray-icon.png')
+    : join(__dirname, '../../assets/tray-icon.png')
   const icon = nativeImage.createFromPath(iconPath)
 
   // 创建托盘
