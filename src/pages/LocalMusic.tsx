@@ -13,6 +13,7 @@ import { useState, useCallback, useEffect } from 'react'
 import SongList from '../components/SongList'           // 复用歌曲列表组件（虚拟列表+右键菜单）
 import type { Track } from '../types'
 
+// LocalMusic — 本地音乐页面，扫描文件夹 + 显示歌曲列表
 function LocalMusic() {
   // --- 页面状态 ---
   const [scanning, setScanning] = useState(false)       // 是否正在扫描

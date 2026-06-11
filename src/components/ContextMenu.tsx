@@ -32,6 +32,7 @@ interface ContextMenuProps {
   onClose: () => void
 }
 
+// ContextMenu — 通用右键菜单，支持子菜单 + 边界溢出自动调整
 function ContextMenu({ items, x, y, onClose }: ContextMenuProps) {
   // ref 用于读取菜单实际渲染尺寸，计算边界溢出
   const menuRef = useRef<HTMLDivElement>(null)

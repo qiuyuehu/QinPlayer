@@ -18,6 +18,7 @@ import { restorePlayerState, usePlayerStore } from './stores/playerStore'
 import { useUIStore } from './stores/uiStore'
 import type { Theme } from './types'
 
+// App — 根组件，组装布局 + 主题管理 + 水合播放状态
 function App() {
   // 水合状态（数据库加载完成前显示骨架屏）
   const [isHydrated, setIsHydrated] = useState(false)

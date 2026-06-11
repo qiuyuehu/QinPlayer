@@ -22,6 +22,7 @@ import { extractMainColor } from '../utils/colorExtract'
 import type { LyricLine } from '../types'
 import { IconPlay, IconPause, IconPrev, IconNext, IconBack, IconExpand, IconCompress } from '../components/Icons'
 
+// Lyrics — 歌词全屏界面，左右分屏（封面+控制 / 歌词滚动）+ 全屏切换
 function Lyrics() {
   // --- 播放状态 ---
   const currentTrack = usePlayerStore((s) => s.currentTrack)

@@ -32,6 +32,7 @@ const PLAY_MODE_LABELS: Record<PlayMode, string> = {
   shuffle: '随机播放',
 }
 
+// PlayerBar — 底部播放控制条，播放/暂停/上下首/进度条/音量/播放模式
 function PlayerBar() {
   // --- Zustand store（通过 useAudioSync hook 统一驱动 AudioEngine） ---
   // 播放状态：isPlaying 控制播放/暂停，currentTrack 当前歌曲

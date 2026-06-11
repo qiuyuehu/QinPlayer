@@ -19,6 +19,7 @@ const NAV_ITEMS = [
   { id: 'settings',    label: '设置',     Icon: IconGear },
 ]
 
+// Sidebar — 左侧导航栏，切换页面（最近/本地/专辑/歌单/喜欢/设置）
 function Sidebar() {
   // 当前选中的导航项
   const activeNav = useUIStore((state) => state.activeNav)

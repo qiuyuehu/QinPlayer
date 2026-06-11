@@ -163,16 +163,20 @@ export function registerWindowIPC(getMainWindow: () => BrowserWindow | null): vo
     const mainWindow = getMainWindow()
     if (!mainWindow) return
     if (isMini) {
-      // 进入迷你模式
+      // 进入迷你模式（先隐藏再改大小，避免 Windows 显示尺寸提示）
       mainWindow.setAlwaysOnTop(true, 'screen-saver')
       mainWindow.setMinimumSize(350, 150)
+      mainWindow.hide()
       mainWindow.setSize(350, 150)
+      mainWindow.show()
     } else {
       // 退出迷你模式
       mainWindow.setAlwaysOnTop(false)
       mainWindow.setMinimumSize(800, 600)
+      mainWindow.hide()
       mainWindow.setSize(1000, 680)
       mainWindow.center()
+      mainWindow.show()
     }
   })
 

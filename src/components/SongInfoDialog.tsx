@@ -11,6 +11,7 @@ interface SongInfoDialogProps {
   onClose: () => void
 }
 
+// SongInfoDialog — 歌曲信息弹窗，显示元数据（标题/歌手/专辑/时长/路径）
 function SongInfoDialog({ track, onClose }: SongInfoDialogProps) {
   // 格式化时长
   const formatDuration = (seconds: number): string => {

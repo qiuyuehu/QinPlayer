@@ -20,6 +20,7 @@ import { getAudioEngine, hasAudioEngine } from '../utils/AudioEngine'
 import { updateMediaSession, setPlaybackState, registerMediaSessionActions } from '../utils/mediaSession'
 import { currentTimeRef } from '../utils/currentTimeRef'
 
+// useAudioSync — 播放器状态同步 hook，驱动 AudioEngine + Media Session + 事件监听
 export function useAudioSync() {
   const currentTrack = usePlayerStore((s) => s.currentTrack)
   const isPlaying = usePlayerStore((s) => s.isPlaying)

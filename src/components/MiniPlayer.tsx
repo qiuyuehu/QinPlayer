@@ -17,6 +17,7 @@ import {
   IconClose, IconExpand,
 } from './Icons'
 
+// MiniPlayer — 迷你模式播放条（300×80），封面 + 歌名 + 控制按钮 + 拖拽移动
 function MiniPlayer() {
   // --- 播放状态 ---
   const isPlaying = usePlayerStore((s) => s.isPlaying)

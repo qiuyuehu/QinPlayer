@@ -103,6 +103,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       } while (randomIndex === currentIndex)
       set({ currentTrack: playlist[randomIndex], duration: 0, isPlaying: true })
     } else {
+      // 顺序/单曲循环：取下一首索引，到末尾则回到第一首
       const nextIndex = (currentIndex + 1) % playlist.length
       set({ currentTrack: playlist[nextIndex], duration: 0, isPlaying: true })
     }
@@ -122,6 +123,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       } while (randomIndex === currentIndex)
       set({ currentTrack: playlist[randomIndex], duration: 0, isPlaying: true })
     } else {
+      // 顺序/单曲循环：取上一首索引，到开头则回到最后一首
       const prevIndex = (currentIndex - 1 + playlist.length) % playlist.length
       set({ currentTrack: playlist[prevIndex], duration: 0, isPlaying: true })
     }

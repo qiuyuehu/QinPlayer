@@ -18,6 +18,7 @@ const THEME_OPTIONS: { value: Theme; label: string; desc: string }[] = [
   { value: 'system', label: '跟随系统', desc: '自动匹配系统主题' },
 ]
 
+// Settings — 设置页面，主题/音频输出/文件夹管理/数据导入导出
 function Settings() {
   // --- 主题状态（从 Zustand 读取） ---
   const theme = useUIStore((state) => state.theme)

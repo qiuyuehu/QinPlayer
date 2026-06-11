@@ -18,6 +18,7 @@ interface LyricsPanelProps {
   onLineClick?: (time: number) => void  // 点击歌词行回调
 }
 
+// LyricsPanel — 歌词滚动面板，逐行高亮 + 点击跳转
 function LyricsPanel({ lyrics, currentIndex, onLineClick }: LyricsPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const itemRefs = useRef<(HTMLDivElement | null)[]>([])

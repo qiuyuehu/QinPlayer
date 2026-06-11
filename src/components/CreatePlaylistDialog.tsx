@@ -11,6 +11,7 @@ interface CreatePlaylistDialogProps {
   onCancel: () => void
 }
 
+// CreatePlaylistDialog — 新建歌单弹窗，输入名称 + 确认/取消
 function CreatePlaylistDialog({ onConfirm, onCancel }: CreatePlaylistDialogProps) {
   const [name, setName] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
