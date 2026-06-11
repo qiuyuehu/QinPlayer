@@ -72,6 +72,16 @@ html, body {
   animation: skeleton-pulse 1.5s ease-in-out infinite;
 }
 
+.app__skeleton-playerbar {
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 0 24px;
+  background-color: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+}
+
 @keyframes skeleton-pulse {
   0%, 100% { opacity: 0.4; }
   50% { opacity: 0.8; }

@@ -91,7 +91,12 @@ function App() {
             </div>
           </div>
         </div>
-        <PlayerBar />
+        {/* 骨架屏底部：用占位条替代真实 PlayerBar */}
+        <div className="app__skeleton-playerbar">
+          <div className="app__skeleton-bar" style={{ width: '30%', height: '12px' }} />
+          <div className="app__skeleton-bar" style={{ width: '50%', height: '8px' }} />
+          <div className="app__skeleton-bar" style={{ width: '20%', height: '12px' }} />
+        </div>
       </div>
     )
   }
