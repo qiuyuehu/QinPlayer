@@ -51,8 +51,14 @@ function Lyrics() {
   const progressThumbRef = useRef<HTMLDivElement>(null)
   const currentTimeTextRef = useRef<HTMLSpanElement>(null)
 
-  // --- 歌词面板用的 currentTime（只在行索引变化时才更新，避免高频 re-render） ---
-  const [lyricsCurrentTime, setLyricsCurrentTime] = useState(0)
+  // --- 歌词面板用的 currentIndex（只在行索引变化时才更新，避免高频 re-render） ---
+  const [lyricsCurrentIndex, setLyricsCurrentIndex] = useState(-1)
+  const lyricsRef = useRef<LyricLine[]>([])
+  const lyricOffsetRef = useRef(0)
+
+  // 同步 lyrics 和 lyricOffset 到 ref（供 RAF 使用）
+  useEffect(() => { lyricsRef.current = lyrics }, [lyrics])
+  useEffect(() => { lyricOffsetRef.current = lyricOffset }, [lyricOffset])
 
   // ---------------------------------------------------------------------------
   // 按 Esc 返回主界面
@@ -166,13 +172,12 @@ function Lyrics() {
   // ---------------------------------------------------------------------------
 
   // ---------------------------------------------------------------------------
-  // RAF 循环：进度条 DOM 直接操作 + 歌词面板低频更新（10fps）
+  // RAF 循环：进度条 DOM 直接操作 + 歌词索引变化时才 re-render
   // ---------------------------------------------------------------------------
-  // 进度条每帧更新（60fps），歌词面板每 100ms 更新一次（10fps，足够歌词滚动）
+  // 进度条每帧更新（60fps），歌词只在行索引变化时触发一次 re-render
   useEffect(() => {
     let rafId: number
-    let lastLyricsUpdate = 0
-    const LYRICS_INTERVAL = 100  // 歌词面板更新间隔（ms）
+    let lastLyricsIndex = -1
 
     const update = () => {
       const time = isDraggingRef.current
@@ -185,11 +190,26 @@ function Lyrics() {
       if (progressThumbRef.current) progressThumbRef.current.style.left = `${pct}%`
       if (currentTimeTextRef.current) currentTimeTextRef.current.textContent = formatTime(time)
 
-      // 歌词面板：每 100ms 更新一次 state（触发 LyricsPanel re-render）
-      const now = performance.now()
-      if (now - lastLyricsUpdate >= LYRICS_INTERVAL) {
-        lastLyricsUpdate = now
-        setLyricsCurrentTime(time)
+      // 歌词索引：只在行索引变化时才 setState（避免每 100ms re-render）
+      const currentLyrics = lyricsRef.current
+      const offset = lyricOffsetRef.current
+      if (currentLyrics.length > 0) {
+        const adjustedTime = time + offset
+        // 二分查找当前行索引
+        let left = 0, right = currentLyrics.length - 1, result = -1
+        while (left <= right) {
+          const mid = Math.floor((left + right) / 2)
+          if (currentLyrics[mid].time <= adjustedTime) {
+            result = mid
+            left = mid + 1
+          } else {
+            right = mid - 1
+          }
+        }
+        if (result !== lastLyricsIndex) {
+          lastLyricsIndex = result
+          setLyricsCurrentIndex(result)
+        }
       }
 
       rafId = requestAnimationFrame(update)
@@ -314,8 +334,7 @@ function Lyrics() {
       <div className="lyrics-page__right">
         <LyricsPanel
           lyrics={lyrics}
-          currentTime={lyricsCurrentTime}
-          offset={lyricOffset}
+          currentIndex={lyricsCurrentIndex}
           onLineClick={(time) => setSeekTime(time)}
         />
       </div>

@@ -9,54 +9,18 @@
 //   - 点击歌词行跳转到对应时间
 // =============================================================================
 
-import { useEffect, useRef, useMemo, useCallback } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
 import type { LyricLine } from '../types'
 
 interface LyricsPanelProps {
   lyrics: LyricLine[]          // 已排序的歌词数组
-  currentTime: number          // 当前播放时间（秒）
-  offset?: number              // 时间轴偏移量（秒）
+  currentIndex: number         // 当前歌词行索引（由父组件计算）
   onLineClick?: (time: number) => void  // 点击歌词行回调
 }
 
-/**
- * 查找当前播放时间对应的歌词行索引
- * 二分查找，返回最后一个 time <= currentTime 的行索引
- */
-function findCurrentIndex(lyrics: LyricLine[], currentTime: number): number {
-  if (lyrics.length === 0 || currentTime < lyrics[0].time) {
-    return -1
-  }
-
-  let left = 0
-  let right = lyrics.length - 1
-  let result = -1
-
-  while (left <= right) {
-    const mid = Math.floor((left + right) / 2)
-    if (lyrics[mid].time <= currentTime) {
-      result = mid
-      left = mid + 1
-    } else {
-      right = mid - 1
-    }
-  }
-
-  return result
-}
-
-function LyricsPanel({ lyrics, currentTime, offset = 0, onLineClick }: LyricsPanelProps) {
+function LyricsPanel({ lyrics, currentIndex, onLineClick }: LyricsPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const itemRefs = useRef<(HTMLDivElement | null)[]>([])
-
-  // 应用偏移量后的当前时间
-  const adjustedTime = currentTime + offset
-
-  // 计算当前行索引
-  const currentIndex = useMemo(
-    () => findCurrentIndex(lyrics, adjustedTime),
-    [lyrics, adjustedTime]
-  )
 
   // 当前行变化时，平滑滚动到当前行
   useEffect(() => {
