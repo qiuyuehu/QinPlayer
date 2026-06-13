@@ -101,11 +101,19 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       do {
         randomIndex = Math.floor(Math.random() * playlist.length)
       } while (randomIndex === currentIndex)
-      set({ currentTrack: playlist[randomIndex], duration: 0, isPlaying: true })
+      const nextTrack = playlist[randomIndex]
+      set({ currentTrack: nextTrack, duration: 0, isPlaying: true })
+      // 记录播放历史
+      window.electronAPI.invoke('songs:recordPlay', { songId: nextTrack.id })
+      window.electronAPI.invoke('songs:updatePlayCount', { songId: nextTrack.id })
     } else {
       // 顺序/单曲循环：取下一首索引，到末尾则回到第一首
       const nextIndex = (currentIndex + 1) % playlist.length
-      set({ currentTrack: playlist[nextIndex], duration: 0, isPlaying: true })
+      const nextTrack = playlist[nextIndex]
+      set({ currentTrack: nextTrack, duration: 0, isPlaying: true })
+      // 记录播放历史
+      window.electronAPI.invoke('songs:recordPlay', { songId: nextTrack.id })
+      window.electronAPI.invoke('songs:updatePlayCount', { songId: nextTrack.id })
     }
   },
 
@@ -121,11 +129,19 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       do {
         randomIndex = Math.floor(Math.random() * playlist.length)
       } while (randomIndex === currentIndex)
-      set({ currentTrack: playlist[randomIndex], duration: 0, isPlaying: true })
+      const prevTrack = playlist[randomIndex]
+      set({ currentTrack: prevTrack, duration: 0, isPlaying: true })
+      // 记录播放历史
+      window.electronAPI.invoke('songs:recordPlay', { songId: prevTrack.id })
+      window.electronAPI.invoke('songs:updatePlayCount', { songId: prevTrack.id })
     } else {
       // 顺序/单曲循环：取上一首索引，到开头则回到最后一首
       const prevIndex = (currentIndex - 1 + playlist.length) % playlist.length
-      set({ currentTrack: playlist[prevIndex], duration: 0, isPlaying: true })
+      const prevTrack = playlist[prevIndex]
+      set({ currentTrack: prevTrack, duration: 0, isPlaying: true })
+      // 记录播放历史
+      window.electronAPI.invoke('songs:recordPlay', { songId: prevTrack.id })
+      window.electronAPI.invoke('songs:updatePlayCount', { songId: prevTrack.id })
     }
   },
 }))
