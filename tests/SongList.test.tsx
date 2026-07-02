@@ -4,11 +4,14 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import SongList from '../src/components/SongList'
+import { createRef } from 'react'
+import SongList, { type SongListHandle } from '../src/components/SongList'
 import { usePlayerStore } from '../src/stores/playerStore'
 import { useUIStore } from '../src/stores/uiStore'
 import { DEFAULT_FEATURE_FLAGS } from '../src/utils/featureFlags'
 import type { Track } from '../src/types'
+
+const scrollToIndexMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@tanstack/react-virtual', () => ({
   useVirtualizer: ({ count }: { count: number }) => ({
@@ -19,6 +22,7 @@ vi.mock('@tanstack/react-virtual', () => ({
       start: index * 44,
       size: 44,
     })),
+    scrollToIndex: scrollToIndexMock,
   }),
 }))
 
@@ -52,6 +56,7 @@ const tracks: Track[] = [
 describe('SongList', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    scrollToIndexMock.mockClear()
     invokeMock.mockResolvedValue([])
     window.electronAPI = {
       ...window.electronAPI,
@@ -139,5 +144,19 @@ describe('SongList', () => {
 
     expect(screen.queryByTitle('收藏')).not.toBeInTheDocument()
     expect(invokeMock).not.toHaveBeenCalledWith('songs:getLiked')
+  })
+
+  it('containerHeight 应该控制滚动容器高度', () => {
+    render(<SongList tracks={tracks} containerHeight={160} />)
+    expect(document.querySelector('.song-list__scroll')).toHaveStyle({ height: '160px' })
+  })
+
+  it('scrollToTrackId 应该滚动到对应歌曲', () => {
+    const ref = createRef<SongListHandle>()
+    render(<SongList ref={ref} tracks={tracks} />)
+
+    ref.current?.scrollToTrackId(2)
+
+    expect(scrollToIndexMock).toHaveBeenCalledWith(1, { align: 'center' })
   })
 })

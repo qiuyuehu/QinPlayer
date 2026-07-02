@@ -12,12 +12,18 @@
 
 /* 导航切换时内容区淡入动画 */
 .content__fade-wrapper {
-  animation: contentFadeIn 0.2s ease;
+  animation: contentFadeIn 180ms cubic-bezier(0.2, 0, 0, 1);
 }
 
 @keyframes contentFadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .content__fade-wrapper {
+    animation: none;
+  }
 }
 
 /* 页面占位 */

@@ -11,11 +11,12 @@ import { usePlayerStore, togglePlayMode } from '../stores/playerStore'  // Zusta
 import { useUIStore } from '../stores/uiStore'  // UI 状态（导航切换、迷你模式）
 import { currentTimeRef } from '../utils/currentTimeRef'  // 共享播放时间 ref
 import type { PlayMode } from '../types'  // 播放模式类型
+import PlaylistPanel from './PlaylistPanel'
 import {
   IconPlay, IconPause, IconPrev, IconNext,
   IconVolumeHigh, IconVolumeLow, IconVolumeMuted,
   IconRepeat, IconRepeatOne, IconShuffle,
-  IconMenu, IconMinimize,
+  IconList, IconMinimize,
 } from './Icons'  // SVG 图标组件
 
 // 播放模式对应的图标组件
@@ -68,6 +69,7 @@ function PlayerBar() {
   // 拖拽音量条 → 实时更新 volume 状态 → useAudioSync 立即驱动 AudioEngine
   const volumeBarRef = useRef<HTMLDivElement>(null)
   const [volumeHover, setVolumeHover] = useState(false)  // 音量条 hover 状态（显示气泡）
+  const [showPlaylistPanel, setShowPlaylistPanel] = useState(false)
 
   // --- 播放/暂停切换（只改状态，useAudioSync 会驱动 AudioEngine） ---
   // 切换 isPlaying 状态 → useAudioSync 检测到变化 → 调用 engine.play()/pause()
@@ -208,6 +210,7 @@ function PlayerBar() {
   if (!featureFlags.playback) return null
 
   return (
+    <>
     <div className="player-bar">
       {/* 左侧：封面缩略图 + 歌名 + 歌手 */}
       <div className="player-bar__info">
@@ -243,10 +246,12 @@ function PlayerBar() {
             onClick={handlePlayPause}
             title={isPlaying ? '暂停' : '播放'}
           >
-            {isPlaying
-              ? <IconPause width={28} height={28} />
-              : <IconPlay width={28} height={28} />
-            }
+            <span className={`player-bar__play-icon ${isPlaying ? 'player-bar__play-icon--hidden' : ''}`}>
+              <IconPlay width={28} height={28} />
+            </span>
+            <span className={`player-bar__play-icon ${isPlaying ? '' : 'player-bar__play-icon--hidden'}`}>
+              <IconPause width={28} height={28} />
+            </span>
           </button>
           <button className="player-bar__btn" onClick={handleNext} title="下一首">
             <IconNext width={22} height={22} />
@@ -311,16 +316,14 @@ function PlayerBar() {
             )}
           </div>
         </div>
-        {/* 菜单按钮：点击进入歌词界面 */}
-        {featureFlags.lyrics && (
-          <button
-            className="player-bar__btn player-bar__btn--menu"
-            onClick={() => setActiveNav('lyrics')}
-            title="歌词"
-          >
-            <IconMenu width={18} height={18} />
-          </button>
-        )}
+        {/* 播放列表按钮：打开当前播放队列面板 */}
+        <button
+          className="player-bar__btn player-bar__btn--queue"
+          onClick={() => setShowPlaylistPanel((visible) => !visible)}
+          title="播放列表"
+        >
+          <IconList width={18} height={18} />
+        </button>
         {/* 迷你模式按钮 */}
         {featureFlags.miniMode && featureFlags.tray && (
           <button
@@ -333,6 +336,10 @@ function PlayerBar() {
         )}
       </div>
     </div>
+    {showPlaylistPanel && (
+      <PlaylistPanel onClose={() => setShowPlaylistPanel(false)} />
+    )}
+    </>
   )
 }
 

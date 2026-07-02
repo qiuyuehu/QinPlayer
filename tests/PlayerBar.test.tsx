@@ -6,6 +6,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import PlayerBar from '../src/components/PlayerBar'
+import { usePlayerStore } from '../src/stores/playerStore'
+import { useUIStore } from '../src/stores/uiStore'
+import { DEFAULT_FEATURE_FLAGS } from '../src/utils/featureFlags'
 
 // 模拟 AudioEngine（避免真实的 Web Audio API 调用）
 vi.mock('../src/utils/AudioEngine', () => {
@@ -34,6 +37,25 @@ vi.mock('../src/utils/AudioEngine', () => {
 describe('PlayerBar', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    useUIStore.setState({
+      activeNav: 'local',
+      isMiniMode: false,
+      theme: 'dark',
+      sidebarCollapsed: false,
+      searchQuery: '',
+      featureFlags: { ...DEFAULT_FEATURE_FLAGS },
+    })
+    usePlayerStore.setState({
+      isPlaying: false,
+      currentTrack: null,
+      playlist: [],
+      volume: 0.8,
+      playMode: 'sequential',
+      fadeEnabled: true,
+      lyricOffset: 0,
+      duration: 0,
+      seekTime: null,
+    })
   })
 
   // =========================================================================
@@ -104,5 +126,16 @@ describe('PlayerBar', () => {
     render(<PlayerBar />)
     const times = screen.getAllByText('0:00')
     expect(times.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('点击播放列表按钮应该打开和关闭播放列表面板', async () => {
+    const user = userEvent.setup()
+    render(<PlayerBar />)
+
+    await user.click(screen.getByTitle('播放列表'))
+    expect(screen.getByText('当前播放队列为空')).toBeInTheDocument()
+
+    await user.click(screen.getByTitle('播放列表'))
+    expect(screen.queryByText('当前播放队列为空')).not.toBeInTheDocument()
   })
 })

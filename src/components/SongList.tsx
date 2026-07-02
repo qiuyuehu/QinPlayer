@@ -7,7 +7,7 @@
 // 优化：使用 @tanstack/react-virtual 虚拟列表，3000+ 首歌滚动不掉帧
 // =============================================================================
 
-import { useCallback, useRef, useState, useEffect } from 'react'
+import { forwardRef, useCallback, useImperativeHandle, useRef, useState, useEffect } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'     // 虚拟列表：只渲染可视区域的 DOM 节点
 import { usePlayerStore } from '../stores/playerStore'        // 全局播放状态（当前歌曲、播放列表、播放状态）
 import { useUIStore } from '../stores/uiStore'
@@ -18,18 +18,26 @@ import type { MenuItem } from './ContextMenu'
 import type { Track, Playlist } from '../types'
 
 // 组件 Props
+export interface SongListHandle {
+  scrollToTrackId: (trackId: number) => void
+}
+
 interface SongListProps {
   tracks: Track[]           // 歌曲列表
   showIndex?: boolean       // 是否显示序号（默认 true）
   showAlbum?: boolean       // 是否显示专辑列（默认 false）
   playlistId?: number       // 当前歌单 ID（从歌单详情页传入，用于"从歌单移除"）
   onRemoveFromPlaylist?: (songId: number) => void  // 从歌单移除回调
+  containerHeight?: number  // 外部容器高度（播放列表面板等半高场景使用）
 }
 
 // 每行高度（px），与 CSS 中 .song-list__row 的 height 一致
 const ROW_HEIGHT = 44
 
-function SongList({ tracks, showIndex = true, showAlbum = false, playlistId, onRemoveFromPlaylist }: SongListProps) {
+const SongList = forwardRef<SongListHandle, SongListProps>(function SongList(
+  { tracks, showIndex = true, showAlbum = false, playlistId, onRemoveFromPlaylist, containerHeight },
+  ref
+) {
   // --- Zustand store ---
   // 以下状态由 useAudioSync 统一驱动 AudioEngine，组件只操作 store
   const currentTrack = usePlayerStore((s) => s.currentTrack)
@@ -61,6 +69,8 @@ function SongList({ tracks, showIndex = true, showAlbum = false, playlistId, onR
   // --- 收藏歌曲 ID 集合（快速查找）---
   // 用 Set 存储，O(1) 判断某首歌是否已收藏，避免每次遍历数组
   const [likedIds, setLikedIds] = useState<Set<number>>(new Set())
+  const [animateInitialRows, setAnimateInitialRows] = useState(true)
+  const prevTracksRef = useRef<Track[] | null>(null)
 
   // 加载歌单列表 + 收藏列表
   // 并行请求两个 IPC 通道，减少加载时间
@@ -82,6 +92,15 @@ function SongList({ tracks, showIndex = true, showAlbum = false, playlistId, onR
     loadData()
   }, [featureFlags.playlists, featureFlags.liked])
 
+  // ★ 只让当前列表首次可见批次做淡入；滚动产生的新虚拟行不重新动画。
+  useEffect(() => {
+    if (prevTracksRef.current === tracks) return
+    prevTracksRef.current = tracks
+    setAnimateInitialRows(true)
+    const timer = setTimeout(() => setAnimateInitialRows(false), 500)
+    return () => clearTimeout(timer)
+  }, [tracks])
+
   // --- 虚拟列表配置 ---
   // overscan: 10 表示上下各多渲染 10 行，滚动时减少白屏闪烁
   const virtualizer = useVirtualizer({
@@ -90,6 +109,14 @@ function SongList({ tracks, showIndex = true, showAlbum = false, playlistId, onR
     estimateSize: () => ROW_HEIGHT,
     overscan: 10,
   })
+
+  useImperativeHandle(ref, () => ({
+    scrollToTrackId: (trackId: number) => {
+      const index = tracks.findIndex((track) => track.id === trackId)
+      if (index < 0) return
+      virtualizer.scrollToIndex(index, { align: 'center' })
+    }
+  }), [tracks, virtualizer])
 
   // --- 点击歌曲播放 ---
   // 将整个歌曲列表设为播放队列，再指定当前播放歌曲，立即开始播放
@@ -217,7 +244,10 @@ function SongList({ tracks, showIndex = true, showAlbum = false, playlistId, onR
       <div
         ref={parentRef}
         className="song-list__scroll"
-        style={{ overflow: 'auto' }}
+        style={{
+          overflow: 'auto',
+          height: containerHeight !== undefined ? `${containerHeight}px` : undefined,
+        }}
       >
         {/* 表头：sticky 定位在滚动容器内，始终可见且与数据列对齐 */}
         <div className="song-list__header">
@@ -237,13 +267,13 @@ function SongList({ tracks, showIndex = true, showAlbum = false, playlistId, onR
           }}
         >
           {/* 只渲染可视区域内的行（虚拟列表核心），每行通过 translateY 定位到正确位置 */}
-          {virtualizer.getVirtualItems().map((virtualRow) => {
+          {virtualizer.getVirtualItems().map((virtualRow, visibleIndex) => {
             const track = tracks[virtualRow.index]
             const isActive = currentTrack?.id === track.id  // 当前播放歌曲高亮
             return (
               <div
                 key={track.id}
-                className={`song-list__row ${isActive ? 'song-list__row--active' : ''}`}
+                className={`song-list__row ${isActive ? 'song-list__row--active' : ''} ${animateInitialRows ? 'song-list__row--enter' : ''}`}
                 onDoubleClick={() => handlePlay(track)}         // 双击整行触发播放（防误触）
                 onContextMenu={(e) => handleContextMenu(e, track)} // 右键打开菜单
                 style={{
@@ -254,6 +284,7 @@ function SongList({ tracks, showIndex = true, showAlbum = false, playlistId, onR
                   height: `${ROW_HEIGHT}px`,
                   // transform 定位：绝对定位 + translateY 模拟固定行高排列
                   transform: `translateY(${virtualRow.start}px)`,
+                  animationDelay: animateInitialRows ? `${Math.min(visibleIndex, 8) * 28}ms` : undefined,
                 }}
               >
                 {showIndex && (
@@ -309,6 +340,6 @@ function SongList({ tracks, showIndex = true, showAlbum = false, playlistId, onR
       )}
     </div>
   )
-}
+})
 
 export default SongList

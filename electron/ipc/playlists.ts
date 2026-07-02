@@ -31,6 +31,7 @@ interface PlaylistRow {
   name: string
   created_at: string
   song_count?: number
+  cover_path: string | null
 }
 
 function rowToTrack(row: SongRow): Track {
@@ -54,7 +55,8 @@ function rowToPlaylist(row: PlaylistRow): Playlist {
     id: row.id,
     name: row.name,
     createdAt: row.created_at,
-    songCount: row.song_count || 0
+    songCount: row.song_count || 0,
+    coverPath: row.cover_path ?? null
   }
 }
 
@@ -90,7 +92,17 @@ export function registerPlaylistsIPC(): void {
   ipcMain.handle('playlists:getAll', () => {
     const db = getDatabase()
     const rows = db.prepare(`
-      SELECT p.*, COUNT(ps.song_id) AS song_count
+      SELECT
+        p.*,
+        COUNT(ps.song_id) AS song_count,
+        (
+          SELECT s.cover_path
+          FROM playlist_songs first_ps
+          INNER JOIN songs s ON s.id = first_ps.song_id
+          WHERE first_ps.playlist_id = p.id
+          ORDER BY first_ps.sort_order ASC
+          LIMIT 1
+        ) AS cover_path
       FROM playlists p
       LEFT JOIN playlist_songs ps ON p.id = ps.playlist_id
       GROUP BY p.id

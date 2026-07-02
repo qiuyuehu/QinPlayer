@@ -32,6 +32,7 @@ export interface Playlist {
   name: string             // 歌单名称
   createdAt: string        // 创建时间
   songCount?: number       // 歌曲数量（查询时填充）
+  coverPath: string | null // 默认顺序第一首歌的封面路径
 }
 
 // ---------------------------------------------------------------------------

@@ -183,7 +183,19 @@ function Playlists() {
               // 点击卡片进入该歌单详情视图
               onClick={() => setSelectedPlaylist(pl)}
             >
-              <div className="playlists__card-icon"><IconList width={32} height={32} /></div>
+              <div className="playlists__card-cover">
+                {pl.coverPath ? (
+                  <img
+                    className="playlists__card-cover-img"
+                    src={window.electronAPI.getCoverUrl(pl.coverPath)}
+                    alt={pl.name}
+                  />
+                ) : (
+                  <div className="playlists__card-cover-placeholder">
+                    <IconList width={32} height={32} />
+                  </div>
+                )}
+              </div>
               <div className="playlists__card-name">{pl.name}</div>
               <div className="playlists__card-count">{pl.songCount || 0} 首</div>
               {/* 删除按钮：stopPropagation 防止触发卡片的点击事件（进入详情） */}
