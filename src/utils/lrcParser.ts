@@ -6,8 +6,9 @@
 //   - 标准格式：[00:12.34]第一行歌词
 //   - 多时间戳：[00:12.34][00:15.67]同一句歌词（间奏重复）
 //   - 双语歌词：
-//     1. 用 ｜ 分隔：[00:12.34]原文｜翻译
-//     2. 用空格分隔：[00:12.34]外文 中文翻译（自动检测）
+//     1. 同时间戳双行：[00:12.34]原文 + [00:12.34]翻译（新格式）
+//     2. 用 ｜ 分隔：[00:12.34]原文｜翻译
+//     3. 用空格分隔：[00:12.34]外文 中文翻译（自动检测）
 //   - 偏移量：[offset:xxx]（全局时间偏移，单位毫秒）
 //   - 2位或3位毫秒：[00:12.34] 或 [00:12.345]
 // =============================================================================
@@ -20,11 +21,6 @@ const TIME_REGEX = /\[(\d{2}):(\d{2})\.(\d{2,3})\]/g
 // 偏移量正则：匹配 [offset:xxx]（正负均可）
 const OFFSET_REGEX = /\[offset:([+-]?\d+)\]/
 
-// 字符检测工具
-const hasCJK = (s: string) => /[\u4e00-\u9fff\u3400-\u4dbf\u3000-\u303f\uff00-\uffef]/.test(s)
-const hasLatin = (s: string) => /[a-zA-Z]/.test(s)
-const hasKana = (s: string) => /[\u3040-\u309f\u30a0-\u30ff]/.test(s)
-
 /**
  * 解析单个时间戳字符串为秒数
  */
@@ -36,11 +32,23 @@ function parseTimestamp(minutes: string, seconds: string, ms: string): number {
 }
 
 /**
- * 检测并拆分双语歌词
- * 1. 优先用 ｜ 分隔
- * 2. 自动检测：找到日文假名的最后位置，往后找空格作为分界点
+ * 检测文本是否包含中文字符
  */
-function detectBilingual(raw: string): { text: string; translation?: string } {
+function hasCJK(s: string): boolean {
+  return /[\u4e00-\u9fff\u3400-\u4dbf\u3000-\u303f\uff00-\uffef]/.test(s)
+}
+
+/**
+ * 检测文本是否包含拉丁字母
+ */
+function hasLatin(s: string): boolean {
+  return /[a-zA-Z]/.test(s)
+}
+
+/**
+ * 检测并拆分单行内的双语歌词（｜ 分隔 或 空格分隔）
+ */
+function detectBilingualInline(raw: string): { text: string; translation?: string } {
   // 1. 优先用 ｜ 分隔
   if (raw.includes('｜')) {
     const parts = raw.split('｜')
@@ -50,23 +58,13 @@ function detectBilingual(raw: string): { text: string; translation?: string } {
     }
   }
 
-  // 2. 自动检测：找到最后一个日文假名的位置
-  // 日文假名（平假名 \u3040-\u309f，片假名 \u30a0-\u30ff）是日文独有的
-  const lastKanaIndex = raw.search(/[\u3040-\u309f\u30a0-\u30ff](?!.*[\u3040-\u309f\u30a0-\u30ff])/)
-  if (lastKanaIndex >= 0) {
-    // 从最后一个假名往后找空格
-    let splitIndex = lastKanaIndex + 1
-    while (splitIndex < raw.length && raw[splitIndex] !== ' ') {
-      splitIndex++
-    }
-
-    // 如果找到了空格，且后面有内容
-    if (splitIndex < raw.length && splitIndex < raw.length - 1) {
-      const left = raw.substring(0, splitIndex).trim()
-      const right = raw.substring(splitIndex + 1).trim()
-
-      // 验证：左侧有日文假名，右侧有中文
-      if (left && right && hasKana(left) && hasCJK(right)) {
+  // 2. 空格分隔：前半含拉丁字母 + 后半含中文 → 双语
+  if (hasLatin(raw) && hasCJK(raw)) {
+    const spaceIndex = raw.indexOf(' ')
+    if (spaceIndex > 0) {
+      const left = raw.substring(0, spaceIndex).trim()
+      const right = raw.substring(spaceIndex + 1).trim()
+      if (left && right && hasLatin(left) && hasCJK(right)) {
         return { text: left, translation: right }
       }
     }
@@ -79,13 +77,22 @@ function detectBilingual(raw: string): { text: string; translation?: string } {
 /**
  * 解析 LRC 歌词内容为时间轴数组
  *
+ * 核心逻辑：
+ *   1. 遍历所有行，提取时间戳 + 文本
+ *   2. 按时间戳分组（同一时间戳的多行归为一组）
+ *   3. 同组两条 → 第一条原文，第二条翻译；一条 → 普通行
+ *   4. 排序输出
+ *
  * @param lrcContent - .lrc 文件的文本内容
  * @returns 按时间排序的歌词行数组
  */
 export function parseLrc(lrcContent: string): LyricLine[] {
   const lines = lrcContent.split('\n')
-  const result: LyricLine[] = []
   let offset = 0  // 全局偏移量（毫秒）
+
+  // 第一遍：收集所有 { time, rawText } 条目
+  type RawEntry = { time: number; raw: string }
+  const entries: RawEntry[] = []
 
   for (const line of lines) {
     const trimmed = line.trim()
@@ -114,16 +121,46 @@ export function parseLrc(lrcContent: string): LyricLine[] {
     const raw = trimmed.replace(TIME_REGEX, '').trim()
     if (!raw) continue
 
-    // 4. 检测双语歌词
-    const { text, translation } = detectBilingual(raw)
-
-    // 5. 为每个时间戳生成一条记录
+    // 4. 为每个时间戳生成一条记录
     for (const time of timestamps) {
+      entries.push({ time: time + offset, raw })
+    }
+  }
+
+  // 第二遍：按时间戳分组，合并同时间的双语行
+  // 用 Map 保持插入顺序（同时间的行按出现顺序排列）
+  const grouped = new Map<number, string[]>()
+  for (const entry of entries) {
+    const list = grouped.get(entry.time)
+    if (list) {
+      list.push(entry.raw)
+    } else {
+      grouped.set(entry.time, [entry.raw])
+    }
+  }
+
+  // 第三遍：生成最终歌词数组
+  const result: LyricLine[] = []
+
+  for (const [time, texts] of grouped) {
+    if (texts.length >= 2) {
+      // 同时间两条：第一条原文，第二条翻译
+      // 每条内部也可能包含 ｜ 分隔的双语，先各自处理
+      const first = detectBilingualInline(texts[0])
+      const second = detectBilingualInline(texts[1])
+
       result.push({
-        time: time + offset,
-        text,
-        translation
+        time,
+        text: first.text,
+        // 翻译取第二行的文本（如果第二行本身也有翻译部分，拼接起来）
+        translation: second.translation
+          ? `${second.text}｜${second.translation}`
+          : second.text
       })
+    } else {
+      // 单行：走常规双语检测
+      const { text, translation } = detectBilingualInline(texts[0])
+      result.push({ time, text, translation })
     }
   }
 

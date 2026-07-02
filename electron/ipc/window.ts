@@ -142,9 +142,9 @@ export function registerWindowIPC(getMainWindow: () => BrowserWindow | null): vo
       await fs.promises.access(lrcPath, fs.constants.R_OK)
       // 异步读取文件内容（替代 readFileSync）
       return await fs.promises.readFile(lrcPath, 'utf-8')
-    } catch (err: any) {
+    } catch (err: unknown) {
       // 文件不存在返回 null（正常情况，歌曲可能没有歌词）
-      if (err.code === 'ENOENT') return null
+      if (err instanceof Error && 'code' in err && (err as { code: string }).code === 'ENOENT') return null
       console.error('[IPC] 读取歌词文件失败:', lrcPath, err)
       return null
     }

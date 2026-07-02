@@ -9,6 +9,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { getAudioEngine } from '../utils/AudioEngine'
 import { useUIStore } from '../stores/uiStore'
 import { usePlayerStore } from '../stores/playerStore'
+import Equalizer from '../components/Equalizer'
 import type { Theme } from '../types'
 
 // 主题选项配置
@@ -346,6 +347,16 @@ function Settings() {
               />
               <span className="settings-switch__slider" />
             </label>
+          </div>
+        </div>
+      </section>
+
+      {/* ===== 均衡器设置区域 ===== */}
+      <section className="settings-section">
+        <h3 className="settings-section__title">均衡器</h3>
+        <div className="settings-item">
+          <div className="settings-item__info settings-item__info--full">
+            <Equalizer />
           </div>
         </div>
       </section>

@@ -122,6 +122,12 @@
 
 /* ===== 开关样式 ===== */
 
+/* 全宽信息区（均衡器等宽组件用） */
+.settings-item__info--full {
+  width: 100%;
+  flex-basis: 100%;
+}
+
 .settings-switch {
   position: relative;
   display: inline-block;

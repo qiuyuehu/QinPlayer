@@ -16,6 +16,7 @@ import { useTheme } from './hooks/useTheme'
 import { useAudioSync } from './hooks/useAudioSync'
 import { restorePlayerState, usePlayerStore } from './stores/playerStore'
 import { useUIStore } from './stores/uiStore'
+import { useEqStore } from './stores/eqStore'
 import type { Theme } from './types'
 
 // App — 根组件，组装布局 + 主题管理 + 水合播放状态
@@ -39,17 +40,20 @@ function App() {
     window.electronAPI.send('window:set-mini-mode', isMiniMode)
   }, [isMiniMode])
 
-  // 启动时恢复播放状态 + 主题设置 + 歌词偏移量 + 淡入淡出
+  // 启动时恢复播放状态 + 主题设置 + 歌词偏移量 + 淡入淡出 + 均衡器
   useEffect(() => {
     async function hydrate() {
       try {
-        // 并行恢复：播放状态 + 主题设置 + 歌词偏移量 + 淡入淡出
+        // 并行恢复：播放状态 + 主题设置 + 歌词偏移量 + 淡入淡出 + 均衡器
         const [, savedTheme, savedLyricOffset, savedFadeEnabled] = await Promise.all([
           restorePlayerState(),
           window.electronAPI.invoke('settings:get', { key: 'theme' }) as Promise<string | null>,
           window.electronAPI.invoke('settings:get', { key: 'lyricOffset' }) as Promise<string | null>,
           window.electronAPI.invoke('settings:get', { key: 'fadeEnabled' }) as Promise<string | null>,
         ])
+
+        // 恢复均衡器设置（独立加载，不阻塞其他恢复）
+        useEqStore.getState().loadFromDb()
 
         // 恢复主题（如果有保存的值）
         if (savedTheme && ['dark', 'light', 'system'].includes(savedTheme)) {

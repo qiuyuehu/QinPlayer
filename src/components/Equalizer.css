@@ -1,0 +1,274 @@
+/* =============================================================================
+   QinPlayer — 均衡器组件样式
+   =============================================================================
+   设计：极简线条风，垂直滑块 + dB 显示 + 预设按钮
+   兼容亮色/暗色主题（全部使用 CSS 变量）
+   ============================================================================= */
+
+/* ---------------------------------------------------------------------------
+   均衡器容器
+   --------------------------------------------------------------------------- */
+
+.eq-container {
+  width: 100%;
+  padding: 16px 0;
+}
+
+/* ---------------------------------------------------------------------------
+   滑块区域（10 个垂直滑块等距排列）
+   --------------------------------------------------------------------------- */
+
+.eq-sliders {
+  display: flex;
+  justify-content: flex-start;
+  align-items: flex-end;
+  flex-wrap: nowrap;
+  gap: 12px;
+  position: relative;
+  padding-bottom: 24px;
+  /* 最小高度保证滑块区域不被压缩 */
+  min-height: 200px;
+  /* 允许水平滚动查看更多频段 */
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* 自定义细滚动条样式 */
+.eq-sliders::-webkit-scrollbar {
+  height: 4px;
+}
+
+.eq-sliders::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.eq-sliders::-webkit-scrollbar-thumb {
+  background: var(--text-muted);
+  border-radius: 2px;
+}
+
+.eq-sliders::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
+
+.eq-sliders {
+  scrollbar-width: thin;
+  scrollbar-color: var(--text-muted) transparent;
+}
+
+/* 单个滑块列容器 */
+.eq-slider-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  z-index: 1;
+}
+
+/* dB 值显示（滑块上方） */
+.eq-value {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  min-width: 42px;
+  text-align: center;
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+  /* 正值显绿、负值显红、零值显灰 */
+  transition: color 0.15s ease;
+}
+
+.eq-value--positive {
+  color: #4ade80;
+}
+
+.eq-value--negative {
+  color: #f87171;
+}
+
+.eq-value--zero {
+  color: var(--text-muted);
+}
+
+/* 滑块轨道容器（用于旋转） */
+.eq-slider-track {
+  position: relative;
+  width: 120px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 垂直滑块（旋转后的 input range） */
+.eq-slider-track input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100px;
+  height: 120px;
+  background: transparent;
+  transform: rotate(-90deg);
+  transform-origin: center center;
+  cursor: pointer;
+  outline: none;
+  margin: 0;
+}
+
+/* 滑块轨道（细轨道 2px） */
+.eq-slider-track input[type='range']::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 2px;
+  background: var(--border);
+  border-radius: 1px;
+}
+
+.eq-slider-track input[type='range']::-moz-range-track {
+  width: 100%;
+  height: 2px;
+  background: var(--border);
+  border-radius: 1px;
+  border: none;
+}
+
+/* 滑块已选中部分（从中心到当前位置） */
+.eq-slider-track input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  cursor: pointer;
+  margin-top: -5px; /* 垂直居中于 2px 轨道 */
+  transition: background-color 0.15s ease, transform 0.15s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.eq-slider-track input[type='range']::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.15s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* 滑块悬停/拖动时放大效果 */
+.eq-slider-track input[type='range']:hover::-webkit-slider-thumb {
+  transform: scale(1.2);
+  background: var(--accent);
+}
+
+.eq-slider-track input[type='range']:hover::-moz-range-thumb {
+  transform: scale(1.2);
+  background: var(--accent);
+}
+
+.eq-slider-track input[type='range']:active::-webkit-slider-thumb {
+  transform: scale(1.3);
+}
+
+.eq-slider-track input[type='range']:active::-moz-range-thumb {
+  transform: scale(1.3);
+}
+
+/* 频段标签（滑块下方） */
+.eq-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  user-select: none;
+  text-align: center;
+  min-width: 30px;
+}
+
+/* ---------------------------------------------------------------------------
+   0dB 参考线（横跨所有滑块的淡灰色线）
+   --------------------------------------------------------------------------- */
+
+.eq-zero-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--text-muted);
+  opacity: 0.3;
+  z-index: 0;
+  /* 垂直位置：滑块区域中点偏上（因为标签区域占据了一些空间） */
+  bottom: calc(24px + 60px); /* 底部 padding + 滑块高度一半 */
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------------------
+   预设按钮行
+   --------------------------------------------------------------------------- */
+
+.eq-presets {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+/* 单个预设文字按钮 */
+.eq-preset-btn {
+  padding: 6px 16px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  position: relative;
+  user-select: none;
+}
+
+.eq-preset-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+/* 选中状态：底部下划线 + 高亮文字 */
+.eq-preset-btn--active {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.eq-preset-btn--active::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 16px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 1px;
+}
+
+/* ---------------------------------------------------------------------------
+   重置按钮
+   --------------------------------------------------------------------------- */
+
+.eq-reset-btn {
+  display: block;
+  margin: 0 auto;
+  padding: 6px 20px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.eq-reset-btn:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--accent);
+  color: var(--text-primary);
+}

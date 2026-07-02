@@ -8,6 +8,9 @@
 //   - AudioContext 在用户首次交互后才创建（避免白屏）
 // =============================================================================
 
+// 均衡器频段频率（10段：32/64/125/250/500/1k/2k/4k/8k/16kHz）
+const EQ_FREQUENCIES: readonly number[] = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
+
 export class AudioEngine {
   // --- 核心节点 ---
   private audioContext: AudioContext | null = null  // 延迟创建
@@ -15,6 +18,10 @@ export class AudioEngine {
   private audioElement: HTMLAudioElement
   private sourceNode: MediaElementAudioSourceNode | null = null
   private webAudioConnected = false  // 是否已接入 Web Audio 图
+
+  // --- 均衡器节点链 ---
+  private eqFilters: BiquadFilterNode[] = []  // 10段 peaking 滤波器
+  private _pendingEqGains: number[] = []  // 等待应用的均衡器增益（Web Audio 接入前缓存）
 
   // --- 状态回调（外部注册）---
   private _onTimeUpdate: ((currentTime: number, duration: number) => void) | null = null
@@ -83,14 +90,42 @@ export class AudioEngine {
       this.audioContext.resume()
     }
 
-    // 创建 GainNode
+    // 创建均衡器 BiquadFilterNode 链（10段 peaking 滤波器）
+    // 每个滤波器对应一个频段，初始增益为 0dB（平直）
+    this.eqFilters = EQ_FREQUENCIES.map((freq) => {
+      const filter = this.audioContext!.createBiquadFilter()
+      filter.type = 'peaking'
+      filter.frequency.value = freq
+      filter.Q.value = 1.4  // 中等 Q 值，相邻频段自然过渡
+      filter.gain.value = 0  // 默认 0dB（不增不减）
+      return filter
+    })
+
+    // 创建 GainNode（音量控制 + 淡入淡出）
     this.gainNode = this.audioContext.createGain()
     this.gainNode.connect(this.audioContext.destination)
 
     // 创建 MediaElementAudioSourceNode（只能创建一次）
     if (!this.sourceNode) {
       this.sourceNode = this.audioContext.createMediaElementSource(this.audioElement)
-      this.sourceNode.connect(this.gainNode)
+    }
+
+    // 连接信号链：source → eq[0] → eq[1] → ... → eq[9] → gainNode → destination
+    // 先断开旧连接（如果有的话）
+    this.sourceNode.disconnect()
+    let lastNode: AudioNode = this.sourceNode
+    for (const filter of this.eqFilters) {
+      lastNode.connect(filter)
+      lastNode = filter
+    }
+    lastNode.connect(this.gainNode)
+
+    // 应用等待中的均衡器增益（eqStore 在 audioEngine 初始化前可能已加载数据库设置）
+    if (this._pendingEqGains.length > 0) {
+      for (let i = 0; i < this.eqFilters.length && i < this._pendingEqGains.length; i++) {
+        this.eqFilters[i].gain.value = this._pendingEqGains[i]
+      }
+      this._pendingEqGains = []
     }
 
     // ⚠️ 同步当前音量到 GainNode（防止接入 Web Audio 后音量断层）
@@ -259,6 +294,49 @@ export class AudioEngine {
     } catch (err) {
       console.error('[AudioEngine] 枚举音频设备失败:', err)
       return []
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 均衡器（需要 Web Audio API）
+  // ---------------------------------------------------------------------------
+
+  /**
+   * 获取均衡器频段频率数组（供 UI 组件渲染频段标签）
+   * @returns 10 个频段频率（Hz）
+   */
+  getEqFrequencies(): readonly number[] {
+    return EQ_FREQUENCIES
+  }
+
+  /**
+   * 设置均衡器单个频段增益
+   * @param index 频段索引（0-9）
+   * @param value 增益值（-12 ~ +12 dB）
+   */
+  setEqGain(index: number, value: number): void {
+    if (this.eqFilters[index]) {
+      // 滤波器已创建，直接设置增益
+      this.eqFilters[index].gain.value = value
+    } else {
+      // 滤波器未创建（Web Audio 未接入），缓存到 pending 数组
+      this._pendingEqGains[index] = value
+    }
+  }
+
+  /**
+   * 批量设置均衡器所有频段增益
+   * @param gains 10 个增益值的数组（-12 ~ +12 dB）
+   */
+  setAllEqGains(gains: readonly number[]): void {
+    if (this.eqFilters.length > 0) {
+      // 滤波器已创建，直接设置
+      for (let i = 0; i < this.eqFilters.length && i < gains.length; i++) {
+        this.eqFilters[i].gain.value = gains[i]
+      }
+    } else {
+      // 滤波器未创建，缓存到 pending 数组
+      this._pendingEqGains = [...gains]
     }
   }
 

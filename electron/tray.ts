@@ -15,6 +15,7 @@ import { join } from 'path'
 let tray: Tray | null = null
 let getMainWindow: () => Electron.BrowserWindow | null
 let getIsPlaying: () => boolean
+let setIsQuitting: () => void
 let onPlayPause: () => void
 let onPrev: () => void
 let onNext: () => void
@@ -26,6 +27,7 @@ let onNext: () => void
 export function createTray(
   mainWindowGetter: () => Electron.BrowserWindow | null,
   isPlayingGetter: () => boolean,
+  setIsQuittingFn: () => void,
   playPauseHandler: () => void,
   prevHandler: () => void,
   nextHandler: () => void
@@ -33,6 +35,7 @@ export function createTray(
   // 保存回调引用
   getMainWindow = mainWindowGetter
   getIsPlaying = isPlayingGetter
+  setIsQuitting = setIsQuittingFn
   onPlayPause = playPauseHandler
   onPrev = prevHandler
   onNext = nextHandler
@@ -98,7 +101,7 @@ export function updateMenu(): void {
     {
       label: '退出',
       click: () => {
-        ;(app as any).isQuitting = true
+        setIsQuitting()
         app.quit()
       }
     }

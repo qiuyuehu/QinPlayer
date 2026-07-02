@@ -30,6 +30,8 @@ const INVOKE_CHANNELS = new Set([
   'read-lrc-file',
   // 数据库
   'db:export', 'db:import-select', 'db:import-apply',
+  // 均衡器
+  'eq:get', 'eq:save',
   // 其他
   'get-auto-launch',
 ])

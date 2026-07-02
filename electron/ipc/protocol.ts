@@ -27,13 +27,17 @@ export function registerProtocol(): void {
       const host = url.hostname  // 'audio' 或 'cover'
 
       if (!filePath) {
+        console.error('[Protocol] 缺少 path 参数:', request.url)
         return new Response('Not Found', { status: 404 })
       }
+
+      console.log('[Protocol] 请求:', host, '→', filePath)
 
       // 异步检查文件是否存在（替代 existsSync）
       try {
         await fs.promises.access(filePath, fs.constants.R_OK)
-      } catch {
+      } catch (accessErr) {
+        console.error('[Protocol] 文件不可访问:', filePath, accessErr)
         return new Response('Not Found', { status: 404 })
       }
 

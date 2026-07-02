@@ -119,6 +119,16 @@ export interface IpcChannels {
     return: void
   }
 
+  // --- 均衡器 ---
+  'eq:get': {
+    args: void
+    return: string | null  // JSON 数组字符串，如 "[0,2,4,0,0,0,0,0,0,0]" 或 null
+  }
+  'eq:save': {
+    args: { gains: number[] }
+    return: void
+  }
+
   // --- 系统 ---
   'set-auto-launch': {
     args: { enabled: boolean }

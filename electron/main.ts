@@ -24,6 +24,7 @@ import { registerSettingsIPC } from './ipc/settings'
 import { registerWindowIPC } from './ipc/window'
 import { registerProtocol } from './ipc/protocol'
 import { registerScanIPC, startIncrementalScan } from './ipc/scan'
+import { registerEqIPC } from './ipc/eq'
 import { createTray, updateMenu, destroyTray } from './tray'
 
 // ---------------------------------------------------------------------------
@@ -32,6 +33,7 @@ import { createTray, updateMenu, destroyTray } from './tray'
 
 let mainWindow: BrowserWindow | null = null
 let isPlaying = false  // 播放状态（托盘菜单需要）
+let isQuitting = false  // 是否正在退出（关闭窗口时判断：退出 vs 最小化到托盘）
 
 /** 获取主窗口引用（供各 IPC 模块使用） */
 function getMainWindow(): BrowserWindow | null {
@@ -41,6 +43,11 @@ function getMainWindow(): BrowserWindow | null {
 /** 获取播放状态（托盘模块调用） */
 function getIsPlaying(): boolean {
   return isPlaying
+}
+
+/** 设置退出标记（托盘"退出"菜单调用） */
+function setIsQuitting(): void {
+  isQuitting = true
 }
 
 // ---------------------------------------------------------------------------
@@ -128,7 +135,7 @@ function createWindow(): void {
 
   // 关闭窗口时隐藏到托盘（不退出）
   mainWindow.on('close', (e) => {
-    if (!(app as any).isQuitting) {
+    if (!isQuitting) {
       e.preventDefault()
       mainWindow?.hide()
     }
@@ -165,6 +172,7 @@ app.whenReady().then(() => {
   registerSongsIPC()
   registerPlaylistsIPC()
   registerSettingsIPC(getMainWindow)
+  registerEqIPC()
 
   // 4. 创建主窗口
   createWindow()
@@ -182,6 +190,7 @@ app.whenReady().then(() => {
   createTray(
     getMainWindow,
     getIsPlaying,
+    setIsQuitting,
     () => {
       // 播放/暂停：切换状态并通知渲染进程
       isPlaying = !isPlaying
