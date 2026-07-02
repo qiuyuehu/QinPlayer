@@ -111,7 +111,24 @@
   align-items: center;
   justify-content: center;
   padding: 0;
+  position: relative;
   transition: color 0.15s, transform 0.1s;
+}
+
+.player-bar__play-icon {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+
+.player-bar__play-icon--hidden {
+  opacity: 0;
+  transform: scale(0.82);
 }
 
 /* 播放/暂停切换时的脉冲动画 */
@@ -123,6 +140,22 @@
   0% { transform: scale(1); }
   50% { transform: scale(1.1); }
   100% { transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player-bar__btn,
+  .player-bar__play-btn,
+  .player-bar__play-icon {
+    transition: none;
+  }
+
+  .player-bar__btn:active {
+    transform: none;
+  }
+
+  .player-bar__play-btn--pulse {
+    animation: none;
+  }
 }
 
 .player-bar__play-btn:hover {

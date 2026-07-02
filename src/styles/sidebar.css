@@ -55,7 +55,7 @@
   color: var(--text-secondary);
   font-size: 13px;
   cursor: pointer;
-  transition: background-color 0.15s ease, color 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
   text-align: left;
 }
 
@@ -69,6 +69,10 @@
   color: var(--text-primary);
 }
 
+.sidebar__item:active {
+  transform: scale(0.98);
+}
+
 .sidebar__icon {
   font-size: 15px;
   width: 20px;
@@ -80,4 +84,14 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar__item {
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+
+  .sidebar__item:active {
+    transform: none;
+  }
 }
