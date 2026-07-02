@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useUIStore } from '../src/stores/uiStore'
+import { DEFAULT_FEATURE_FLAGS, isNavAllowed } from '../src/utils/featureFlags'
 
 describe('uiStore', () => {
   beforeEach(() => {
@@ -13,6 +14,7 @@ describe('uiStore', () => {
       theme: 'dark',
       sidebarCollapsed: false,
       searchQuery: '',
+      featureFlags: { ...DEFAULT_FEATURE_FLAGS },
     })
   })
 
@@ -24,6 +26,7 @@ describe('uiStore', () => {
     expect(state.sidebarCollapsed).toBe(false)
     expect(state.isMiniMode).toBe(false)
     expect(state.searchQuery).toBe('')
+    expect(state.featureFlags.playback).toBe(true)
   })
 
   // --- setActiveNav ---
@@ -65,5 +68,17 @@ describe('uiStore', () => {
     expect(useUIStore.getState().searchQuery).toBe('周杰伦')
     useUIStore.getState().setSearchQuery('')
     expect(useUIStore.getState().searchQuery).toBe('')
+  })
+
+  // --- setFeatureFlags ---
+  it('setFeatureFlags 设置功能开关快照', () => {
+    useUIStore.getState().setFeatureFlags({ ...DEFAULT_FEATURE_FLAGS, albums: false })
+    expect(useUIStore.getState().featureFlags.albums).toBe(false)
+  })
+
+  it('isNavAllowed 应该拦截关闭的导航页面', () => {
+    const flags = { ...DEFAULT_FEATURE_FLAGS, albums: false }
+    expect(isNavAllowed('albums', flags)).toBe(false)
+    expect(isNavAllowed('local', flags)).toBe(true)
   })
 })

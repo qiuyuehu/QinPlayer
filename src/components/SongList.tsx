@@ -10,6 +10,7 @@
 import { useCallback, useRef, useState, useEffect } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'     // 虚拟列表：只渲染可视区域的 DOM 节点
 import { usePlayerStore } from '../stores/playerStore'        // 全局播放状态（当前歌曲、播放列表、播放状态）
+import { useUIStore } from '../stores/uiStore'
 import ContextMenu from './ContextMenu'                       // 通用右键菜单组件
 import SongInfoDialog from './SongInfoDialog'                 // 歌曲详情弹窗
 import { IconPlay, IconList, IconClose, IconFolder, IconInfo, IconStar } from './Icons'
@@ -35,6 +36,7 @@ function SongList({ tracks, showIndex = true, showAlbum = false, playlistId, onR
   const setCurrentTrack = usePlayerStore((s) => s.setCurrentTrack)
   const setPlaylist = usePlayerStore((s) => s.setPlaylist)
   const setPlaying = usePlayerStore((s) => s.setPlaying)
+  const featureFlags = useUIStore((s) => s.featureFlags)
 
   // --- 虚拟列表滚动容器 ref ---
   // 此 ref 挂在滚动容器上，useVirtualizer 通过它读取 scrollTop 和可视高度
@@ -65,18 +67,20 @@ function SongList({ tracks, showIndex = true, showAlbum = false, playlistId, onR
   useEffect(() => {
     async function loadData() {
       try {
-        const [list, likedSongs] = await Promise.all([
-          window.electronAPI.invoke('playlists:getAll') as Promise<Playlist[]>,
-          window.electronAPI.invoke('songs:getLiked') as Promise<Track[]>
-        ])
-        setPlaylists(list)
-        setLikedIds(new Set(likedSongs.map(s => s.id)))
+        if (featureFlags.playlists) {
+          const list = await window.electronAPI.invoke('playlists:getAll') as Playlist[]
+          setPlaylists(list)
+        }
+        if (featureFlags.liked) {
+          const likedSongs = await window.electronAPI.invoke('songs:getLiked') as Track[]
+          setLikedIds(new Set(likedSongs.map(s => s.id)))
+        }
       } catch {
         // 忽略
       }
     }
     loadData()
-  }, [])
+  }, [featureFlags.playlists, featureFlags.liked])
 
   // --- 虚拟列表配置 ---
   // overscan: 10 表示上下各多渲染 10 行，滚动时减少白屏闪烁
@@ -90,18 +94,24 @@ function SongList({ tracks, showIndex = true, showAlbum = false, playlistId, onR
   // --- 点击歌曲播放 ---
   // 将整个歌曲列表设为播放队列，再指定当前播放歌曲，立即开始播放
   const handlePlay = useCallback((track: Track) => {
+    if (!featureFlags.playback) return
+
     setPlaylist(tracks)
     setCurrentTrack(track)
     setPlaying(true)
     // 记录播放 —— 同时写入"最近播放"表和更新"播放次数"，两个 IPC 互不依赖
-    window.electronAPI.invoke('songs:recordPlay', { songId: track.id })
+    if (featureFlags.recent) {
+      window.electronAPI.invoke('songs:recordPlay', { songId: track.id })
+    }
     window.electronAPI.invoke('songs:updatePlayCount', { songId: track.id })
-  }, [tracks, setCurrentTrack, setPlaylist, setPlaying])
+  }, [tracks, featureFlags.playback, featureFlags.recent, setCurrentTrack, setPlaylist, setPlaying])
 
   // --- 切换收藏状态 ---
   // 点击爱心按钮时切换收藏，需要阻止事件冒泡避免触发整行播放
   const toggleLike = useCallback(async (e: React.MouseEvent, track: Track) => {
     e.stopPropagation()  // 关键：阻止冒泡到父元素的 onClick，否则会同时触发播放
+    if (!featureFlags.liked) return
+
     const isLiked = likedIds.has(track.id)
     if (isLiked) {
       await window.electronAPI.invoke('songs:unlike', { songId: track.id })
@@ -114,7 +124,7 @@ function SongList({ tracks, showIndex = true, showAlbum = false, playlistId, onR
       await window.electronAPI.invoke('songs:like', { songId: track.id })
       setLikedIds(prev => new Set(prev).add(track.id))
     }
-  }, [likedIds])
+  }, [likedIds, featureFlags.liked])
 
   // --- 右键菜单 ---
   // 记录鼠标坐标和目标歌曲，传给 ContextMenu 组件定位菜单
@@ -126,13 +136,18 @@ function SongList({ tracks, showIndex = true, showAlbum = false, playlistId, onR
   // --- 构建菜单项 ---
   // 动态构建菜单：根据是否有歌单决定显示哪些选项
   const getMenuItems = useCallback((track: Track): MenuItem[] => {
-    const items: MenuItem[] = [
-      {
+    const items: MenuItem[] = []
+
+    if (featureFlags.playback) {
+      items.push({
         label: '播放',
         icon: <IconPlay width={14} height={14} />,
         action: () => handlePlay(track)
-      },
-      {
+      })
+    }
+
+    if (featureFlags.playlists) {
+      items.push({
         label: '添加到歌单',               // 有子菜单的项，hover 时展开歌单列表
         icon: <IconList width={14} height={14} />,
         children: playlists.length > 0     // 空歌单时显示"暂无歌单"占位
@@ -146,12 +161,12 @@ function SongList({ tracks, showIndex = true, showAlbum = false, playlistId, onR
               }
             }))
           : [{ label: '暂无歌单', disabled: true }]
-      },
-    ]
+      })
+    }
 
     // 从歌单移除（仅在歌单详情页显示）
     // 只有从歌单详情页进入时才传入 playlistId，其他页面不显示此选项
-    if (playlistId && onRemoveFromPlaylist) {
+    if (featureFlags.playlists && playlistId && onRemoveFromPlaylist) {
       items.push({
         label: '从歌单移除',
         icon: <IconClose width={14} height={14} />,
@@ -177,7 +192,7 @@ function SongList({ tracks, showIndex = true, showAlbum = false, playlistId, onR
     )
 
     return items
-  }, [playlists, playlistId, onRemoveFromPlaylist, handlePlay])
+  }, [featureFlags.playback, featureFlags.playlists, playlists, playlistId, onRemoveFromPlaylist, handlePlay])
 
   // --- 格式化时长 ---
   // 将秒数转为 "m:ss" 格式，无效值显示 "--:--" 占位
@@ -260,13 +275,15 @@ function SongList({ tracks, showIndex = true, showAlbum = false, playlistId, onR
                 <span className="song-list__col song-list__col--duration">
                   {formatDuration(track.duration)}
                 </span>
-                <button
-                  className={`song-list__like ${likedIds.has(track.id) ? 'song-list__like--active' : ''}`} // 已收藏时高亮样式
-                  onClick={(e) => toggleLike(e, track)}
-                  title={likedIds.has(track.id) ? '取消收藏' : '收藏'}  // tooltip 提示当前状态
-                >
-                  <IconStar width={14} height={14} filled={likedIds.has(track.id)} />
-                </button>
+                {featureFlags.liked && (
+                  <button
+                    className={`song-list__like ${likedIds.has(track.id) ? 'song-list__like--active' : ''}`} // 已收藏时高亮样式
+                    onClick={(e) => toggleLike(e, track)}
+                    title={likedIds.has(track.id) ? '取消收藏' : '收藏'}  // tooltip 提示当前状态
+                  >
+                    <IconStar width={14} height={14} filled={likedIds.has(track.id)} />
+                  </button>
+                )}
               </div>
             )
           })}

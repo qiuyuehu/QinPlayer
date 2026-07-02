@@ -33,6 +33,7 @@ function MiniPlayer() {
   // --- UI 状态 ---
   const setActiveNav = useUIStore((s) => s.setActiveNav)
   const setMiniMode = useUIStore((s) => s.setMiniMode)
+  const featureFlags = useUIStore((s) => s.featureFlags)
 
   // --- 进度条拖拽 ---
   const progressRef = useRef<HTMLDivElement>(null)
@@ -154,6 +155,8 @@ function MiniPlayer() {
   const coverUrl = currentTrack?.coverPath
     ? window.electronAPI.getCoverUrl(currentTrack.coverPath)
     : null
+
+  if (!featureFlags.playback || !featureFlags.miniMode) return null
 
   return (
     <div className="mini-player">

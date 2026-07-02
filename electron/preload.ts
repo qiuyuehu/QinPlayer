@@ -14,6 +14,8 @@ import { contextBridge, ipcRenderer } from 'electron'
 // ---------------------------------------------------------------------------
 
 const INVOKE_CHANNELS = new Set([
+  // 配置
+  'config:getFeatureFlags',
   // 设置
   'settings:get', 'settings:set',
   'settings:getFolders', 'settings:addFolder', 'settings:removeFolder',
@@ -72,6 +74,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   minimize: () => ipcRenderer.send('window:minimize'),
   maximize: () => ipcRenderer.send('window:maximize'),
   close: () => ipcRenderer.send('window:close'),
+  getFeatureFlags: () => ipcRenderer.invoke('config:getFeatureFlags'),
 
   // --- IPC 通信 ---
   // invoke: 双向通信（渲染 → 主进程 → 返回结果）
@@ -122,6 +125,7 @@ export interface ElectronAPI {
   minimize: () => void
   maximize: () => void
   close: () => void
+  getFeatureFlags: () => Promise<unknown>
   invoke: (channel: string, ...args: unknown[]) => Promise<unknown>
   send: (channel: string, ...args: unknown[]) => void
   on: (channel: string, callback: (...args: unknown[]) => void) => () => void

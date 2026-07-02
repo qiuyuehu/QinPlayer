@@ -7,6 +7,7 @@
 
 import { Tray, Menu, app, nativeImage } from 'electron'
 import { join } from 'path'
+import type { FeatureFlags } from '../src/types/ipc'
 
 // ---------------------------------------------------------------------------
 // 全局引用
@@ -19,6 +20,7 @@ let setIsQuitting: () => void
 let onPlayPause: () => void
 let onPrev: () => void
 let onNext: () => void
+let featureFlags: FeatureFlags
 
 // ---------------------------------------------------------------------------
 // 创建托盘
@@ -30,7 +32,8 @@ export function createTray(
   setIsQuittingFn: () => void,
   playPauseHandler: () => void,
   prevHandler: () => void,
-  nextHandler: () => void
+  nextHandler: () => void,
+  flags: FeatureFlags
 ): void {
   // 保存回调引用
   getMainWindow = mainWindowGetter
@@ -39,6 +42,7 @@ export function createTray(
   onPlayPause = playPauseHandler
   onPrev = prevHandler
   onNext = nextHandler
+  featureFlags = flags
 
   // 托盘图标路径
   const iconPath = app.isPackaged
@@ -72,21 +76,27 @@ export function updateMenu(): void {
 
   const isPlaying = getIsPlaying()
 
+  const playbackItems: Electron.MenuItemConstructorOptions[] = featureFlags.playback
+    ? [
+        {
+          label: isPlaying ? '暂停' : '播放',
+          click: onPlayPause
+        },
+        { type: 'separator' },
+        {
+          label: '上一首',
+          click: onPrev
+        },
+        {
+          label: '下一首',
+          click: onNext
+        },
+        { type: 'separator' },
+      ]
+    : []
+
   const contextMenu = Menu.buildFromTemplate([
-    {
-      label: isPlaying ? '暂停' : '播放',
-      click: onPlayPause
-    },
-    { type: 'separator' },
-    {
-      label: '上一首',
-      click: onPrev
-    },
-    {
-      label: '下一首',
-      click: onNext
-    },
-    { type: 'separator' },
+    ...playbackItems,
     {
       label: '显示主窗口',
       click: () => {

@@ -1,3 +1,5 @@
+import type { FeatureFlags } from './ipc'
+
 // =============================================================================
 // QinPlayer — Electron API 类型声明
 // =============================================================================
@@ -16,6 +18,8 @@ export interface ElectronAPI {
   maximize: () => void
   /** 关闭窗口 */
   close: () => void
+  /** 获取功能开关快照 */
+  getFeatureFlags: () => Promise<FeatureFlags>
   /** 双向 IPC 通信（渲染 → 主进程） */
   invoke: (channel: string, ...args: unknown[]) => Promise<unknown>
   /** 单向发送（渲染 → 主进程） */

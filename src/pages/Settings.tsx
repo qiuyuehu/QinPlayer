@@ -24,6 +24,7 @@ function Settings() {
   // --- 主题状态（从 Zustand 读取） ---
   const theme = useUIStore((state) => state.theme)
   const setTheme = useUIStore((state) => state.setTheme)
+  const featureFlags = useUIStore((state) => state.featureFlags)
 
   // --- 音频设备状态 ---
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
@@ -352,14 +353,16 @@ function Settings() {
       </section>
 
       {/* ===== 均衡器设置区域 ===== */}
-      <section className="settings-section">
-        <h3 className="settings-section__title">均衡器</h3>
-        <div className="settings-item">
-          <div className="settings-item__info settings-item__info--full">
-            <Equalizer />
+      {featureFlags.equalizer && (
+        <section className="settings-section">
+          <h3 className="settings-section__title">均衡器</h3>
+          <div className="settings-item">
+            <div className="settings-item__info settings-item__info--full">
+              <Equalizer />
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* ===== 文件管理区域 ===== */}
       <section className="settings-section">

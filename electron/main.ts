@@ -20,12 +20,13 @@ import { join } from 'path'
 import { initDatabase, closeDatabase } from './db/database'
 import { registerSongsIPC } from './ipc/songs'
 import { registerPlaylistsIPC } from './ipc/playlists'
-import { registerSettingsIPC } from './ipc/settings'
+import { getFeatureFlags, loadFeatureFlags, registerSettingsIPC } from './ipc/settings'
 import { registerWindowIPC } from './ipc/window'
 import { registerProtocol } from './ipc/protocol'
 import { registerScanIPC, startIncrementalScan } from './ipc/scan'
 import { registerEqIPC } from './ipc/eq'
 import { createTray, updateMenu, destroyTray } from './tray'
+import type { FeatureFlags } from '../src/types/ipc'
 
 // ---------------------------------------------------------------------------
 // 全局引用
@@ -94,7 +95,7 @@ protocol.registerSchemesAsPrivileged([
 // 窗口创建
 // ---------------------------------------------------------------------------
 
-function createWindow(): void {
+function createWindow(flags: FeatureFlags): void {
   // 打包后 assets 在 resources/assets/，开发时在项目根目录
   const iconPath = app.isPackaged
     ? join(process.resourcesPath, 'assets/icon.ico')
@@ -135,7 +136,7 @@ function createWindow(): void {
 
   // 关闭窗口时隐藏到托盘（不退出）
   mainWindow.on('close', (e) => {
-    if (!isQuitting) {
+    if (flags.tray && !isQuitting) {
       e.preventDefault()
       mainWindow?.hide()
     }
@@ -159,9 +160,12 @@ function createWindow(): void {
 // 应用生命周期
 // ---------------------------------------------------------------------------
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // 1. 初始化数据库（最先，其他模块可能依赖数据库）
   initDatabase()
+
+  // 1.1 读取功能开关（必须早于窗口、托盘和渲染进程水合）
+  const featureFlags = await loadFeatureFlags()
 
   // 2. 注册自定义协议拦截
   registerProtocol()
@@ -175,7 +179,7 @@ app.whenReady().then(() => {
   registerEqIPC()
 
   // 4. 创建主窗口
-  createWindow()
+  createWindow(featureFlags)
 
   // 5. 启动增量扫描（后台自动检测新增/修改的歌曲）
   startIncrementalScan(getMainWindow)
@@ -187,25 +191,31 @@ app.whenReady().then(() => {
   })
 
   // 7. 创建系统托盘
-  createTray(
-    getMainWindow,
-    getIsPlaying,
-    setIsQuitting,
-    () => {
-      // 播放/暂停：切换状态并通知渲染进程
-      isPlaying = !isPlaying
-      mainWindow?.webContents.send('tray:play-pause')
-      updateMenu()
-    },
-    () => {
-      // 上一首
-      mainWindow?.webContents.send('tray:prev')
-    },
-    () => {
-      // 下一首
-      mainWindow?.webContents.send('tray:next')
-    }
-  )
+  if (featureFlags.tray) {
+    createTray(
+      getMainWindow,
+      getIsPlaying,
+      setIsQuitting,
+      () => {
+        if (!getFeatureFlags().playback) return
+        // 播放/暂停：切换状态并通知渲染进程
+        isPlaying = !isPlaying
+        mainWindow?.webContents.send('tray:play-pause')
+        updateMenu()
+      },
+      () => {
+        if (!getFeatureFlags().playback) return
+        // 上一首
+        mainWindow?.webContents.send('tray:prev')
+      },
+      () => {
+        if (!getFeatureFlags().playback) return
+        // 下一首
+        mainWindow?.webContents.send('tray:next')
+      },
+      featureFlags
+    )
+  }
 
   // 播放状态同步（渲染进程通知主进程）
   ipcMain.on('player:playing-changed', (_event, playing: boolean) => {

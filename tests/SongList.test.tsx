@@ -3,9 +3,24 @@
  * 覆盖：空状态、列表渲染、当前歌曲高亮、列显示控制
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import SongList from '../src/components/SongList'
+import { usePlayerStore } from '../src/stores/playerStore'
+import { useUIStore } from '../src/stores/uiStore'
+import { DEFAULT_FEATURE_FLAGS } from '../src/utils/featureFlags'
 import type { Track } from '../src/types'
+
+vi.mock('@tanstack/react-virtual', () => ({
+  useVirtualizer: ({ count }: { count: number }) => ({
+    getTotalSize: () => count * 44,
+    getVirtualItems: () => Array.from({ length: count }, (_, index) => ({
+      index,
+      key: index,
+      start: index * 44,
+      size: 44,
+    })),
+  }),
+}))
 
 // 模拟 AudioEngine
 vi.mock('../src/utils/AudioEngine', () => ({
@@ -25,12 +40,7 @@ vi.mock('../src/utils/AudioEngine', () => ({
 }))
 
 // 模拟 electronAPI
-window.electronAPI = {
-  ...window.electronAPI,
-  invoke: async () => null,
-  on: () => () => {},
-  send: () => {},
-}
+const invokeMock = vi.fn()
 
 // 测试用歌曲数据
 const tracks: Track[] = [
@@ -42,6 +52,32 @@ const tracks: Track[] = [
 describe('SongList', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    invokeMock.mockResolvedValue([])
+    window.electronAPI = {
+      ...window.electronAPI,
+      invoke: invokeMock,
+      on: () => () => {},
+      send: () => {},
+    }
+    useUIStore.setState({
+      activeNav: 'local',
+      isMiniMode: false,
+      theme: 'dark',
+      sidebarCollapsed: false,
+      searchQuery: '',
+      featureFlags: { ...DEFAULT_FEATURE_FLAGS },
+    })
+    usePlayerStore.setState({
+      isPlaying: false,
+      currentTrack: null,
+      playlist: [],
+      volume: 0.8,
+      playMode: 'sequential',
+      fadeEnabled: true,
+      lyricOffset: 0,
+      duration: 0,
+      seekTime: null,
+    })
   })
 
   // --- 空状态 ---
@@ -74,4 +110,34 @@ describe('SongList', () => {
 
   // --- 时长格式化 ---
   // 注：时长显示在虚拟列表行内，jsdom 下无法渲染，需真实浏览器验证。
+
+  it('playback=false 时双击歌曲不触发播放 IPC', async () => {
+    useUIStore.getState().setFeatureFlags({ ...DEFAULT_FEATURE_FLAGS, playback: false })
+    render(<SongList tracks={tracks} />)
+
+    fireEvent.doubleClick(screen.getByText('晴天'))
+
+    expect(usePlayerStore.getState().currentTrack).toBeNull()
+    expect(invokeMock).not.toHaveBeenCalledWith('songs:updatePlayCount', { songId: 1 })
+  })
+
+  it('playlists=false 时右键菜单不显示添加到歌单', async () => {
+    useUIStore.getState().setFeatureFlags({ ...DEFAULT_FEATURE_FLAGS, playlists: false })
+    render(<SongList tracks={tracks} />)
+
+    fireEvent.contextMenu(screen.getByText('晴天'))
+
+    await waitFor(() => {
+      expect(screen.getByText('播放')).toBeInTheDocument()
+    })
+    expect(screen.queryByText('添加到歌单')).not.toBeInTheDocument()
+  })
+
+  it('liked=false 时不渲染爱心按钮且不读取收藏列表', () => {
+    useUIStore.getState().setFeatureFlags({ ...DEFAULT_FEATURE_FLAGS, liked: false })
+    render(<SongList tracks={tracks} />)
+
+    expect(screen.queryByTitle('收藏')).not.toBeInTheDocument()
+    expect(invokeMock).not.toHaveBeenCalledWith('songs:getLiked')
+  })
 })

@@ -11,6 +11,12 @@
 // 均衡器频段频率（10段：32/64/125/250/500/1k/2k/4k/8k/16kHz）
 const EQ_FREQUENCIES: readonly number[] = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
 
+let equalizerEnabled = true
+
+export function setAudioEngineEqualizerEnabled(enabled: boolean): void {
+  equalizerEnabled = enabled
+}
+
 export class AudioEngine {
   // --- 核心节点 ---
   private audioContext: AudioContext | null = null  // 延迟创建
@@ -90,16 +96,17 @@ export class AudioEngine {
       this.audioContext.resume()
     }
 
-    // 创建均衡器 BiquadFilterNode 链（10段 peaking 滤波器）
-    // 每个滤波器对应一个频段，初始增益为 0dB（平直）
-    this.eqFilters = EQ_FREQUENCIES.map((freq) => {
-      const filter = this.audioContext!.createBiquadFilter()
-      filter.type = 'peaking'
-      filter.frequency.value = freq
-      filter.Q.value = 1.4  // 中等 Q 值，相邻频段自然过渡
-      filter.gain.value = 0  // 默认 0dB（不增不减）
-      return filter
-    })
+    // ★ equalizer=false 时不创建 EQ 节点链，音频直接进入 GainNode。
+    this.eqFilters = equalizerEnabled
+      ? EQ_FREQUENCIES.map((freq) => {
+          const filter = this.audioContext!.createBiquadFilter()
+          filter.type = 'peaking'
+          filter.frequency.value = freq
+          filter.Q.value = 1.4  // 中等 Q 值，相邻频段自然过渡
+          filter.gain.value = 0  // 默认 0dB（不增不减）
+          return filter
+        })
+      : []
 
     // 创建 GainNode（音量控制 + 淡入淡出）
     this.gainNode = this.audioContext.createGain()
@@ -110,7 +117,7 @@ export class AudioEngine {
       this.sourceNode = this.audioContext.createMediaElementSource(this.audioElement)
     }
 
-    // 连接信号链：source → eq[0] → eq[1] → ... → eq[9] → gainNode → destination
+    // 连接信号链：source → eq[0] → ... → gainNode；EQ 关闭时 source → gainNode。
     // 先断开旧连接（如果有的话）
     this.sourceNode.disconnect()
     let lastNode: AudioNode = this.sourceNode
@@ -315,6 +322,8 @@ export class AudioEngine {
    * @param value 增益值（-12 ~ +12 dB）
    */
   setEqGain(index: number, value: number): void {
+    if (!equalizerEnabled) return
+
     if (this.eqFilters[index]) {
       // 滤波器已创建，直接设置增益
       this.eqFilters[index].gain.value = value
@@ -329,6 +338,8 @@ export class AudioEngine {
    * @param gains 10 个增益值的数组（-12 ~ +12 dB）
    */
   setAllEqGains(gains: readonly number[]): void {
+    if (!equalizerEnabled) return
+
     if (this.eqFilters.length > 0) {
       // 滤波器已创建，直接设置
       for (let i = 0; i < this.eqFilters.length && i < gains.length; i++) {

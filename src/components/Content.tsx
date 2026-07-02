@@ -16,6 +16,7 @@ import Playlists from '../pages/Playlists'
 import Liked from '../pages/Liked'
 import Lyrics from '../pages/Lyrics'
 import Settings from '../pages/Settings'
+import { isNavAllowed } from '../utils/featureFlags'
 
 // ---------------------------------------------------------------------------
 // 内容区路由
@@ -23,6 +24,7 @@ import Settings from '../pages/Settings'
 
 function Content() {
   const activeNav = useUIStore((state) => state.activeNav)
+  const featureFlags = useUIStore((state) => state.featureFlags)
   const [fadeKey, setFadeKey] = useState(0)   // 每次导航切换递增，触发淡入
 
   // 导航切换时触发淡入动画
@@ -32,6 +34,10 @@ function Content() {
 
   // 根据导航项渲染对应页面
   const renderPage = () => {
+    if (!isNavAllowed(activeNav, featureFlags)) {
+      return <LocalMusic />
+    }
+
     switch (activeNav) {
       case 'search':
         return <Search />

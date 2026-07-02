@@ -8,6 +8,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useUIStore } from '../stores/uiStore'
 import { IconClock, IconMusic, IconDisc, IconList, IconStar, IconGear } from './Icons'
+import { isNavAllowed } from '../utils/featureFlags'
 
 // 导航项定义（使用 SVG 图标组件，统一扁平 stroke 风格）
 const NAV_ITEMS = [
@@ -23,6 +24,7 @@ const NAV_ITEMS = [
 function Sidebar() {
   // 当前选中的导航项
   const activeNav = useUIStore((state) => state.activeNav)
+  const featureFlags = useUIStore((state) => state.featureFlags)
   const setActiveNav = useUIStore((state) => state.setActiveNav)
   const setSearchQuery = useUIStore((state) => state.setSearchQuery)
 
@@ -44,6 +46,7 @@ function Sidebar() {
     }
 
     if (value.trim()) {
+      if (!featureFlags.search) return
       // 有输入 → 自动切到搜索页面
       if (activeNav !== 'search') {
         prevNavRef.current = activeNav
@@ -61,7 +64,7 @@ function Sidebar() {
         setActiveNav(prevNavRef.current)
       }
     }
-  }, [activeNav, setActiveNav, setSearchQuery])
+  }, [activeNav, featureFlags.search, setActiveNav, setSearchQuery])
 
   // 点击导航项时，清空搜索框
   const handleNavClick = useCallback((id: string) => {
@@ -83,18 +86,20 @@ function Sidebar() {
     <nav className="sidebar">
       {/* 搜索框 */}
       <div className="sidebar__search">
-        <input
-          className="sidebar__search-input"
-          type="text"
-          placeholder="搜索歌曲..."
-          value={inputValue}
-          onChange={handleInputChange}
-        />
+        {featureFlags.search && (
+          <input
+            className="sidebar__search-input"
+            type="text"
+            placeholder="搜索歌曲..."
+            value={inputValue}
+            onChange={handleInputChange}
+          />
+        )}
       </div>
 
       {/* 导航项列表 */}
       <ul className="sidebar__list">
-        {NAV_ITEMS.map((item) => (
+        {NAV_ITEMS.filter((item) => isNavAllowed(item.id, featureFlags)).map((item) => (
           <li key={item.id}>
             <button
               className={`sidebar__item ${activeNav === item.id ? 'sidebar__item--active' : ''}`}

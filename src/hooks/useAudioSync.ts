@@ -19,6 +19,7 @@ import { usePlayerStore } from '../stores/playerStore'
 import { getAudioEngine, hasAudioEngine } from '../utils/AudioEngine'
 import { updateMediaSession, setPlaybackState, registerMediaSessionActions } from '../utils/mediaSession'
 import { currentTimeRef } from '../utils/currentTimeRef'
+import { useUIStore } from '../stores/uiStore'
 
 // useAudioSync — 播放器状态同步 hook，驱动 AudioEngine + Media Session + 事件监听
 export function useAudioSync() {
@@ -30,6 +31,7 @@ export function useAudioSync() {
   const setIsPlaying = usePlayerStore((s) => s.setPlaying)
   const setSeekTime = usePlayerStore((s) => s.setSeekTime)
   const nextTrack = usePlayerStore((s) => s.nextTrack)
+  const featureFlags = useUIStore((s) => s.featureFlags)
 
   // 标记：音频加载完毕后需要自动播放
   const pendingAutoPlay = useRef(false)
@@ -62,6 +64,8 @@ export function useAudioSync() {
     })
 
     engine.onEnded(() => {
+      if (!useUIStore.getState().featureFlags.playback) return
+
       const mode = usePlayerStore.getState().playMode
       if (mode === 'loop') {
         engine.currentTime = 0
@@ -72,20 +76,24 @@ export function useAudioSync() {
       }
     })
 
-    // 注册 Media Session 动作回调（键盘多媒体键、任务栏按钮）
-    registerMediaSessionActions({
-      play: () => usePlayerStore.getState().setPlaying(true),
-      pause: () => usePlayerStore.getState().setPlaying(false),
-      prevTrack: () => usePlayerStore.getState().prevTrack(),
-      nextTrack: () => usePlayerStore.getState().nextTrack(),
-      seekTo: (time) => usePlayerStore.getState().setSeekTime(time)
-    })
+    if (useUIStore.getState().featureFlags.mediaSession) {
+      // 注册 Media Session 动作回调（键盘多媒体键、任务栏按钮）
+      registerMediaSessionActions({
+        play: () => usePlayerStore.getState().setPlaying(true),
+        pause: () => usePlayerStore.getState().setPlaying(false),
+        prevTrack: () => usePlayerStore.getState().prevTrack(),
+        nextTrack: () => usePlayerStore.getState().nextTrack(),
+        seekTo: (time) => usePlayerStore.getState().setSeekTime(time)
+      })
+    }
   }
 
   // ---------------------------------------------------------------------------
   // 注册 AudioEngine 事件（只注册一次）
   // ---------------------------------------------------------------------------
   useEffect(() => {
+    if (!featureFlags.playback) return
+
     // 轮询等待引擎创建（可能由 SongList 的点击创建）
     const tryRegister = () => {
       if (eventsRegistered.current) return true
@@ -105,12 +113,13 @@ export function useAudioSync() {
 
     return () => clearInterval(timer)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [featureFlags.playback])
 
   // ---------------------------------------------------------------------------
   // currentTrack 变化 → 加载音频
   // ---------------------------------------------------------------------------
   useEffect(() => {
+    if (!featureFlags.playback) return
     if (!currentTrack) return
 
     // 懒创建引擎（此时可能已有用户交互上下文）
@@ -125,14 +134,17 @@ export function useAudioSync() {
     console.log('[useAudioSync] 加载歌曲:', currentTrack.title, url)
 
     // ⚠️ 暗礁 1：更新 Media Session（封面图需转 Blob URL）
-    updateMediaSession(currentTrack)
+    if (featureFlags.mediaSession) {
+      updateMediaSession(currentTrack)
+    }
 
     // ⚠️ 用 getState() 实时读取，避免闭包陷阱
     // 依赖数组只有 [currentTrack]，fadeEnabled/isPlaying 可能是旧值
     const { fadeEnabled: currentFade, isPlaying: currentPlaying } = usePlayerStore.getState()
+    const shouldFade = featureFlags.fadeEffect && currentFade
 
     // 根据 fadeEnabled 决定是否使用淡入淡出
-    if (currentFade && currentPlaying) {
+    if (shouldFade && currentPlaying) {
       // 淡入淡出模式：fadeOut → load → play → fadeIn
       engine.loadWithFade(url, 500).catch((err) => {
         if (err.name !== 'AbortError') {
@@ -151,12 +163,17 @@ export function useAudioSync() {
         pendingAutoPlay.current = true
       }
     }
-  }, [currentTrack])  // 只依赖 currentTrack
+  }, [currentTrack, featureFlags.playback, featureFlags.mediaSession, featureFlags.fadeEffect])
 
   // ---------------------------------------------------------------------------
   // isPlaying 变化 → 播放/暂停
   // ---------------------------------------------------------------------------
   useEffect(() => {
+    if (!featureFlags.playback) {
+      if (isPlaying) setIsPlaying(false)
+      return
+    }
+
     if (!hasAudioEngine()) return
     const engine = getAudioEngine()
 
@@ -172,25 +189,27 @@ export function useAudioSync() {
           }
         })
       }
-      setPlaybackState('playing')
+      if (featureFlags.mediaSession) setPlaybackState('playing')
     } else {
       engine.pause()
-      setPlaybackState('paused')
+      if (featureFlags.mediaSession) setPlaybackState('paused')
     }
-  }, [isPlaying, setIsPlaying])
+  }, [isPlaying, setIsPlaying, featureFlags.playback, featureFlags.mediaSession])
 
   // ---------------------------------------------------------------------------
   // volume 变化 → 设置音量
   // ---------------------------------------------------------------------------
   useEffect(() => {
+    if (!featureFlags.playback) return
     if (!hasAudioEngine()) return
     getAudioEngine().setVolume(volume)
-  }, [volume])
+  }, [volume, featureFlags.playback])
 
   // ---------------------------------------------------------------------------
   // seekTime 变化 → 跳转进度
   // ---------------------------------------------------------------------------
   useEffect(() => {
+    if (!featureFlags.playback) return
     if (seekTime === null || isNaN(seekTime)) return
 
     if (!hasAudioEngine()) {
@@ -204,19 +223,22 @@ export function useAudioSync() {
     engine.currentTime = seekTime
     currentTimeRef.current = seekTime
     setSeekTime(null)
-  }, [seekTime, setSeekTime])
+  }, [seekTime, setSeekTime, featureFlags.playback])
 
   // ---------------------------------------------------------------------------
   // 播放状态变化 → 通知主进程（托盘菜单需要）
   // ---------------------------------------------------------------------------
   useEffect(() => {
+    if (!featureFlags.playback || !featureFlags.tray) return
     window.electronAPI.send('player:playing-changed', isPlaying)
-  }, [isPlaying])
+  }, [isPlaying, featureFlags.playback, featureFlags.tray])
 
   // ---------------------------------------------------------------------------
   // 监听托盘事件（托盘右键菜单的播放控制）
   // ---------------------------------------------------------------------------
   useEffect(() => {
+    if (!featureFlags.playback || !featureFlags.tray) return
+
     const unsubPlayPause = window.electronAPI.on('tray:play-pause', () => {
       const current = usePlayerStore.getState().isPlaying
       usePlayerStore.getState().setPlaying(!current)
@@ -235,5 +257,5 @@ export function useAudioSync() {
       unsubPrev()
       unsubNext()
     }
-  }, [])
+  }, [featureFlags.playback, featureFlags.tray])
 }

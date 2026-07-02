@@ -51,6 +51,7 @@ function PlayerBar() {
   // 导航切换（点击封面打开歌词页面）和迷你模式
   const setActiveNav = useUIStore((s) => s.setActiveNav)
   const setMiniMode = useUIStore((s) => s.setMiniMode)
+  const featureFlags = useUIStore((s) => s.featureFlags)
 
   // --- 进度条拖拽（三阶段：mousedown → mousemove → mouseup） ---
   // mousedown 时注册 mousemove/mouseup 全局事件，mouseup 时移除
@@ -204,14 +205,18 @@ function PlayerBar() {
   // 播放模式图标
   const ModeIcon = PLAY_MODE_ICON[playMode]
 
+  if (!featureFlags.playback) return null
+
   return (
     <div className="player-bar">
       {/* 左侧：封面缩略图 + 歌名 + 歌手 */}
       <div className="player-bar__info">
         <div
           className="player-bar__cover player-bar__cover--clickable"
-          onClick={() => setActiveNav('lyrics')}
-          title="查看歌词"
+          onClick={() => {
+            if (featureFlags.lyrics) setActiveNav('lyrics')
+          }}
+          title={featureFlags.lyrics ? '查看歌词' : undefined}
         >
           {currentTrack?.coverPath && (
             <img src={window.electronAPI.getCoverUrl(currentTrack.coverPath)} alt="封面" />
@@ -307,21 +312,25 @@ function PlayerBar() {
           </div>
         </div>
         {/* 菜单按钮：点击进入歌词界面 */}
-        <button
-          className="player-bar__btn player-bar__btn--menu"
-          onClick={() => setActiveNav('lyrics')}
-          title="歌词"
-        >
-          <IconMenu width={18} height={18} />
-        </button>
+        {featureFlags.lyrics && (
+          <button
+            className="player-bar__btn player-bar__btn--menu"
+            onClick={() => setActiveNav('lyrics')}
+            title="歌词"
+          >
+            <IconMenu width={18} height={18} />
+          </button>
+        )}
         {/* 迷你模式按钮 */}
-        <button
-          className="player-bar__btn player-bar__btn--mini"
-          onClick={() => setMiniMode(true)}
-          title="迷你模式"
-        >
-          <IconMinimize width={18} height={18} />
-        </button>
+        {featureFlags.miniMode && featureFlags.tray && (
+          <button
+            className="player-bar__btn player-bar__btn--mini"
+            onClick={() => setMiniMode(true)}
+            title="迷你模式"
+          >
+            <IconMinimize width={18} height={18} />
+          </button>
+        )}
       </div>
     </div>
   )

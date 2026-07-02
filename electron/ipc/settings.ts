@@ -4,15 +4,41 @@
 // 职责：设置键值对读写、音乐文件夹管理
 // =============================================================================
 
-import { ipcMain, dialog, BrowserWindow } from 'electron'
+import { app, ipcMain, dialog, BrowserWindow } from 'electron'
+import { readFile } from 'fs/promises'
 import { getDatabase } from '../db/database'
-import { sep } from 'path'
+import { join, sep } from 'path'
+import type { FeatureFlags } from '../../src/types/ipc'
+import { DEFAULT_FEATURE_FLAGS, parseFeatureFlagsText } from '../../src/utils/featureFlags'
+
+let featureFlags: FeatureFlags = { ...DEFAULT_FEATURE_FLAGS }
+
+export async function loadFeatureFlags(): Promise<FeatureFlags> {
+  const flagsPath = join(app.getPath('userData'), 'feature-flags.json')
+
+  try {
+    const text = await readFile(flagsPath, 'utf-8')
+    featureFlags = parseFeatureFlagsText(text)
+  } catch {
+    // ★ feature-flags.json 是可选覆盖；缺失、损坏或不可读时保持默认全开。
+    featureFlags = { ...DEFAULT_FEATURE_FLAGS }
+  }
+
+  return { ...featureFlags }
+}
+
+export function getFeatureFlags(): FeatureFlags {
+  return { ...featureFlags }
+}
 
 // ---------------------------------------------------------------------------
 // 注册所有设置相关 IPC 通道
 // ---------------------------------------------------------------------------
 
 export function registerSettingsIPC(getMainWindow: () => BrowserWindow | null): void {
+  // --- config:getFeatureFlags — 获取启动时读取的功能开关快照 ---
+  ipcMain.handle('config:getFeatureFlags', () => getFeatureFlags())
+
   // --- settings:get — 读取单个设置 ---
   ipcMain.handle('settings:get', (_event, { key }: { key: string }) => {
     const db = getDatabase()

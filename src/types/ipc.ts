@@ -8,6 +8,41 @@
 import type { Track, Playlist } from './index'
 
 // ---------------------------------------------------------------------------
+// Feature Flags
+// ---------------------------------------------------------------------------
+
+export type FeatureFlagKey =
+  | 'playback'
+  | 'equalizer'
+  | 'lyrics'
+  | 'albums'
+  | 'recent'
+  | 'liked'
+  | 'search'
+  | 'miniMode'
+  | 'tray'
+  | 'playlists'
+  | 'settings'
+  | 'fadeEffect'
+  | 'mediaSession'
+
+export interface FeatureFlags {
+  playback: boolean
+  equalizer: boolean
+  lyrics: boolean
+  albums: boolean
+  recent: boolean
+  liked: boolean
+  search: boolean
+  miniMode: boolean
+  tray: boolean
+  playlists: boolean
+  settings: boolean
+  fadeEffect: boolean
+  mediaSession: boolean
+}
+
+// ---------------------------------------------------------------------------
 // IPC 通道定义
 // ---------------------------------------------------------------------------
 // 每个通道定义 args（参数类型）和 return（返回值类型）
@@ -15,6 +50,12 @@ import type { Track, Playlist } from './index'
 // ---------------------------------------------------------------------------
 
 export interface IpcChannels {
+  // --- 配置 ---
+  'config:getFeatureFlags': {
+    args: void
+    return: FeatureFlags
+  }
+
   // --- 文件夹管理 ---
   'select-folder': {
     args: void

@@ -9,6 +9,7 @@
 import { create } from 'zustand'
 import type { Track, PlayMode } from '../types'
 import { currentTimeRef } from '../utils/currentTimeRef'
+import { useUIStore } from './uiStore'
 
 // ---------------------------------------------------------------------------
 // 状态接口
@@ -90,6 +91,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   // --- 切歌逻辑 ---
 
   nextTrack: () => {
+    const flags = useUIStore.getState().featureFlags
+    if (!flags.playback) return
+
     const { playlist, currentTrack, playMode } = get()
     if (playlist.length === 0 || !currentTrack) return
 
@@ -104,7 +108,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       const nextTrack = playlist[randomIndex]
       set({ currentTrack: nextTrack, duration: 0, isPlaying: true })
       // 记录播放历史
-      window.electronAPI.invoke('songs:recordPlay', { songId: nextTrack.id })
+      if (flags.recent) {
+        window.electronAPI.invoke('songs:recordPlay', { songId: nextTrack.id })
+      }
       window.electronAPI.invoke('songs:updatePlayCount', { songId: nextTrack.id })
     } else {
       // 顺序/单曲循环：取下一首索引，到末尾则回到第一首
@@ -112,12 +118,17 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       const nextTrack = playlist[nextIndex]
       set({ currentTrack: nextTrack, duration: 0, isPlaying: true })
       // 记录播放历史
-      window.electronAPI.invoke('songs:recordPlay', { songId: nextTrack.id })
+      if (flags.recent) {
+        window.electronAPI.invoke('songs:recordPlay', { songId: nextTrack.id })
+      }
       window.electronAPI.invoke('songs:updatePlayCount', { songId: nextTrack.id })
     }
   },
 
   prevTrack: () => {
+    const flags = useUIStore.getState().featureFlags
+    if (!flags.playback) return
+
     const { playlist, currentTrack, playMode } = get()
     if (playlist.length === 0 || !currentTrack) return
 
@@ -132,7 +143,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       const prevTrack = playlist[randomIndex]
       set({ currentTrack: prevTrack, duration: 0, isPlaying: true })
       // 记录播放历史
-      window.electronAPI.invoke('songs:recordPlay', { songId: prevTrack.id })
+      if (flags.recent) {
+        window.electronAPI.invoke('songs:recordPlay', { songId: prevTrack.id })
+      }
       window.electronAPI.invoke('songs:updatePlayCount', { songId: prevTrack.id })
     } else {
       // 顺序/单曲循环：取上一首索引，到开头则回到最后一首
@@ -140,7 +153,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       const prevTrack = playlist[prevIndex]
       set({ currentTrack: prevTrack, duration: 0, isPlaying: true })
       // 记录播放历史
-      window.electronAPI.invoke('songs:recordPlay', { songId: prevTrack.id })
+      if (flags.recent) {
+        window.electronAPI.invoke('songs:recordPlay', { songId: prevTrack.id })
+      }
       window.electronAPI.invoke('songs:updatePlayCount', { songId: prevTrack.id })
     }
   },
@@ -204,6 +219,11 @@ usePlayerStore.subscribe((state) => {
 /** 启动时从数据库恢复播放状态 */
 export async function restorePlayerState(): Promise<void> {
   try {
+    if (!useUIStore.getState().featureFlags.playback) {
+      console.log('[PlayerStore] playback=false，跳过播放状态恢复')
+      return
+    }
+
     const [volumeStr, playMode, lastTrackId, lastTimeStr] = await Promise.all([
       window.electronAPI.invoke('settings:get', { key: 'volume' }) as Promise<string | null>,
       window.electronAPI.invoke('settings:get', { key: 'playMode' }) as Promise<string | null>,

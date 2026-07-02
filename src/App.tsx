@@ -18,6 +18,8 @@ import { restorePlayerState, usePlayerStore } from './stores/playerStore'
 import { useUIStore } from './stores/uiStore'
 import { useEqStore } from './stores/eqStore'
 import type { Theme } from './types'
+import { isNavAllowed } from './utils/featureFlags'
+import { setAudioEngineEqualizerEnabled } from './utils/AudioEngine'
 
 // App — 根组件，组装布局 + 主题管理 + 水合播放状态
 function App() {
@@ -28,6 +30,7 @@ function App() {
   const activeNav = useUIStore((state) => state.activeNav)
   const isLyricsMode = activeNav === 'lyrics'
   const isMiniMode = useUIStore((state) => state.isMiniMode)
+  const featureFlags = useUIStore((state) => state.featureFlags)
 
   // 初始化主题系统
   useTheme()
@@ -37,23 +40,39 @@ function App() {
 
   // 迷你模式切换时通知主进程调整窗口尺寸
   useEffect(() => {
+    if (!featureFlags.miniMode || !featureFlags.tray) return
     window.electronAPI.send('window:set-mini-mode', isMiniMode)
-  }, [isMiniMode])
+  }, [isMiniMode, featureFlags.miniMode, featureFlags.tray])
 
   // 启动时恢复播放状态 + 主题设置 + 歌词偏移量 + 淡入淡出 + 均衡器
   useEffect(() => {
     async function hydrate() {
       try {
-        // 并行恢复：播放状态 + 主题设置 + 歌词偏移量 + 淡入淡出 + 均衡器
+        // ★ 启动顺序不可调：flags 必须先于播放状态和均衡器水合。
+        const flags = await window.electronAPI.getFeatureFlags()
+        useUIStore.getState().setFeatureFlags(flags)
+        setAudioEngineEqualizerEnabled(flags.equalizer)
+
+        if (!isNavAllowed(useUIStore.getState().activeNav, flags)) {
+          useUIStore.getState().setActiveNav('local')
+        }
+
+        if ((!flags.miniMode || !flags.tray) && useUIStore.getState().isMiniMode) {
+          useUIStore.getState().setMiniMode(false)
+        }
+
+        // 并行恢复：播放状态 + 主题设置 + 歌词偏移量 + 淡入淡出
         const [, savedTheme, savedLyricOffset, savedFadeEnabled] = await Promise.all([
-          restorePlayerState(),
+          flags.playback ? restorePlayerState() : Promise.resolve(),
           window.electronAPI.invoke('settings:get', { key: 'theme' }) as Promise<string | null>,
           window.electronAPI.invoke('settings:get', { key: 'lyricOffset' }) as Promise<string | null>,
           window.electronAPI.invoke('settings:get', { key: 'fadeEnabled' }) as Promise<string | null>,
         ])
 
         // 恢复均衡器设置（独立加载，不阻塞其他恢复）
-        useEqStore.getState().loadFromDb()
+        if (flags.equalizer) {
+          useEqStore.getState().loadFromDb()
+        }
 
         // 恢复主题（如果有保存的值）
         if (savedTheme && ['dark', 'light', 'system'].includes(savedTheme)) {
@@ -70,7 +89,9 @@ function App() {
 
         // 恢复淡入淡出设置
         if (savedFadeEnabled) {
-          usePlayerStore.getState().setFadeEnabled(savedFadeEnabled === 'true')
+          usePlayerStore.getState().setFadeEnabled(flags.fadeEffect && savedFadeEnabled === 'true')
+        } else if (!flags.fadeEffect) {
+          usePlayerStore.getState().setFadeEnabled(false)
         }
       } catch (e) {
         console.error('[App] 水合失败:', e)

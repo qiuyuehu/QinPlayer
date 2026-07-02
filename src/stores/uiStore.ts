@@ -7,6 +7,8 @@
 
 import { create } from 'zustand'
 import type { Theme } from '../types'
+import type { FeatureFlags } from '../types/ipc'
+import { DEFAULT_FEATURE_FLAGS } from '../utils/featureFlags'
 
 // ---------------------------------------------------------------------------
 // 状态接口
@@ -18,6 +20,7 @@ interface UIState {
   theme: Theme                   // 当前主题
   sidebarCollapsed: boolean      // 侧边栏是否折叠
   searchQuery: string            // 搜索关键词
+  featureFlags: FeatureFlags     // 启动时读取的功能开关快照
 
   // actions
   setActiveNav: (nav: string) => void
@@ -25,6 +28,7 @@ interface UIState {
   setTheme: (t: Theme) => void
   toggleSidebar: () => void
   setSearchQuery: (q: string) => void
+  setFeatureFlags: (flags: FeatureFlags) => void
 }
 
 // ---------------------------------------------------------------------------
@@ -38,6 +42,7 @@ export const useUIStore = create<UIState>((set) => ({
   theme: 'dark',                 // 默认暗色主题
   sidebarCollapsed: false,
   searchQuery: '',               // 搜索关键词（空 = 不搜索）
+  featureFlags: { ...DEFAULT_FEATURE_FLAGS },
 
   // actions
   setActiveNav: (nav) => set({ activeNav: nav }),
@@ -45,4 +50,5 @@ export const useUIStore = create<UIState>((set) => ({
   setTheme: (t) => set({ theme: t }),
   toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
   setSearchQuery: (q) => set({ searchQuery: q }),
+  setFeatureFlags: (flags) => set({ featureFlags: flags }),
 }))
