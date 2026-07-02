@@ -1,6 +1,6 @@
 # QinPlayer — 纯本地音乐播放器
 
-> 基于 devlog 更新至 2026-06-11
+> 基于源码分析更新至：2026-07-02
 
 ---
 
@@ -22,6 +22,11 @@
 - 播放/暂停/上一首/下一首/进度条/音量
 - 播放模式：顺序播放、单曲循环、随机播放
 - 切歌淡入淡出（Web Audio API GainNode 实现）
+
+### 均衡器
+- 10 段参数均衡器（32Hz ~ 16kHz，BiquadFilterNode 实现）
+- 5 个预设：流行、摇滚、古典、低音增强、人声突出
+- 自定义增益调节（-12dB ~ +12dB），防抖保存到数据库
 
 ### 歌单
 - 手动创建歌单，支持增删改重命名
@@ -131,7 +136,7 @@ Apple Music 风，精致克制。
 - 使用 Web Audio API（可结合 Howler.js 或自行封装轻量级 AudioNode 图）
 - 淡入淡出：`GainNode.gain.linearRampToValueAtTime()` 实现毫秒级平滑过渡
 - 音频输出设备切换：`AudioContext.setSinkId()` 稳健切换
-- 预留 `AnalyserNode` 接口，未来可扩展频谱图/均衡器
+- 预留 `AnalyserNode` 接口，未来可扩展频谱图
 
 ### 媒体库扫描（Worker Threads）
 
@@ -220,7 +225,6 @@ Apple Music 风，精致克制。
 ## 已知约束
 
 - 不联网，纯本地
-- 不做均衡器
 - 不做全局快捷键（暂时）
 - 不导入 .m3u 歌单，只手动建
 - 窗口关闭最小化到托盘，不退出
@@ -229,8 +233,43 @@ Apple Music 风，精致克制。
 - 自定义协议必须在 app.whenReady 之前注册为特权协议
 - Worker 线程不能直接写 SQLite（只解析不写库）
 - 主进程不能用同步 I/O（readdirSync/statSync 会卡死窗口）
+- `currentTime` 不放 Zustand（高频更新用模块级 ref）
+
+---
+
+## 测试覆盖
+
+- 框架：Vitest + @testing-library/react
+- 用例数：72 个（6 个测试文件）
+- 覆盖范围：formatTime、lrcParser、playerStore、uiStore、PlayerBar、SongList
+- 限制：虚拟列表（react-virtual）和颜色提取（Canvas API）需真实浏览器环境验证
+
+---
+
+## Harness 工程
+
+```
+harness/
+├── CONSTRAINTS.md        ← 代码约束（10 大类，200 行）
+├── DECISIONS.md          ← 决策记录（10 条）
+├── TEST_CONVENTIONS.md   ← 测试规范
+└── SPEC.md               ← Harness 工程规范
+```
+
+详见 `harness/CONSTRAINTS.md`。
+
+---
+
+## 文档说明
+
+- `SPEC.md` — 项目规格书（唯一真相源）
+- `harness/` — 约束体系（约束 + 决策 + 测试规范）
+- `docs/plans/` — 各阶段执行方案
+- `docs/archive/PLAN.md` — 早期执行方案（已归档）
+- `docs/ARCHITECTURE.md` — 已删除（内容已整合到 SPEC 和 harness）
 
 ---
 
 *创建于 2026-06-08*
+*更新于 2026-07-02：建立 harness 约束体系、补全测试、类型安全修复*
 *技术补充来源：外部 Mentor 技术评审*
