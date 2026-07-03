@@ -25,6 +25,7 @@ export type FeatureFlagKey =
   | 'settings'
   | 'fadeEffect'
   | 'mediaSession'
+  | 'queuePanel'
 
 export interface FeatureFlags {
   playback: boolean
@@ -40,6 +41,7 @@ export interface FeatureFlags {
   settings: boolean
   fadeEffect: boolean
   mediaSession: boolean
+  queuePanel: boolean
 }
 
 // ---------------------------------------------------------------------------

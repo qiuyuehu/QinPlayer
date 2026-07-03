@@ -5,9 +5,10 @@
 // 设计：歌单列表和歌单详情在同一组件内切换（不用额外路由）
 // =============================================================================
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef, type KeyboardEvent, type MouseEvent } from 'react'
 import SongList from '../components/SongList'
 import CreatePlaylistDialog from '../components/CreatePlaylistDialog'
+import ContextMenu, { type MenuItem } from '../components/ContextMenu'
 import { IconList, IconClose } from '../components/Icons'
 import type { Track, Playlist } from '../types'
 
@@ -26,6 +27,15 @@ function Playlists() {
   const [songs, setSongs] = useState<Track[]>([])
   // 是否显示新建歌单弹窗
   const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [contextMenu, setContextMenu] = useState<{
+    x: number
+    y: number
+    playlist: Playlist
+  } | null>(null)
+  const [editingPlaylistId, setEditingPlaylistId] = useState<number | null>(null)
+  const [editingName, setEditingName] = useState('')
+  const skipRenameBlurRef = useRef(false)
+  const renameSubmittingRef = useRef(false)
   // 歌单内歌曲排序字段：added（添加时间）或 playCount（播放次数）
   const [sortBy, setSortBy] = useState<'added' | 'playCount'>('added')
   // 排序方向：asc 升序 / desc 降序
@@ -88,6 +98,65 @@ function Playlists() {
     setSelectedPlaylist(null)
     loadPlaylists()
   }, [loadPlaylists])
+
+  const handleCardContextMenu = useCallback((event: MouseEvent<HTMLDivElement>, playlist: Playlist) => {
+    event.preventDefault()
+    setContextMenu({ x: event.clientX, y: event.clientY, playlist })
+  }, [])
+
+  const handleStartRename = useCallback((playlist: Playlist) => {
+    skipRenameBlurRef.current = false
+    renameSubmittingRef.current = false
+    setEditingPlaylistId(playlist.id)
+    setEditingName(playlist.name)
+    setContextMenu(null)
+  }, [])
+
+  const handleCancelRename = useCallback(() => {
+    skipRenameBlurRef.current = true
+    setEditingPlaylistId(null)
+    setEditingName('')
+  }, [])
+
+  const handleConfirmRename = useCallback(async () => {
+    if (renameSubmittingRef.current) return
+    renameSubmittingRef.current = true
+
+    const playlistId = editingPlaylistId
+    const trimmedName = editingName.trim()
+    const originalName = playlists.find((playlist) => playlist.id === playlistId)?.name
+
+    try {
+      if (playlistId && trimmedName && trimmedName !== originalName) {
+        await window.electronAPI.invoke('playlists:rename', {
+          id: playlistId,
+          name: trimmedName
+        })
+        loadPlaylists()
+      }
+    } finally {
+      setEditingPlaylistId(null)
+      setEditingName('')
+    }
+  }, [editingPlaylistId, editingName, playlists, loadPlaylists])
+
+  const handleRenameBlur = useCallback(() => {
+    if (skipRenameBlurRef.current) {
+      skipRenameBlurRef.current = false
+      return
+    }
+    void handleConfirmRename()
+  }, [handleConfirmRename])
+
+  const handleRenameKeyDown = useCallback((event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      void handleConfirmRename()
+    } else if (event.key === 'Escape') {
+      event.preventDefault()
+      handleCancelRename()
+    }
+  }, [handleConfirmRename, handleCancelRename])
 
   // --- 歌单详情视图 ---
   // 当有选中歌单时，渲染详情视图（包含返回按钮、排序控制和歌曲列表）
@@ -181,7 +250,10 @@ function Playlists() {
               key={pl.id}
               className="playlists__card"
               // 点击卡片进入该歌单详情视图
-              onClick={() => setSelectedPlaylist(pl)}
+              onClick={() => {
+                if (editingPlaylistId !== pl.id) setSelectedPlaylist(pl)
+              }}
+              onContextMenu={(event) => handleCardContextMenu(event, pl)}
             >
               <div className="playlists__card-cover">
                 {pl.coverPath ? (
@@ -196,7 +268,19 @@ function Playlists() {
                   </div>
                 )}
               </div>
-              <div className="playlists__card-name">{pl.name}</div>
+              {editingPlaylistId === pl.id ? (
+                <input
+                  className="playlists__rename-input"
+                  value={editingName}
+                  onChange={(event) => setEditingName(event.target.value)}
+                  onKeyDown={handleRenameKeyDown}
+                  onBlur={handleRenameBlur}
+                  onClick={(event) => event.stopPropagation()}
+                  autoFocus
+                />
+              ) : (
+                <div className="playlists__card-name">{pl.name}</div>
+              )}
               <div className="playlists__card-count">{pl.songCount || 0} 首</div>
               {/* 删除按钮：stopPropagation 防止触发卡片的点击事件（进入详情） */}
               <button
@@ -224,6 +308,26 @@ function Playlists() {
         <CreatePlaylistDialog
           onConfirm={handleCreate}
           onCancel={() => setShowCreateDialog(false)}
+        />
+      )}
+
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+          items={[
+            {
+              label: '重命名',
+              action: () => handleStartRename(contextMenu.playlist)
+            },
+            {
+              label: '删除',
+              action: () => {
+                void handleDelete(contextMenu.playlist.id)
+              }
+            }
+          ] satisfies MenuItem[]}
         />
       )}
     </div>

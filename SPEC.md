@@ -240,9 +240,9 @@ Apple Music 风，精致克制。
 ## 测试覆盖
 
 - 框架：Vitest + @testing-library/react
-- 用例数：113 个（9 个测试文件）
+- 用例数：132 个（11 个测试文件）
 - 覆盖范围：formatTime、lrcParser、playerStore、uiStore、PlayerBar、SongList、featureFlags、Sidebar、useAudioSync
-- Feature Flags 消融验证：13 个 flag 逐个关闭不影响其他 flag
+- Feature Flags 消融验证：14 个 flag 逐个关闭不影响其他 flag
 
 ---
 
@@ -252,7 +252,7 @@ Apple Music 风，精致克制。
 - 默认值：代码内 `DEFAULT_FEATURE_FLAGS`，全部 true（全开）
 - 读取时机：App.tsx 水合第一步，先于播放状态和均衡器加载
 - 关闭行为：导航栏隐藏入口 + 功能逻辑完全禁用 + 所有入口点统一拦截
-- 13 个 flag：playback、equalizer、lyrics、albums、recent、liked、search、miniMode、tray、playlists、settings、fadeEffect、mediaSession
+- 14 个 flag：playback、equalizer、lyrics、albums、recent、liked、search、miniMode、tray、playlists、settings、fadeEffect、mediaSession、queuePanel
 - 类型安全：`FeatureFlagKey` / `FeatureFlags` 强类型，IPC 通道 `config:getFeatureFlags`
 - 限制：虚拟列表（react-virtual）和颜色提取（Canvas API）需真实浏览器环境验证
 

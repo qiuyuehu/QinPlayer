@@ -317,13 +317,15 @@ function PlayerBar() {
           </div>
         </div>
         {/* 播放列表按钮：打开当前播放队列面板 */}
-        <button
-          className="player-bar__btn player-bar__btn--queue"
-          onClick={() => setShowPlaylistPanel((visible) => !visible)}
-          title="播放列表"
-        >
-          <IconList width={18} height={18} />
-        </button>
+        {featureFlags.queuePanel && (
+          <button
+            className="player-bar__btn player-bar__btn--queue"
+            onClick={() => setShowPlaylistPanel((visible) => !visible)}
+            title="播放列表"
+          >
+            <IconList width={18} height={18} />
+          </button>
+        )}
         {/* 迷你模式按钮 */}
         {featureFlags.miniMode && featureFlags.tray && (
           <button
@@ -336,7 +338,7 @@ function PlayerBar() {
         )}
       </div>
     </div>
-    {showPlaylistPanel && (
+    {showPlaylistPanel && featureFlags.queuePanel && (
       <PlaylistPanel onClose={() => setShowPlaylistPanel(false)} />
     )}
     </>

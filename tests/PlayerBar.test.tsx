@@ -138,4 +138,15 @@ describe('PlayerBar', () => {
     await user.click(screen.getByTitle('播放列表'))
     expect(screen.queryByText('当前播放队列为空')).not.toBeInTheDocument()
   })
+
+  it('queuePanel=false 时应该隐藏播放列表按钮', () => {
+    useUIStore.setState({
+      featureFlags: { ...DEFAULT_FEATURE_FLAGS, queuePanel: false },
+    })
+
+    render(<PlayerBar />)
+
+    expect(screen.queryByTitle('播放列表')).not.toBeInTheDocument()
+    expect(screen.queryByText('当前播放队列为空')).not.toBeInTheDocument()
+  })
 })

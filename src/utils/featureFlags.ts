@@ -20,6 +20,7 @@ export const FEATURE_FLAG_KEYS: readonly FeatureFlagKey[] = [
   'settings',
   'fadeEffect',
   'mediaSession',
+  'queuePanel',
 ]
 
 export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
@@ -36,6 +37,7 @@ export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
   settings: true,
   fadeEffect: true,
   mediaSession: true,
+  queuePanel: true,
 }
 
 const NAV_FLAG_MAP: Partial<Record<string, FeatureFlagKey>> = {

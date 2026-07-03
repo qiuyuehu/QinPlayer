@@ -24,6 +24,7 @@ window.electronAPI = {
     settings: true,
     fadeEffect: true,
     mediaSession: true,
+    queuePanel: true,
   }),
   invoke: async () => null,
   send: () => {},

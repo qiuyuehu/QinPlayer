@@ -27,6 +27,7 @@ const ALL_OFF: FeatureFlags = {
   settings: false,
   fadeEffect: false,
   mediaSession: false,
+  queuePanel: false,
 }
 
 describe('isNavAllowed — 导航守卫', () => {
@@ -71,6 +72,10 @@ describe('canPlay — 播放守卫', () => {
 })
 
 describe('hasFeature — 单项检查', () => {
+  it('queuePanel 默认开启', () => {
+    expect(hasFeature(DEFAULT_FEATURE_FLAGS, 'queuePanel')).toBe(true)
+  })
+
   it('对应 flag 为 true 返回 true', () => {
     expect(hasFeature(DEFAULT_FEATURE_FLAGS, 'equalizer')).toBe(true)
   })

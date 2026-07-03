@@ -133,6 +133,25 @@ const SongList = forwardRef<SongListHandle, SongListProps>(function SongList(
     window.electronAPI.invoke('songs:updatePlayCount', { songId: track.id })
   }, [tracks, featureFlags.playback, featureFlags.recent, setCurrentTrack, setPlaylist, setPlaying])
 
+  const handleAddToQueue = useCallback((track: Track) => {
+    const { playlist, currentTrack, setPlaylist: updatePlaylist } = usePlayerStore.getState()
+    if (playlist.some((item) => item.id === track.id)) return
+
+    const nextPlaylist = [...playlist]
+    if (!currentTrack) {
+      nextPlaylist.push(track)
+    } else {
+      const currentIndex = nextPlaylist.findIndex((item) => item.id === currentTrack.id)
+      if (currentIndex === -1) {
+        nextPlaylist.push(track)
+      } else {
+        nextPlaylist.splice(currentIndex + 1, 0, track)
+      }
+    }
+
+    updatePlaylist(nextPlaylist)
+  }, [])
+
   // --- 切换收藏状态 ---
   // 点击爱心按钮时切换收藏，需要阻止事件冒泡避免触发整行播放
   const toggleLike = useCallback(async (e: React.MouseEvent, track: Track) => {
@@ -170,6 +189,10 @@ const SongList = forwardRef<SongListHandle, SongListProps>(function SongList(
         label: '播放',
         icon: <IconPlay width={14} height={14} />,
         action: () => handlePlay(track)
+      }, {
+        label: '添加到播放队列',
+        icon: <IconList width={14} height={14} />,
+        action: () => handleAddToQueue(track)
       })
     }
 
@@ -219,7 +242,7 @@ const SongList = forwardRef<SongListHandle, SongListProps>(function SongList(
     )
 
     return items
-  }, [featureFlags.playback, featureFlags.playlists, playlists, playlistId, onRemoveFromPlaylist, handlePlay])
+  }, [featureFlags.playback, featureFlags.playlists, playlists, playlistId, onRemoveFromPlaylist, handlePlay, handleAddToQueue])
 
   // --- 格式化时长 ---
   // 将秒数转为 "m:ss" 格式，无效值显示 "--:--" 占位

@@ -159,4 +159,36 @@ describe('SongList', () => {
 
     expect(scrollToIndexMock).toHaveBeenCalledWith(1, { align: 'center' })
   })
+
+  it('右键添加到播放队列应插入当前歌曲后一位', async () => {
+    usePlayerStore.setState({
+      currentTrack: tracks[0],
+      playlist: [tracks[0], tracks[2]],
+    })
+    render(<SongList tracks={tracks} />)
+
+    fireEvent.contextMenu(screen.getByText('七里香'))
+    await waitFor(() => {
+      expect(screen.getByText('添加到播放队列')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByText('添加到播放队列'))
+
+    expect(usePlayerStore.getState().playlist.map((track) => track.id)).toEqual([1, 2, 3])
+  })
+
+  it('右键添加到播放队列遇到重复歌曲应跳过', async () => {
+    usePlayerStore.setState({
+      currentTrack: tracks[0],
+      playlist: [tracks[0], tracks[1]],
+    })
+    render(<SongList tracks={tracks} />)
+
+    fireEvent.contextMenu(screen.getByText('七里香'))
+    await waitFor(() => {
+      expect(screen.getByText('添加到播放队列')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByText('添加到播放队列'))
+
+    expect(usePlayerStore.getState().playlist.map((track) => track.id)).toEqual([1, 2])
+  })
 })
