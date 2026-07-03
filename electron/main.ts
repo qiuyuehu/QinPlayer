@@ -73,6 +73,14 @@ if (!gotTheLock) {
 }
 
 // ---------------------------------------------------------------------------
+// GPU 硬件加速优化（为后续视频/动画效果铺垫）
+// ---------------------------------------------------------------------------
+app.commandLine.appendSwitch('enable-gpu-rasterization')
+app.commandLine.appendSwitch('enable-zero-copy')
+app.commandLine.appendSwitch('enable-webgl')
+app.commandLine.appendSwitch('enable-accelerated-2d-canvas')
+
+// ---------------------------------------------------------------------------
 // 自定义协议注册（必须在 app.whenReady 之前！）
 // ---------------------------------------------------------------------------
 // qinplayer:// 协议用于加载本地音频文件，绕过浏览器 CORS 限制
