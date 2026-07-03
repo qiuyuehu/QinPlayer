@@ -137,6 +137,9 @@ function PlaylistPanel({ onClose }: PlaylistPanelProps) {
           <button className="queue-panel__clear" onClick={handleClearQueue}>
             清空后续队列
           </button>
+          <button className="queue-panel__back" onClick={onClose} title="返回">
+            返回
+          </button>
         </footer>
       )}
     </aside>

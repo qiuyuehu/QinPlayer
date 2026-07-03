@@ -175,7 +175,7 @@
   background-color: var(--bg-secondary);
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
 }
 
 .queue-panel__clear {
@@ -195,6 +195,22 @@
   color: #fff;
 }
 
+.queue-panel__back {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 5px 10px;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.queue-panel__back:hover {
+  background-color: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
 @keyframes queuePanelSlideIn {
   from {
     transform: translateX(100%);
