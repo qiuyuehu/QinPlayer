@@ -5,7 +5,8 @@
 .content {
   flex: 1;
   background-color: var(--bg-card);
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 20px 8px 0;
   position: relative;   /* 歌词沉浸模式的定位基准 */
   min-height: 0;

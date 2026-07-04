@@ -152,6 +152,17 @@ describe('SongList', () => {
     expect(document.querySelector('.song-list__scroll')).toHaveStyle({ height: '160px' })
   })
 
+  it('表头应独立于滚动容器', () => {
+    render(<SongList tracks={tracks} />)
+
+    const header = document.querySelector('.song-list__header')
+    const scroll = document.querySelector('.song-list__scroll')
+
+    expect(header).toBeInTheDocument()
+    expect(scroll).toBeInTheDocument()
+    expect(scroll).not.toContainElement(header)
+  })
+
   it('页面内歌曲列表应填满剩余高度并保留自身滚动区', () => {
     const contentCss = readFileSync('src/styles/content.css', 'utf8')
     const songListCss = readFileSync('src/styles/songlist.css', 'utf8')
@@ -161,8 +172,13 @@ describe('SongList', () => {
     expect(songListCss).not.toContain('calc(100vh - 260px)')
     expect(contentCss).toMatch(/\.content\s*\{[\s\S]*padding:\s*20px 8px 0;/)
     expect(contentCss).toMatch(/\.content__fade-wrapper\s*\{[\s\S]*display:\s*flex;[\s\S]*flex-direction:\s*column;/)
-    expect(songListCss).toMatch(/\.song-list\s*\{[\s\S]*flex:\s*1;[\s\S]*min-height:\s*0;[\s\S]*display:\s*flex;/)
-    expect(songListCss).toMatch(/\.song-list__scroll\s*\{[\s\S]*height:\s*100%;[\s\S]*min-height:\s*0;[\s\S]*overflow:\s*auto;/)
+    expect(songListCss).toMatch(/\.song-list\s*\{[\s\S]*flex:\s*1;[\s\S]*min-height:\s*0;[\s\S]*display:\s*flex;[\s\S]*width:\s*calc\(100% \+ 16px\);[\s\S]*margin-inline:\s*-8px;/)
+    expect(songListCss).toMatch(/\.song-list__scroll\s*\{[\s\S]*flex:\s*1;[\s\S]*height:\s*auto;[\s\S]*min-height:\s*0;[\s\S]*overflow:\s*auto;[\s\S]*scrollbar-gutter:\s*stable;/)
+    expect(songListCss).toMatch(/\.song-list__header\s*\{[\s\S]*padding:\s*8px calc\(24px \+ var\(--song-list-scrollbar-gutter\)\) 8px 24px;/)
+    expect(songListCss).toMatch(/\.song-list__row\s*\{[\s\S]*padding:\s*8px 24px;/)
+    expect(songListCss).toMatch(/\.song-list__row--active\s*\{[\s\S]*box-shadow:\s*var\(--song-list-scrollbar-gutter\) 0 0 var\(--accent-subtle\);/)
+    expect(songListCss).not.toContain('.song-list__header::before')
+    expect(songListCss).not.toMatch(/\.song-list__header\s*\{[\s\S]*position:\s*sticky;/)
     expect(localMusicCss).toMatch(/\.local-music\s*\{[\s\S]*height:\s*100%;[\s\S]*display:\s*flex;[\s\S]*flex-direction:\s*column;/)
     expect(recentLikedCss).toMatch(/\.recent-page,\s*\.liked-page\s*\{[\s\S]*height:\s*100%;[\s\S]*display:\s*flex;[\s\S]*flex-direction:\s*column;/)
   })
