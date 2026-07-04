@@ -240,7 +240,7 @@ Apple Music 风，精致克制。
 ## 测试覆盖
 
 - 框架：Vitest + @testing-library/react
-- 用例数：132 个（11 个测试文件）
+- 用例数：133 个（11 个测试文件）
 - 覆盖范围：formatTime、lrcParser、playerStore、uiStore、PlayerBar、SongList、featureFlags、Sidebar、useAudioSync
 - Feature Flags 消融验证：14 个 flag 逐个关闭不影响其他 flag
 
