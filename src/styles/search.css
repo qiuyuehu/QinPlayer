@@ -2,6 +2,13 @@
    搜索页面
    ============================================================================= */
 
+.search-page {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .search-page__header {
   margin-bottom: 16px;
 }

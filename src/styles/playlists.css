@@ -2,6 +2,13 @@
    歌单页面
    ============================================================================= */
 
+.playlists {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .playlists__header {
   display: flex;
   align-items: center;
@@ -27,8 +34,8 @@
   padding: 6px 14px;
   font-size: 13px;
   color: var(--text-primary);
-  background-color: var(--bg-tertiary);
-  border: 1px solid var(--border);
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
   border-radius: 6px;
   cursor: pointer;
   transition: background-color 0.15s;
@@ -37,7 +44,7 @@
 .playlists__back-btn:hover,
 .playlists__create-btn:hover {
   background-color: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
   border-color: var(--accent);
 }
 
@@ -46,6 +53,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 12px;
+  overflow: auto;
 }
 
 .playlists__card {
@@ -56,14 +64,14 @@
   justify-content: flex-start;
   padding: 12px;
   background-color: var(--bg-secondary);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   border-radius: 10px;
   cursor: pointer;
   transition: background-color 0.15s, border-color 0.15s;
 }
 
 .playlists__card:hover {
-  background-color: var(--bg-tertiary);
+  background-color: var(--control-hover);
   border-color: var(--accent);
 }
 
@@ -163,7 +171,7 @@
   font-size: 12px;
   color: var(--text-secondary);
   background-color: var(--bg-secondary);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   border-radius: 4px;
   cursor: pointer;
   transition: background-color 0.15s;
@@ -172,7 +180,7 @@
 .playlists__sort-btn:hover,
 .playlists__sort-btn--active {
   background-color: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
   border-color: var(--accent);
 }
 

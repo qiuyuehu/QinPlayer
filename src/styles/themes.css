@@ -8,45 +8,83 @@
 /* 暗色主题（默认） */
 [data-theme="dark"] {
   /* 背景层级：主 → 次 → 三级 */
-  --bg-primary: #121212;
-  --bg-secondary: #1a1a1a;
-  --bg-tertiary: #2a2a2a;
+  --bg-primary: #141312;
+  --bg-secondary: #1d1b18;
+  --bg-tertiary: #292621;
+  --bg-card: #181715;
 
   /* 文字层级：主 → 次 → 弱 */
-  --text-primary: #e0e0e0;
-  --text-secondary: #999999;
-  --text-muted: #666666;
+  --text-primary: #e7e1d8;
+  --text-secondary: #aaa095;
+  --text-muted: #746d64;
+  --text-on-accent: #f9f1e6;
 
-  /* 强调色（中性银灰，不偏蓝） */
-  --accent: #a0a0a0;
-  --accent-hover: #c0c0c0;
+  /* 强调色：黄铜 */
+  --accent: #c0914f;
+  --accent-hover: #d2a765;
+  --accent-subtle: rgba(192, 145, 79, 0.16);
 
   /* 边框 */
-  --border: #2a2a2a;
+  --border: #332f29;
+  --border-subtle: #28241f;
+
+  /* 控件 */
+  --control-hover: rgba(231, 225, 216, 0.07);
+  --control-active: rgba(192, 145, 79, 0.14);
+  --progress-track: #3a352e;
+  --progress-fill: var(--accent);
+  --input-bg: #211f1b;
+  --input-border: #39342d;
+  --scrollbar-thumb: #4a4339;
+  --focus-ring: rgba(192, 145, 79, 0.32);
 
   /* 播放条 */
-  --player-bg: #1a1a1a;
+  --player-bg: #1d1b18;
 
   /* 标题栏 */
-  --titlebar-bg: #1a1a1a;
+  --titlebar-bg: #1d1b18;
+  --titlebar-close-hover: #b43a2f;
+  --titlebar-close-active: #8f2d25;
+
+  /* 阴影 */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.24);
+  --shadow-md: 0 12px 28px rgba(0, 0, 0, 0.34);
 }
 
 /* 亮色主题 */
 [data-theme="light"] {
-  --bg-primary: #ffffff;
-  --bg-secondary: #f5f5f7;
-  --bg-tertiary: #e8e8ed;
+  --bg-primary: #f3f1ec;
+  --bg-secondary: #e9e5dc;
+  --bg-tertiary: #ddd7cb;
+  --bg-card: #f8f7f3;
 
-  --text-primary: #1d1d1f;
-  --text-secondary: #86868b;
-  --text-muted: #aeaeb2;
+  --text-primary: #26231f;
+  --text-secondary: #746b60;
+  --text-muted: #9a9084;
+  --text-on-accent: #f9f1e6;
 
-  --accent: #6b6b6b;
-  --accent-hover: #555555;
+  --accent: #a86f2a;
+  --accent-hover: #8f5f1e;
+  --accent-subtle: rgba(168, 111, 42, 0.12);
 
-  --border: #d2d2d7;
+  --border: #d7d0c4;
+  --border-subtle: #e2ddd4;
 
-  --player-bg: #f5f5f7;
+  --control-hover: rgba(63, 52, 39, 0.06);
+  --control-active: rgba(168, 111, 42, 0.12);
+  --progress-track: #d2cabd;
+  --progress-fill: var(--accent);
+  --input-bg: #f0ede6;
+  --input-border: #d7d0c4;
+  --scrollbar-thumb: #c2b8aa;
+  --focus-ring: rgba(168, 111, 42, 0.28);
 
-  --titlebar-bg: #f5f5f7;
+  --player-bg: #e7e1d8;
+
+  --titlebar-bg: #e9e5dc;
+  --titlebar-close-hover: #c74436;
+  --titlebar-close-active: #9f3229;
+
+  --shadow-sm: 0 1px 2px rgba(60, 48, 36, 0.08);
+  --shadow-md: 0 12px 28px rgba(60, 48, 36, 0.14);
 }

@@ -6,7 +6,7 @@
   height: 72px;
   flex-shrink: 0;
   background-color: var(--player-bg);
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
   padding: 0 16px;
@@ -28,6 +28,7 @@
   height: 48px;
   border-radius: 6px;
   background-color: var(--bg-tertiary);
+  box-shadow: var(--shadow-sm);
   flex-shrink: 0;
   overflow: hidden;
 }
@@ -95,7 +96,7 @@
 
 .player-bar__btn:hover {
   color: var(--text-primary);
-  background-color: rgba(255, 255, 255, 0.08);
+  background-color: var(--control-hover);
 }
 
 .player-bar__btn:active {
@@ -159,7 +160,7 @@
 }
 
 .player-bar__play-btn:hover {
-  background-color: rgba(255, 255, 255, 0.12);
+  background-color: var(--control-hover);
 }
 
 /* 进度条行 */
@@ -186,26 +187,43 @@
 
 .player-bar__progress-bar {
   flex: 1;
-  height: 4px;
-  background-color: var(--bg-tertiary);
+  height: 8px;
+  background-color: transparent;
   border-radius: 2px;
   position: relative;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.player-bar__progress-bar::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background-color: var(--progress-track);
+  border-radius: 2px;
 }
 
 .player-bar__progress-fill {
-  height: 100%;
-  background-color: var(--accent);
+  height: 4px;
+  background-color: var(--progress-fill);
   border-radius: 2px;
   pointer-events: none;
+  z-index: 1;
+  transition: height 0.15s ease;
 }
 
+.player-bar__progress-bar:hover .player-bar__progress-fill {
+  height: 6px;
+}
 .player-bar__progress-thumb {
   position: absolute;
   top: 50%;
   width: 12px;
   height: 12px;
-  background-color: var(--accent);
+  background-color: var(--progress-fill);
   border-radius: 50%;
   transform: translate(-50%, -50%);
   opacity: 0;
@@ -241,26 +259,38 @@
 
 .player-bar__volume-bar {
   width: 80px;
-  height: 4px;
-  background-color: var(--bg-tertiary);
+  height: 8px;
+  background-color: transparent;
   border-radius: 2px;
   position: relative;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.player-bar__volume-bar::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background-color: var(--progress-track);
+  border-radius: 2px;
 }
 
 .player-bar__volume-fill {
-  height: 100%;
-  background-color: var(--accent);
+  height: 4px;
+  background-color: var(--progress-fill);
   border-radius: 2px;
   pointer-events: none;
+  z-index: 1;
 }
-
 .player-bar__volume-thumb {
   position: absolute;
   top: 50%;
   width: 10px;
   height: 10px;
-  background-color: var(--accent);
+  background-color: var(--progress-fill);
   border-radius: 50%;
   transform: translate(-50%, -50%);
   opacity: 0;
@@ -284,5 +314,5 @@
   border-radius: 4px;
   pointer-events: none;
   white-space: nowrap;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-md);
 }

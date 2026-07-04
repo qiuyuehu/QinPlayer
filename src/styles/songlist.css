@@ -11,39 +11,46 @@
   font-size: 13px;
 }
 
+.song-list {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 /* 虚拟列表滚动容器 */
 .song-list__scroll {
-  height: calc(100vh - 260px);  /* 填满剩余空间（减去标题栏+导航+表头+播放条） */
+  height: 100%;
+  min-height: 0;
   overflow: auto;
-  border-radius: 8px;
-  border: 1px solid var(--border);
+  border-radius: 0;
+  border: none;
 }
 
 .song-list__header {
   display: flex;
   align-items: center;
-  padding: 8px 12px;
+  padding: 8px 16px;
   background-color: var(--bg-secondary);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  border-bottom: 1px solid var(--border);
-  border-radius: 8px 8px 0 0;
+  text-transform: none;
+  letter-spacing: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: 0;
   position: sticky;   /* 粘在滚动容器顶部，始终可见 */
   top: 0;
   z-index: 1;         /* 浮在数据行之上 */
 }
-
 .song-list__row {
   display: flex;
   align-items: center;
-  padding: 8px 12px;
+  padding: 8px 16px;
   height: 44px;  /* 与 ROW_HEIGHT 常量一致，虚拟列表需要精确高度 */
   font-size: 13px;
   color: var(--text-primary);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-subtle);
   cursor: pointer;
   transition: background-color 0.1s;
   box-sizing: border-box;
@@ -64,15 +71,15 @@
 }
 
 .song-list__row:hover {
-  background-color: var(--bg-tertiary);
+  background-color: var(--control-hover);
 }
 
 .song-list__row--active {
-  background-color: rgba(160, 160, 160, 0.08);
+  background-color: var(--accent-subtle);
 }
 
 .song-list__row--active:hover {
-  background-color: rgba(160, 160, 160, 0.12);
+  background-color: var(--accent-subtle);
 }
 
 .song-list__col {

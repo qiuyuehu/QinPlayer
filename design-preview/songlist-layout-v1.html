@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1000">
+  <title>QinPlayer — 歌曲列表布局选项</title>
+  <style>
+    /* ============================================================
+       基础变量
+       ============================================================ */
+    :root {
+      --bg-primary: #f5f5f7;
+      --bg-secondary: #e8e8ed;
+      --bg-tertiary: #d2d2d7;
+      --text-primary: #1d1d1f;
+      --text-secondary: #86868b;
+      --text-muted: #aeaeb2;
+      --accent: #6b6b6b;
+      --border: #d2d2d7;
+      --border-subtle: rgba(0, 0, 0, 0.08);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      font-size: 13px;
+      color: var(--text-primary);
+      background: var(--bg-primary);
+      width: 1000px;
+      height: 680px;
+      overflow: hidden;
+    }
+
+    .app {
+      display: flex;
+      flex-direction: column;
+      height: 680px;
+    }
+
+    .app__body {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ============================================================
+       标题栏
+       ============================================================ */
+    .titlebar {
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .titlebar__title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    .titlebar__controls {
+      display: flex;
+      gap: 2px;
+    }
+
+    .title-bar__btn {
+      width: 32px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      border-radius: 4px;
+    }
+
+    .title-bar__btn:hover {
+      background: var(--bg-tertiary);
+    }
+
+    /* ============================================================
+       侧栏
+       ============================================================ */
+    .sidebar {
+      width: 200px;
+      flex-shrink: 0;
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 12px 0;
+    }
+
+    .sidebar__search {
+      padding: 0 12px 12px;
+    }
+
+    .sidebar__search-input {
+      width: 100%;
+      height: 32px;
+      padding: 0 10px;
+      font-size: 12px;
+      color: var(--text-primary);
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      outline: none;
+    }
+
+    .sidebar__search-input::placeholder {
+      color: var(--text-muted);
+    }
+
+    .sidebar__nav {
+      flex: 1;
+    }
+
+    .sidebar__item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 16px;
+      cursor: pointer;
+      color: var(--text-secondary);
+    }
+
+    .sidebar__item--active {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+
+    .sidebar__icon {
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+
+    /* ============================================================
+       主内容区
+       ============================================================ */
+    .content {
+      flex: 1;
+      background: var(--bg-primary);
+      overflow-y: auto;
+      position: relative;
+    }
+
+    .content__header {
+      padding: 20px 24px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .content__title {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .content__count {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-left: 8px;
+    }
+
+    .content__actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .content__btn {
+      padding: 6px 12px;
+      font-size: 12px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      cursor: pointer;
+      color: var(--text-primary);
+    }
+
+    .content__btn:hover {
+      background: var(--bg-tertiary);
+    }
+
+    /* ============================================================
+       选项 A：全出血无边框
+       ============================================================ */
+    .song-list--full-bleed {
+      padding: 0;
+    }
+
+    .song-list--full-bleed .song-list__header {
+      display: flex;
+      align-items: center;
+      padding: 8px 24px;
+      background: var(--bg-secondary);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border);
+      border-radius: 0;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    .song-list--full-bleed .song-list__row {
+      display: flex;
+      align-items: center;
+      padding: 8px 24px;
+      height: 44px;
+      font-size: 13px;
+      color: var(--text-primary);
+      border-bottom: 1px solid var(--border-subtle);
+      cursor: pointer;
+      transition: background-color 0.1s;
+    }
+
+    .song-list--full-bleed .song-list__row:hover {
+      background: var(--bg-secondary);
+    }
+
+    /* ============================================================
+       选项 B：轻微留边无边框
+       ============================================================ */
+    .song-list--slight-margin {
+      padding: 0 8px;
+    }
+
+    .song-list--slight-margin .song-list__header {
+      display: flex;
+      align-items: center;
+      padding: 8px 16px;
+      background: transparent;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border);
+      border-radius: 0;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    .song-list--slight-margin .song-list__row {
+      display: flex;
+      align-items: center;
+      padding: 8px 16px;
+      height: 44px;
+      font-size: 13px;
+      color: var(--text-primary);
+      border-bottom: 1px solid var(--border-subtle);
+      cursor: pointer;
+      transition: background-color 0.1s;
+    }
+
+    .song-list--slight-margin .song-list__row:hover {
+      background: var(--bg-secondary);
+    }
+
+    /* ============================================================
+       选项 C：无边框无表头
+       ============================================================ */
+    .song-list--minimal {
+      padding: 0;
+    }
+
+    .song-list--minimal .song-list__header {
+      display: none;
+    }
+
+    .song-list--minimal .song-list__row {
+      display: flex;
+      align-items: center;
+      padding: 10px 24px;
+      height: 48px;
+      font-size: 13px;
+      color: var(--text-primary);
+      border-bottom: 1px solid var(--border-subtle);
+      cursor: pointer;
+      transition: background-color 0.1s;
+    }
+
+    .song-list--minimal .song-list__row:hover {
+      background: var(--bg-secondary);
+    }
+
+    /* ============================================================
+       列通用
+       ============================================================ */
+    .song-list__col {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      padding: 0 4px;
+    }
+
+    .song-list__col--index {
+      width: 40px;
+      flex-shrink: 0;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    .song-list__col--title {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .song-list__col--artist {
+      width: 180px;
+      flex-shrink: 0;
+      color: var(--text-secondary);
+      font-size: 12px;
+    }
+
+    .song-list__col--duration {
+      width: 70px;
+      flex-shrink: 0;
+      text-align: right;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      margin-left: 12px;
+    }
+
+    .song-list__row--active {
+      background: rgba(107, 107, 107, 0.08);
+    }
+
+    .song-list__row--active .song-list__col--title {
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    .song-list__row--active .song-list__col--index {
+      color: var(--accent);
+    }
+
+    /* ============================================================
+       底部播放器
+       ============================================================ */
+    .player-bar {
+      height: 72px;
+      flex-shrink: 0;
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 16px;
+    }
+
+    .player-bar__info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 200px;
+      flex-shrink: 0;
+    }
+
+    .player-bar__cover {
+      width: 44px;
+      height: 44px;
+      border-radius: 4px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    .player-bar__meta {
+      overflow: hidden;
+    }
+
+    .player-bar__title {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-primary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .player-bar__artist {
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .player-bar__controls {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      flex: 1;
+    }
+
+    .player-bar__buttons {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .player-bar__btn {
+      width: 32px;
+      height: 32px;
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+
+    .player-bar__btn:hover {
+      background: var(--bg-tertiary);
+    }
+
+    .player-bar__play-btn {
+      width: 36px;
+      height: 36px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 16px;
+    }
+
+    .player-bar__progress {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      max-width: 400px;
+    }
+
+    .player-bar__time {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+      width: 36px;
+      text-align: center;
+    }
+
+    .player-bar__progress-bar {
+      flex: 1;
+      height: 4px;
+      background: var(--bg-tertiary);
+      border-radius: 2px;
+      position: relative;
+    }
+
+    .player-bar__progress-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      width: 45%;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+
+    .player-bar__right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 160px;
+      justify-content: flex-end;
+    }
+
+    .player-bar__volume {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .player-bar__volume-bar {
+      width: 80px;
+      height: 4px;
+      background: var(--bg-tertiary);
+      border-radius: 2px;
+      position: relative;
+    }
+
+    .player-bar__volume-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      width: 65%;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+
+    /* ============================================================
+       选项切换
+       ============================================================ */
+    .option-switcher {
+      position: fixed;
+      top: 8px;
+      right: 8px;
+      z-index: 100;
+      display: flex;
+      gap: 4px;
+    }
+
+    .option-btn {
+      padding: 6px 12px;
+      font-size: 12px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      cursor: pointer;
+      color: var(--text-primary);
+    }
+
+    .option-btn:hover {
+      background: var(--bg-tertiary);
+    }
+
+    .option-btn--active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
+    /* ============================================================
+       滚动条
+       ============================================================ */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--bg-tertiary);
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- 标题栏 -->
+    <div class="titlebar">
+      <span class="titlebar__title">QinPlayer</span>
+      <div class="titlebar__controls">
+        <button class="title-bar__btn">─</button>
+        <button class="title-bar__btn">□</button>
+        <button class="title-bar__btn">×</button>
+      </div>
+    </div>
+
+    <div class="app__body">
+      <!-- 侧栏 -->
+      <div class="sidebar">
+        <div class="sidebar__search">
+          <input class="sidebar__search-input" type="text" placeholder="搜索歌曲...">
+        </div>
+        <div class="sidebar__nav">
+          <div class="sidebar__item sidebar__item--active">
+            <span class="sidebar__icon">🕐</span>
+            <span>最近播放</span>
+          </div>
+          <div class="sidebar__item">
+            <span class="sidebar__icon">♫</span>
+            <span>本地音乐</span>
+          </div>
+          <div class="sidebar__item">
+            <span class="sidebar__icon">💿</span>
+            <span>专辑</span>
+          </div>
+          <div class="sidebar__item">
+            <span class="sidebar__icon">📋</span>
+            <span>歌单</span>
+          </div>
+          <div class="sidebar__item">
+            <span class="sidebar__icon">⭐</span>
+            <span>我喜欢的</span>
+          </div>
+          <div class="sidebar__item">
+            <span class="sidebar__icon">⚙</span>
+            <span>设置</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 主内容区 -->
+      <div class="content">
+        <div class="content__header">
+          <div>
+            <span class="content__title">本地音乐</span>
+            <span class="content__count">9 首</span>
+          </div>
+          <div class="content__actions">
+            <button class="content__btn">选择文件夹</button>
+          </div>
+        </div>
+
+        <!-- 歌曲列表 -->
+        <div class="song-list" id="songList">
+          <div class="song-list__header">
+            <span class="song-list__col song-list__col--index">#</span>
+            <span class="song-list__col song-list__col--title">歌名</span>
+            <span class="song-list__col song-list__col--artist">歌手</span>
+            <span class="song-list__col song-list__col--duration">时长</span>
+          </div>
+
+          <div class="song-list__row">
+            <span class="song-list__col song-list__col--index">1</span>
+            <span class="song-list__col song-list__col--title">Eversinging Song</span>
+            <span class="song-list__col song-list__col--artist">Wuthering Waves, xTR33x, &amp; Tarc</span>
+            <span class="song-list__col song-list__col--duration">1:55</span>
+          </div>
+          <div class="song-list__row">
+            <span class="song-list__col song-list__col--index">2</span>
+            <span class="song-list__col song-list__col--title">Catch Me If You Can</span>
+            <span class="song-list__col song-list__col--artist">Wuthering Waves</span>
+            <span class="song-list__col song-list__col--duration">3:07</span>
+          </div>
+          <div class="song-list__row">
+            <span class="song-list__col song-list__col--index">3</span>
+            <span class="song-list__col song-list__col--title">Fallen Petals</span>
+            <span class="song-list__col song-list__col--artist">Fleet Snowfluff</span>
+            <span class="song-list__col song-list__col--duration">2:32</span>
+          </div>
+          <div class="song-list__row song-list__row--active">
+            <span class="song-list__col song-list__col--index">♫</span>
+            <span class="song-list__col song-list__col--title">アディオス - Adios</span>
+            <span class="song-list__col song-list__col--artist">DAZBEE</span>
+            <span class="song-list__col song-list__col--duration">3:20</span>
+          </div>
+          <div class="song-list__row">
+            <span class="song-list__col song-list__col--index">5</span>
+            <span class="song-list__col song-list__col--title">星炬不熄</span>
+            <span class="song-list__col song-list__col--artist">Wuthering Waves</span>
+            <span class="song-list__col song-list__col--duration">3:52</span>
+          </div>
+          <div class="song-list__row">
+            <span class="song-list__col song-list__col--index">6</span>
+            <span class="song-list__col song-list__col--title">Running Towards Startorch</span>
+            <span class="song-list__col song-list__col--artist">Wuthering Waves</span>
+            <span class="song-list__col song-list__col--duration">2:16</span>
+          </div>
+          <div class="song-list__row">
+            <span class="song-list__col song-list__col--index">7</span>
+            <span class="song-list__col song-list__col--title">Moments of a Joyous Sunrise</span>
+            <span class="song-list__col song-list__col--artist">Wuthering Waves</span>
+            <span class="song-list__col song-list__col--duration">1:56</span>
+          </div>
+          <div class="song-list__row">
+            <span class="song-list__col song-list__col--index">8</span>
+            <span class="song-list__col song-list__col--title">草々不一 - Sincerely Yours</span>
+            <span class="song-list__col song-list__col--artist">Rokudenashi</span>
+            <span class="song-list__col song-list__col--duration">4:08</span>
+          </div>
+          <div class="song-list__row">
+            <span class="song-list__col song-list__col--index">9</span>
+            <span class="song-list__col song-list__col--title">彼女は旅に出る</span>
+            <span class="song-list__col song-list__col--artist">kanojo wa tabinideru</span>
+            <span class="song-list__col song-list__col--duration">3:45</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 底部播放器 -->
+    <div class="player-bar">
+      <div class="player-bar__info">
+        <div class="player-bar__cover">♫</div>
+        <div class="player-bar__meta">
+          <div class="player-bar__title">アディオス - Adios</div>
+          <div class="player-bar__artist">DAZBEE</div>
+        </div>
+      </div>
+
+      <div class="player-bar__controls">
+        <div class="player-bar__buttons">
+          <button class="player-bar__btn">⏮</button>
+          <button class="player-bar__btn player-bar__play-btn">▶</button>
+          <button class="player-bar__btn">⏭</button>
+        </div>
+        <div class="player-bar__progress">
+          <span class="player-bar__time">2:02</span>
+          <div class="player-bar__progress-bar">
+            <div class="player-bar__progress-fill"></div>
+          </div>
+          <span class="player-bar__time">3:20</span>
+        </div>
+      </div>
+
+      <div class="player-bar__right">
+        <div class="player-bar__volume">
+          <span style="font-size: 14px; color: var(--text-muted);">🔊</span>
+          <div class="player-bar__volume-bar">
+            <div class="player-bar__volume-fill"></div>
+          </div>
+        </div>
+        <button class="player-bar__btn" style="font-size: 12px;">≡</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 选项切换按钮 -->
+  <div class="option-switcher">
+    <button class="option-btn option-btn--active" data-option="full-bleed">A: 全出血</button>
+    <button class="option-btn" data-option="slight-margin">B: 轻微留边</button>
+    <button class="option-btn" data-option="minimal">C: 无表头</button>
+  </div>
+
+  <script>
+    const songList = document.getElementById('songList');
+    const buttons = document.querySelectorAll('.option-btn');
+
+    buttons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        // 移除所有 active
+        buttons.forEach(b => b.classList.remove('option-btn--active'));
+        // 添加 active
+        btn.classList.add('option-btn--active');
+
+        // 切换样式
+        const option = btn.dataset.option;
+        songList.className = 'song-list';
+
+        if (option === 'full-bleed') {
+          songList.classList.add('song-list--full-bleed');
+        } else if (option === 'slight-margin') {
+          songList.classList.add('song-list--slight-margin');
+        } else if (option === 'minimal') {
+          songList.classList.add('song-list--minimal');
+        }
+      });
+    });
+
+    // 默认选中 A
+    songList.classList.add('song-list--full-bleed');
+  </script>
+</body>
+</html>

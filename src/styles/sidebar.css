@@ -6,7 +6,7 @@
   width: 220px;
   flex-shrink: 0;
   background-color: var(--bg-secondary);
-  border-right: 1px solid var(--border);
+  border-right: 1px solid var(--border-subtle);
   padding: 12px 0;
   overflow-y: auto;
 }
@@ -21,12 +21,12 @@
   padding: 8px 12px;
   font-size: 13px;
   color: var(--text-primary);
-  background-color: var(--bg-tertiary);
-  border: 1px solid var(--border);
+  background-color: var(--input-bg);
+  border: 1px solid var(--input-border);
   border-radius: 8px;
   outline: none;
   box-sizing: border-box;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
 }
 
 .sidebar__search-input::placeholder {
@@ -35,6 +35,7 @@
 
 .sidebar__search-input:focus {
   border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--focus-ring);
 }
 
 .sidebar__list {
@@ -45,6 +46,7 @@
 }
 
 .sidebar__item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -60,13 +62,24 @@
 }
 
 .sidebar__item:hover {
-  background-color: rgba(255, 255, 255, 0.06);
+  background-color: var(--control-hover);
   color: var(--text-primary);
 }
 
 .sidebar__item--active {
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: var(--control-active);
   color: var(--text-primary);
+}
+
+.sidebar__item--active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 7px;
+  bottom: 7px;
+  width: 3px;
+  background-color: var(--accent);
+  border-radius: 0 2px 2px 0;
 }
 
 .sidebar__item:active {
@@ -78,6 +91,10 @@
   width: 20px;
   text-align: center;
   flex-shrink: 0;
+}
+
+.sidebar__item--active .sidebar__icon {
+  color: var(--accent);
 }
 
 .sidebar__label {

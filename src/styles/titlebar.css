@@ -47,19 +47,19 @@
 }
 
 .title-bar__btn:hover {
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: var(--control-hover);
 }
 
 .title-bar__btn:active {
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: var(--control-active);
 }
 
 .title-bar__btn--close:hover {
-  background-color: #e81123;
-  color: #ffffff;
+  background-color: var(--titlebar-close-hover);
+  color: var(--text-on-accent);
 }
 
 .title-bar__btn--close:active {
-  background-color: #b2001b;
-  color: #ffffff;
+  background-color: var(--titlebar-close-active);
+  color: var(--text-on-accent);
 }

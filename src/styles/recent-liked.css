@@ -2,6 +2,14 @@
    最近播放 / 我喜欢的 页面
    ============================================================================= */
 
+.recent-page,
+.liked-page {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .recent-page__title,
 .liked-page__title {
   font-size: 20px;

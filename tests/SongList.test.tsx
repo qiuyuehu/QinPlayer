@@ -5,6 +5,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { createRef } from 'react'
+import { readFileSync } from 'node:fs'
 import SongList, { type SongListHandle } from '../src/components/SongList'
 import { usePlayerStore } from '../src/stores/playerStore'
 import { useUIStore } from '../src/stores/uiStore'
@@ -149,6 +150,21 @@ describe('SongList', () => {
   it('containerHeight 应该控制滚动容器高度', () => {
     render(<SongList tracks={tracks} containerHeight={160} />)
     expect(document.querySelector('.song-list__scroll')).toHaveStyle({ height: '160px' })
+  })
+
+  it('页面内歌曲列表应填满剩余高度并保留自身滚动区', () => {
+    const contentCss = readFileSync('src/styles/content.css', 'utf8')
+    const songListCss = readFileSync('src/styles/songlist.css', 'utf8')
+    const localMusicCss = readFileSync('src/styles/localmusic.css', 'utf8')
+    const recentLikedCss = readFileSync('src/styles/recent-liked.css', 'utf8')
+
+    expect(songListCss).not.toContain('calc(100vh - 260px)')
+    expect(contentCss).toMatch(/\.content\s*\{[\s\S]*padding:\s*20px 8px 0;/)
+    expect(contentCss).toMatch(/\.content__fade-wrapper\s*\{[\s\S]*display:\s*flex;[\s\S]*flex-direction:\s*column;/)
+    expect(songListCss).toMatch(/\.song-list\s*\{[\s\S]*flex:\s*1;[\s\S]*min-height:\s*0;[\s\S]*display:\s*flex;/)
+    expect(songListCss).toMatch(/\.song-list__scroll\s*\{[\s\S]*height:\s*100%;[\s\S]*min-height:\s*0;[\s\S]*overflow:\s*auto;/)
+    expect(localMusicCss).toMatch(/\.local-music\s*\{[\s\S]*height:\s*100%;[\s\S]*display:\s*flex;[\s\S]*flex-direction:\s*column;/)
+    expect(recentLikedCss).toMatch(/\.recent-page,\s*\.liked-page\s*\{[\s\S]*height:\s*100%;[\s\S]*display:\s*flex;[\s\S]*flex-direction:\s*column;/)
   })
 
   it('scrollToTrackId 应该滚动到对应歌曲', () => {
