@@ -36,6 +36,19 @@ export function registerWindowIPC(getMainWindow: () => BrowserWindow | null): vo
     getMainWindow()?.close()
   })
 
+  // 设置窗口置顶（歌词页使用；迷你模式仍走自己的逻辑）
+  ipcMain.on('window:set-always-on-top', (_event, flag: boolean) => {
+    if (typeof flag !== 'boolean') return
+    const mainWindow = getMainWindow()
+    if (!mainWindow) return
+
+    if (flag) {
+      mainWindow.setAlwaysOnTop(true, 'screen-saver')
+    } else {
+      mainWindow.setAlwaysOnTop(false)
+    }
+  })
+
   // --- 文件操作 ---
 
   // 打开文件夹（用系统资源管理器）

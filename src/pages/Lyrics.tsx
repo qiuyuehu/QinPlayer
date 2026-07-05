@@ -20,7 +20,7 @@ import LyricsPanel from '../components/LyricsPanel'
 import { parseLrc } from '../utils/lrcParser'
 import { extractMainColor } from '../utils/colorExtract'
 import type { LyricLine } from '../types'
-import { IconPlay, IconPause, IconPrev, IconNext, IconBack, IconExpand, IconCompress } from '../components/Icons'
+import { IconPlay, IconPause, IconPrev, IconNext, IconExpand, IconCompress, IconPin, IconChevronDown } from '../components/Icons'
 
 // Lyrics — 歌词全屏界面，左右分屏（封面+控制 / 歌词滚动）+ 全屏切换
 function Lyrics() {
@@ -41,6 +41,7 @@ function Lyrics() {
   const [lyrics, setLyrics] = useState<LyricLine[]>([])
   const [bgColor, setBgColor] = useState('')
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [isPinned, setIsPinned] = useState(false)
 
   // --- 进度条拖拽 ---
   const progressRef = useRef<HTMLDivElement>(null)
@@ -64,16 +65,29 @@ function Lyrics() {
   // ---------------------------------------------------------------------------
   // 按 Esc 返回主界面
   // ---------------------------------------------------------------------------
+  const leaveLyrics = useCallback(() => {
+    window.electronAPI.setAlwaysOnTop(false)
+    setIsPinned(false)
+    setActiveNav('local')
+  }, [setActiveNav])
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        setActiveNav('local')  // 返回本地音乐页面
+        leaveLyrics()  // 返回本地音乐页面
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [setActiveNav])
+  }, [leaveLyrics])
+
+  // 歌词页置顶只在当前页面有效，离开页面时自动取消。
+  useEffect(() => {
+    return () => {
+      window.electronAPI.setAlwaysOnTop(false)
+    }
+  }, [])
 
   // ---------------------------------------------------------------------------
   // 全屏切换
@@ -84,6 +98,14 @@ function Lyrics() {
     } else {
       document.exitFullscreen()
     }
+  }, [])
+
+  const togglePinned = useCallback(() => {
+    setIsPinned(prev => {
+      const next = !prev
+      window.electronAPI.setAlwaysOnTop(next)
+      return next
+    })
   }, [])
 
   // 监听全屏状态变化（F11 / Esc 退出时同步状态）
@@ -245,8 +267,15 @@ function Lyrics() {
       {/* 顶部拖拽区域 */}
       <div className="lyrics-page__drag-area" />
 
-      {/* 右上角按钮：全屏 + 返回 */}
+      {/* 右上角按钮：置顶 + 全屏 + 返回 */}
       <div className="lyrics-page__top-actions">
+        <button
+          className={`lyrics-page__action-btn ${isPinned ? 'lyrics-page__action-btn--active' : ''}`}
+          onClick={togglePinned}
+          title={isPinned ? '取消置顶' : '置顶'}
+        >
+          <IconPin width={16} height={16} />
+        </button>
         <button
           className="lyrics-page__action-btn"
           onClick={toggleFullscreen}
@@ -259,10 +288,10 @@ function Lyrics() {
         </button>
         <button
           className="lyrics-page__back-btn"
-          onClick={() => setActiveNav('local')}
+          onClick={leaveLyrics}
           title="返回"
         >
-          <IconBack width={18} height={18} />
+          <IconChevronDown width={18} height={18} />
         </button>
       </div>
 

@@ -169,6 +169,25 @@ export function IconBack({ width = 20, height = 20, className }: IconProps) {
   )
 }
 
+/** 向下箭头 */
+export function IconChevronDown({ width = 20, height = 20, className }: IconProps) {
+  return (
+    <svg width={width} height={height} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M5 8l5 5 5-5" />
+    </svg>
+  )
+}
+
+/** 图钉 */
+export function IconPin({ width = 20, height = 20, className }: IconProps) {
+  return (
+    <svg width={width} height={height} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M7 3h6l-1 5 3 3v1H5v-1l3-3L7 3z" />
+      <path d="M10 12v5" />
+    </svg>
+  )
+}
+
 /** 五角星（收藏） */
 export function IconStar({ width = 20, height = 20, filled = false, className }: IconProps & { filled?: boolean }) {
   return (

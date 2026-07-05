@@ -247,10 +247,10 @@ function PlayerBar() {
             title={isPlaying ? '暂停' : '播放'}
           >
             <span className={`player-bar__play-icon ${isPlaying ? 'player-bar__play-icon--hidden' : ''}`}>
-              <IconPlay width={28} height={28} />
+              <IconPlay width={22} height={22} />
             </span>
             <span className={`player-bar__play-icon ${isPlaying ? '' : 'player-bar__play-icon--hidden'}`}>
-              <IconPause width={28} height={28} />
+              <IconPause width={22} height={22} />
             </span>
           </button>
           <button className="player-bar__btn" onClick={handleNext} title="下一首">
@@ -316,16 +316,6 @@ function PlayerBar() {
             )}
           </div>
         </div>
-        {/* 播放列表按钮：打开当前播放队列面板 */}
-        {featureFlags.queuePanel && (
-          <button
-            className="player-bar__btn player-bar__btn--queue"
-            onClick={() => setShowPlaylistPanel((visible) => !visible)}
-            title="播放列表"
-          >
-            <IconList width={18} height={18} />
-          </button>
-        )}
         {/* 迷你模式按钮 */}
         {featureFlags.miniMode && featureFlags.tray && (
           <button
@@ -334,6 +324,16 @@ function PlayerBar() {
             title="迷你模式"
           >
             <IconMinimize width={18} height={18} />
+          </button>
+        )}
+        {/* 播放列表按钮：打开当前播放队列面板 */}
+        {featureFlags.queuePanel && (
+          <button
+            className="player-bar__btn player-bar__btn--queue"
+            onClick={() => setShowPlaylistPanel((visible) => !visible)}
+            title="播放列表"
+          >
+            <IconList width={18} height={18} />
           </button>
         )}
       </div>

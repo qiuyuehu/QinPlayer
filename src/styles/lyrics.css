@@ -224,31 +224,35 @@
   max-width: 32vw;
 }
 
-/* 播放按钮组：三个胶囊按钮 */
+/* 播放按钮组：紧凑传输控制 */
 .lyrics-page__buttons {
   display: flex;
   align-items: center;
-  gap: 1.5vw;
+  gap: min(0.9vw, 12px);
 }
 
-/* 胶囊按钮：统一样式 */
+/* 传输控制按钮：白色图标，弱化按钮底 */
 .lyrics-page__btn {
-  width: min(4vw, 48px);
-  height: min(2.8vw, 32px);
+  width: min(3vw, 34px);
+  height: min(2.4vw, 32px);
   border: none;
-  border-radius: 50%;
+  border-radius: 4px;
   background: transparent;
-  color: var(--text-secondary);
+  color: #ffffff;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
 }
 
 .lyrics-page__btn:hover {
-  color: var(--text-primary);
+  color: #ffffff;
   background: rgba(255, 255, 255, 0.08);
+}
+
+.lyrics-page__btn:active {
+  transform: scale(0.94);
 }
 
 
@@ -398,11 +402,21 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.2s ease;
+  transition: color 0.2s ease, background 0.2s ease, text-shadow 0.2s ease;
 }
 
 .lyrics-page__action-btn:hover {
   background: rgba(255, 255, 255, 0.1);
+}
+
+.lyrics-page__action-btn--active {
+  color: var(--accent);
+  background: transparent;
+  text-shadow: 0 0 10px rgba(192, 145, 79, 0.55);
+}
+
+.lyrics-page__action-btn--active:hover {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 /* 返回按钮 */

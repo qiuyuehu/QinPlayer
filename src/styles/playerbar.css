@@ -78,7 +78,7 @@
 .player-bar__buttons {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 10px;
 }
 
 .player-bar__btn {
@@ -104,9 +104,9 @@
 }
 
 .player-bar__play-btn {
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
   color: var(--text-primary);
   display: flex;
   align-items: center;
@@ -114,6 +114,14 @@
   padding: 0;
   position: relative;
   transition: color 0.15s, transform 0.1s;
+}
+
+.player-bar__buttons .player-bar__btn:not(.player-bar__play-btn) {
+  width: 30px;
+  height: 32px;
+  padding: 0;
+  border-radius: 4px;
+  color: var(--text-primary);
 }
 
 .player-bar__play-icon {
@@ -160,6 +168,10 @@
 }
 
 .player-bar__play-btn:hover {
+  background-color: var(--control-hover);
+}
+
+.player-bar__buttons .player-bar__btn:hover {
   background-color: var(--control-hover);
 }
 

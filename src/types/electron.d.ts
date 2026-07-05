@@ -18,6 +18,8 @@ export interface ElectronAPI {
   maximize: () => void
   /** 关闭窗口 */
   close: () => void
+  /** 设置窗口是否置顶 */
+  setAlwaysOnTop: (flag: boolean) => void
   /** 获取功能开关快照 */
   getFeatureFlags: () => Promise<FeatureFlags>
   /** 双向 IPC 通信（渲染 → 主进程） */

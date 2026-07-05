@@ -40,7 +40,7 @@ const INVOKE_CHANNELS = new Set([
 
 const SEND_CHANNELS = new Set([
   'window:minimize', 'window:maximize', 'window:close',
-  'window:set-mini-mode',
+  'window:set-mini-mode', 'window:set-always-on-top',
   'player:playing-changed',
   'theme-changed',
   'set-auto-launch',
@@ -74,6 +74,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   minimize: () => ipcRenderer.send('window:minimize'),
   maximize: () => ipcRenderer.send('window:maximize'),
   close: () => ipcRenderer.send('window:close'),
+  setAlwaysOnTop: (flag: boolean) => ipcRenderer.send('window:set-always-on-top', flag),
   getFeatureFlags: () => ipcRenderer.invoke('config:getFeatureFlags'),
 
   // --- IPC 通信 ---
@@ -125,6 +126,7 @@ export interface ElectronAPI {
   minimize: () => void
   maximize: () => void
   close: () => void
+  setAlwaysOnTop: (flag: boolean) => void
   getFeatureFlags: () => Promise<unknown>
   invoke: (channel: string, ...args: unknown[]) => Promise<unknown>
   send: (channel: string, ...args: unknown[]) => void
