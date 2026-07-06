@@ -258,53 +258,77 @@
   gap: 16px;
 }
 
-.player-bar__volume-row {
+.player-bar__volume-wrapper {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 6px;
 }
 
-.player-bar__volume-icon {
-  font-size: 14px;
-  user-select: none;
+.player-bar__volume-btn {
+  color: var(--text-secondary);
+}
+
+.player-bar__volume-popup {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  z-index: 100;
+  width: 36px;
+  height: 128px;
+  padding: 14px 0;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .player-bar__volume-bar {
-  width: 80px;
-  height: 8px;
+  width: 8px;
+  height: 100%;
   background-color: transparent;
   border-radius: 2px;
   position: relative;
   cursor: pointer;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
+  justify-content: center;
 }
 
 .player-bar__volume-bar::before {
   content: '';
   position: absolute;
-  left: 0;
-  right: 0;
-  height: 4px;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 4px;
   background-color: var(--progress-track);
   border-radius: 2px;
+  transform: translateX(-50%);
 }
 
 .player-bar__volume-fill {
-  height: 4px;
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 4px;
   background-color: var(--progress-fill);
   border-radius: 2px;
   pointer-events: none;
   z-index: 1;
+  transform: translateX(-50%);
 }
 .player-bar__volume-thumb {
   position: absolute;
-  top: 50%;
+  left: 50%;
   width: 10px;
   height: 10px;
   background-color: var(--progress-fill);
   border-radius: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, 50%);
   opacity: 0;
   transition: opacity 0.15s;
   pointer-events: none;
@@ -317,8 +341,8 @@
 /* 音量数值气泡 */
 .player-bar__volume-tooltip {
   position: absolute;
-  bottom: 14px;
-  transform: translateX(-50%);
+  right: calc(100% + 8px);
+  transform: translateY(50%);
   background-color: var(--bg-tertiary);
   color: var(--text-primary);
   font-size: 11px;

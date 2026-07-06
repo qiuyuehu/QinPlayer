@@ -13,14 +13,19 @@ import { formatTime } from "../utils/formatTime"
 // =============================================================================
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { usePlayerStore } from '../stores/playerStore'
+import { usePlayerStore, togglePlayMode } from '../stores/playerStore'
 import { useUIStore } from '../stores/uiStore'
 import { currentTimeRef } from '../utils/currentTimeRef'
 import LyricsPanel from '../components/LyricsPanel'
 import { parseLrc } from '../utils/lrcParser'
 import { extractMainColor } from '../utils/colorExtract'
 import type { LyricLine } from '../types'
-import { IconPlay, IconPause, IconPrev, IconNext, IconExpand, IconCompress, IconPin, IconChevronDown } from '../components/Icons'
+import {
+  IconPlay, IconPause, IconPrev, IconNext,
+  IconExpand, IconCompress, IconPin, IconChevronDown,
+  IconVolumeHigh, IconVolumeLow, IconVolumeMuted,
+  IconRepeat, IconRepeatOne, IconShuffle,
+} from '../components/Icons'
 
 // Lyrics — 歌词全屏界面，左右分屏（封面+控制 / 歌词滚动）+ 全屏切换
 function Lyrics() {
@@ -28,7 +33,11 @@ function Lyrics() {
   const currentTrack = usePlayerStore((s) => s.currentTrack)
   const duration = usePlayerStore((s) => s.duration)
   const isPlaying = usePlayerStore((s) => s.isPlaying)
+  const volume = usePlayerStore((s) => s.volume)
+  const playMode = usePlayerStore((s) => s.playMode)
   const setPlaying = usePlayerStore((s) => s.setPlaying)
+  const setVolume = usePlayerStore((s) => s.setVolume)
+  const setPlayMode = usePlayerStore((s) => s.setPlayMode)
   const setSeekTime = usePlayerStore((s) => s.setSeekTime)
   const nextTrack = usePlayerStore((s) => s.nextTrack)
   const prevTrack = usePlayerStore((s) => s.prevTrack)
@@ -52,6 +61,9 @@ function Lyrics() {
   const progressFillRef = useRef<HTMLDivElement>(null)
   const progressThumbRef = useRef<HTMLDivElement>(null)
   const currentTimeTextRef = useRef<HTMLSpanElement>(null)
+  const volumeRowRef = useRef<HTMLDivElement>(null)
+  const volumeBarRef = useRef<HTMLDivElement>(null)
+  const [showVolume, setShowVolume] = useState(false)
 
   // --- 歌词面板用的 currentIndex（只在行索引变化时才更新，避免高频 re-render） ---
   const [lyricsCurrentIndex, setLyricsCurrentIndex] = useState(-1)
@@ -107,6 +119,19 @@ function Lyrics() {
       return next
     })
   }, [])
+
+  useEffect(() => {
+    if (!showVolume) return
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (volumeRowRef.current && !volumeRowRef.current.contains(e.target as Node)) {
+        setShowVolume(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showVolume])
 
   // 监听全屏状态变化（F11 / Esc 退出时同步状态）
   useEffect(() => {
@@ -190,6 +215,39 @@ function Lyrics() {
     document.addEventListener('mouseup', handleMouseUp)
   }, [updateDragTime, setSeekTime])
 
+  const updateVolume = useCallback((e: MouseEvent) => {
+    if (!volumeBarRef.current) return
+    const rect = volumeBarRef.current.getBoundingClientRect()
+    const ratio = Math.max(0, Math.min(1, 1 - (e.clientY - rect.top) / rect.height))
+    setVolume(ratio)
+  }, [setVolume])
+
+  const handleVolumeMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    updateVolume(e.nativeEvent)
+
+    const handleMouseMove = (ev: MouseEvent) => {
+      updateVolume(ev)
+    }
+
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }, [updateVolume])
+
+  const handleVolumeBtnClick = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation()
+    setShowVolume((visible) => !visible)
+  }, [])
+
+  const handleToggleMode = useCallback(() => {
+    setPlayMode(togglePlayMode(playMode))
+  }, [playMode, setPlayMode])
+
   // ---------------------------------------------------------------------------
   // 格式化时间
   // ---------------------------------------------------------------------------
@@ -258,6 +316,9 @@ function Lyrics() {
     : null
 
   // 进度条由 RAF 循环直接操作 DOM，不依赖 React state
+  const VolumeIcon = volume === 0 ? IconVolumeMuted : volume < 0.5 ? IconVolumeLow : IconVolumeHigh
+  const ModeIcon = playMode === 'loop' ? IconRepeatOne : playMode === 'shuffle' ? IconShuffle : IconRepeat
+  const modeTitle = playMode === 'loop' ? '单曲循环' : playMode === 'shuffle' ? '随机播放' : '顺序播放'
 
   return (
     <div
@@ -319,25 +380,6 @@ function Lyrics() {
 
         {/* 播放控制 */}
         <div className="lyrics-page__controls">
-          <div className="lyrics-page__buttons">
-            <button className="lyrics-page__btn" onClick={prevTrack} title="上一首">
-              <IconPrev width={18} height={18} />
-            </button>
-            <button
-              className="lyrics-page__btn"
-              onClick={() => setPlaying(!isPlaying)}
-              title={isPlaying ? '暂停' : '播放'}
-            >
-              {isPlaying
-                ? <IconPause width={18} height={18} />
-                : <IconPlay width={18} height={18} />
-              }
-            </button>
-            <button className="lyrics-page__btn" onClick={nextTrack} title="下一首">
-              <IconNext width={18} height={18} />
-            </button>
-          </div>
-
           {/* 小进度条 */}
           <div className="lyrics-page__progress-row">
             <span className="lyrics-page__time" ref={currentTimeTextRef}>0:00</span>
@@ -356,6 +398,63 @@ function Lyrics() {
               />
             </div>
             <span className="lyrics-page__time">{formatTime(duration)}</span>
+          </div>
+
+          <div className="lyrics-page__buttons">
+            <button
+              className="lyrics-page__btn lyrics-page__mode-btn"
+              onClick={handleToggleMode}
+              title={modeTitle}
+            >
+              <ModeIcon width={24} height={24} />
+            </button>
+            <div className="lyrics-page__transport-buttons">
+              <button className="lyrics-page__btn" onClick={prevTrack} title="上一首">
+                <IconPrev width={24} height={24} />
+              </button>
+              <button
+                className="lyrics-page__btn"
+                onClick={() => setPlaying(!isPlaying)}
+                title={isPlaying ? '暂停' : '播放'}
+              >
+                {isPlaying
+                  ? <IconPause width={32} height={32} />
+                  : <IconPlay width={32} height={32} />
+                }
+              </button>
+              <button className="lyrics-page__btn" onClick={nextTrack} title="下一首">
+                <IconNext width={24} height={24} />
+              </button>
+            </div>
+            <div className="lyrics-page__volume-wrapper" ref={volumeRowRef}>
+              <button
+                className="lyrics-page__btn"
+                onClick={handleVolumeBtnClick}
+                title="音量"
+                aria-label="音量控制"
+                aria-expanded={showVolume}
+              >
+                <VolumeIcon width={24} height={24} />
+              </button>
+              {showVolume && (
+                <div className="lyrics-page__volume-popup">
+                  <div
+                    className="lyrics-page__volume-bar"
+                    ref={volumeBarRef}
+                    onMouseDown={handleVolumeMouseDown}
+                  >
+                    <div
+                      className="lyrics-page__volume-fill"
+                      style={{ height: `${volume * 100}%` }}
+                    />
+                    <div
+                      className="lyrics-page__volume-thumb"
+                      style={{ bottom: `${volume * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

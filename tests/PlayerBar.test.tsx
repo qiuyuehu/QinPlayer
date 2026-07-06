@@ -103,12 +103,19 @@ describe('PlayerBar', () => {
   })
 
   // =========================================================================
-  // 测试 6：音量滑块存在
+  // 测试 6：音量滑块折叠
   // =========================================================================
-  it('应该有音量滑块', () => {
+  it('音量滑块应该点击音量按钮后显示，再次点击后收起', async () => {
+    const user = userEvent.setup()
     render(<PlayerBar />)
-    const slider = document.querySelector('.player-bar__volume-bar')
-    expect(slider).toBeInTheDocument()
+
+    expect(document.querySelector('.player-bar__volume-bar')).not.toBeInTheDocument()
+
+    await user.click(screen.getByLabelText('音量控制'))
+    expect(document.querySelector('.player-bar__volume-bar')).toBeInTheDocument()
+
+    await user.click(screen.getByLabelText('音量控制'))
+    expect(document.querySelector('.player-bar__volume-bar')).not.toBeInTheDocument()
   })
 
   // =========================================================================

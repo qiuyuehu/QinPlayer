@@ -228,13 +228,33 @@
 .lyrics-page__buttons {
   display: flex;
   align-items: center;
-  gap: min(0.9vw, 12px);
+  justify-content: center;
+  position: relative;
+  width: 100%;
+  min-height: 48px;
+}
+
+.lyrics-page__transport-buttons {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.lyrics-page__mode-btn {
+  position: absolute;
+  top: 50%;
+  right: calc(50% + 104px);
+  transform: translateY(-50%);
+}
+
+.lyrics-page__mode-btn:active {
+  transform: translateY(-50%) scale(0.94);
 }
 
 /* 传输控制按钮：白色图标，弱化按钮底 */
 .lyrics-page__btn {
-  width: min(3vw, 34px);
-  height: min(2.4vw, 32px);
+  width: 48px;
+  height: 48px;
   border: none;
   border-radius: 4px;
   background: transparent;
@@ -273,17 +293,31 @@
 
 .lyrics-page__progress-bar {
   flex: 1;
-  height: 0.4vh;
-  background: var(--bg-tertiary);
-  border-radius: 0.2vh;
+  height: 8px;
+  background: transparent;
+  border-radius: 4px;
   position: relative;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.lyrics-page__progress-bar::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--bg-tertiary);
+  border-radius: 2px;
 }
 
 .lyrics-page__progress-fill {
-  height: 100%;
+  height: 4px;
   background: var(--accent);
-  border-radius: 0.2vh;
+  border-radius: 2px;
+  position: relative;
+  z-index: 1;
   transition: width 0.1s linear;
 }
 
@@ -301,6 +335,78 @@
 
 .lyrics-page__progress-bar:hover .lyrics-page__progress-thumb {
   opacity: 1;
+}
+
+.lyrics-page__volume-wrapper {
+  position: absolute;
+  top: 50%;
+  left: calc(50% + 104px);
+  transform: translateY(-50%);
+}
+
+.lyrics-page__volume-popup {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  width: 36px;
+  height: 128px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 0;
+  box-shadow: var(--shadow-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lyrics-page__volume-bar {
+  width: 8px;
+  height: 100%;
+  background: transparent;
+  border-radius: 2px;
+  cursor: pointer;
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.lyrics-page__volume-bar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 4px;
+  background: var(--bg-tertiary);
+  border-radius: 2px;
+  transform: translateX(-50%);
+}
+
+.lyrics-page__volume-fill {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 4px;
+  background: var(--accent);
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 1;
+  transform: translateX(-50%);
+}
+
+.lyrics-page__volume-thumb {
+  position: absolute;
+  left: 50%;
+  transform: translate(-50%, 50%);
+  width: 12px;
+  height: 12px;
+  background: var(--accent);
+  border-radius: 50%;
+  pointer-events: none;
 }
 
 /* 隐藏歌词面板滚动条（保留滚动功能） */

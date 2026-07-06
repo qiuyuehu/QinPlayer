@@ -68,7 +68,9 @@ function PlayerBar() {
   // --- 音量条拖拽（与进度条同理，但不需要 ref，因为没有延迟回调） ---
   // 拖拽音量条 → 实时更新 volume 状态 → useAudioSync 立即驱动 AudioEngine
   const volumeBarRef = useRef<HTMLDivElement>(null)
+  const volumeRowRef = useRef<HTMLDivElement>(null)
   const [volumeHover, setVolumeHover] = useState(false)  // 音量条 hover 状态（显示气泡）
+  const [showVolume, setShowVolume] = useState(false)
   const [showPlaylistPanel, setShowPlaylistPanel] = useState(false)
 
   // --- 播放/暂停切换（只改状态，useAudioSync 会驱动 AudioEngine） ---
@@ -148,7 +150,7 @@ function PlayerBar() {
   const updateVolume = useCallback((e: MouseEvent) => {
     if (!volumeBarRef.current) return
     const rect = volumeBarRef.current.getBoundingClientRect()
-    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+    const ratio = Math.max(0, Math.min(1, 1 - (e.clientY - rect.top) / rect.height))
     setVolume(ratio)
   }, [setVolume])
 
@@ -167,6 +169,25 @@ function PlayerBar() {
     document.addEventListener('mousemove', handleMouseMove)
     document.addEventListener('mouseup', handleMouseUp)
   }, [updateVolume])
+
+  useEffect(() => {
+    if (!showVolume) return
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (volumeRowRef.current && !volumeRowRef.current.contains(e.target as Node)) {
+        setShowVolume(false)
+        setVolumeHover(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showVolume])
+
+  const handleVolumeBtnClick = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation()
+    setShowVolume((visible) => !visible)
+  }, [])
 
   // ---------------------------------------------------------------------------
   // 工具函数
@@ -286,35 +307,45 @@ function PlayerBar() {
         >
           <ModeIcon width={18} height={18} />
         </button>
-        <div className="player-bar__volume-row">
-          <span className="player-bar__volume-icon">
-            <VolumeIcon width={18} height={18} />
-          </span>
-          <div
-            className="player-bar__volume-bar"
-            ref={volumeBarRef}
-            onMouseDown={handleVolumeMouseDown}
-            onMouseEnter={() => setVolumeHover(true)}
-            onMouseLeave={() => setVolumeHover(false)}
+        <div className="player-bar__volume-wrapper" ref={volumeRowRef}>
+          <button
+            className="player-bar__btn player-bar__volume-btn"
+            onClick={handleVolumeBtnClick}
+            title="音量"
+            aria-label="音量控制"
+            aria-expanded={showVolume}
           >
-            <div
-              className="player-bar__volume-fill"
-              style={{ width: `${volume * 100}%` }}
-            />
-            <div
-              className="player-bar__volume-thumb"
-              style={{ left: `${volume * 100}%` }}
-            />
-            {/* 音量数值气泡（hover 时显示） */}
-            {volumeHover && (
+            <VolumeIcon width={18} height={18} />
+          </button>
+          {showVolume && (
+            <div className="player-bar__volume-popup">
               <div
-                className="player-bar__volume-tooltip"
-                style={{ left: `${volume * 100}%` }}
+                className="player-bar__volume-bar"
+                ref={volumeBarRef}
+                onMouseDown={handleVolumeMouseDown}
+                onMouseEnter={() => setVolumeHover(true)}
+                onMouseLeave={() => setVolumeHover(false)}
               >
-                {Math.round(volume * 100)}
+                <div
+                  className="player-bar__volume-fill"
+                  style={{ height: `${volume * 100}%` }}
+                />
+                <div
+                  className="player-bar__volume-thumb"
+                  style={{ bottom: `${volume * 100}%` }}
+                />
+                {/* 音量数值气泡（hover 时显示） */}
+                {volumeHover && (
+                  <div
+                    className="player-bar__volume-tooltip"
+                    style={{ bottom: `${volume * 100}%` }}
+                  >
+                    {Math.round(volume * 100)}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
         {/* 迷你模式按钮 */}
         {featureFlags.miniMode && featureFlags.tray && (
