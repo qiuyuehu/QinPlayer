@@ -3,25 +3,56 @@
 // =============================================================================
 // 职责：逐行渲染歌词，自动滚动到当前行，当前行高亮放大
 // 设计要点：
-//   - GPU 加速：使用 CSS transform: translateY() + will-change: transform
-//   - 不用 scrollTop（易掉帧）
+//   - 使用 scrollTop 滚动 + 透明滚动条
 //   - 当前行高亮：scale(1.1) + 颜色变化
 //   - 点击歌词行跳转到对应时间
 // =============================================================================
 
 import { useEffect, useRef, useCallback } from 'react'
+import type { WheelEvent } from 'react'
 import type { LyricLine } from '../types'
+import type { FeatureFlags } from '../types/ipc'
 
 interface LyricsPanelProps {
   lyrics: LyricLine[]          // 已排序的歌词数组
   currentIndex: number         // 当前歌词行索引（由父组件计算）
   onLineClick?: (time: number) => void  // 点击歌词行回调
+  featureFlags?: FeatureFlags
 }
 
 // LyricsPanel — 歌词滚动面板，逐行高亮 + 点击跳转
-function LyricsPanel({ lyrics, currentIndex, onLineClick }: LyricsPanelProps) {
+function LyricsPanel({ lyrics, currentIndex, onLineClick, featureFlags }: LyricsPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const itemRefs = useRef<(HTMLDivElement | null)[]>([])
+  const prevIndexRef = useRef(currentIndex)
+  const prevLyricsRef = useRef(lyrics)
+  const userScrollingRef = useRef(false)
+  const scrollTimerRef = useRef<number>(0)
+  const autoScrollingRef = useRef(false)
+  const autoScrollTimerRef = useRef<number>(0)
+
+  // 标记用户手动滚动，暂停自动滚动 3 秒。
+  const markUserScrolling = useCallback(() => {
+    userScrollingRef.current = true
+    clearTimeout(scrollTimerRef.current)
+    scrollTimerRef.current = window.setTimeout(() => {
+      userScrollingRef.current = false
+    }, 3000)
+  }, [])
+
+  const handleUserScroll = markUserScrolling
+
+  const handleScroll = useCallback(() => {
+    if (autoScrollingRef.current) return
+    markUserScrolling()
+  }, [markUserScrolling])
+
+  useEffect(() => {
+    return () => {
+      clearTimeout(scrollTimerRef.current)
+      clearTimeout(autoScrollTimerRef.current)
+    }
+  }, [])
 
   // 当前行变化时，平滑滚动到当前行
   useEffect(() => {
@@ -38,9 +69,30 @@ function LyricsPanel({ lyrics, currentIndex, onLineClick }: LyricsPanelProps) {
     // 计算偏移量：让当前行居中，但整体上移 15% 让歌词和封面对齐
     const targetScroll = elementTop - containerHeight * 0.35 + elementHeight / 2
 
-    // 使用 CSS transform 实现 GPU 加速滚动（不用 scrollTop）
-    container.style.transform = `translateY(${-targetScroll}px)`
-  }, [currentIndex])
+    const isTrackChange = lyrics !== prevLyricsRef.current
+    const isJump = isTrackChange || Math.abs(currentIndex - prevIndexRef.current) > 3 || currentIndex === 0
+
+    if (isJump) {
+      userScrollingRef.current = false
+      clearTimeout(scrollTimerRef.current)
+      clearTimeout(autoScrollTimerRef.current)
+      autoScrollingRef.current = true
+      container.scrollTo({ top: targetScroll, behavior: 'auto' })
+      autoScrollingRef.current = false
+    } else if (!userScrollingRef.current) {
+      autoScrollingRef.current = true
+      container.scrollTo({ top: targetScroll, behavior: 'smooth' })
+      const scrollDistance = Math.abs(targetScroll - container.scrollTop)
+      const animDuration = Math.max(500, scrollDistance * 0.4)
+      clearTimeout(autoScrollTimerRef.current)
+      autoScrollTimerRef.current = window.setTimeout(() => {
+        autoScrollingRef.current = false
+      }, animDuration)
+    }
+
+    prevIndexRef.current = currentIndex
+    prevLyricsRef.current = lyrics
+  }, [currentIndex, lyrics])
 
   // 点击歌词行跳转
   const handleLineClick = useCallback((time: number) => {
@@ -56,19 +108,37 @@ function LyricsPanel({ lyrics, currentIndex, onLineClick }: LyricsPanelProps) {
     )
   }
 
+  const moreLines = featureFlags?.lyricsMoreLines !== false
+  const scrollbarEnabled = featureFlags?.lyricsScrollbar !== false
+  const handleWheel = scrollbarEnabled
+    ? handleUserScroll
+    : (e: WheelEvent) => e.preventDefault()
+
   return (
-    <div className="lyrics-panel" ref={containerRef}>
+    <div
+      className={`lyrics-panel ${scrollbarEnabled ? 'lyrics-panel--scrollbar' : ''}`}
+      ref={containerRef}
+      onWheel={handleWheel}
+      onScroll={scrollbarEnabled ? handleScroll : undefined}
+      style={!scrollbarEnabled ? { overflow: 'hidden' } : undefined}
+    >
       {/* 顶部留白（让第一行歌词能滚动到中间） */}
       <div className="lyrics-panel__spacer" />
 
       {lyrics.map((line, index) => {
         // 计算当前行与激活行的距离（渐进式披露）
         const distance = index - currentIndex
-        const absDistance = Math.abs(distance)
 
-        // 只显示当前行和后面2行（共3句），之前的歌词隐藏
-        const isVisible = distance >= 0 && distance <= 2
-        const opacity = isVisible ? (distance === 0 ? 1 : distance === 1 ? 0.5 : 0.25) : 0
+        // 默认显示更多行；关闭 flag 时回退到当前行和后面 2 行。
+        // 开启滚动条时，远处歌词也需要保持可见，否则手动上滑看不到旧歌词。
+        const isInFocusRange = index >= 0 && distance >= (moreLines ? -1 : 0) && distance <= (moreLines ? 4 : 2)
+        const isVisible = scrollbarEnabled || isInFocusRange
+        const opacity = isVisible ? (
+          distance === 0 ? 1 :
+          Math.abs(distance) === 1 ? 0.5 :
+          Math.abs(distance) === 2 ? 0.3 :
+          isInFocusRange ? 0.15 : 0.22
+        ) : 0
         const isActive = index === currentIndex
 
         return (

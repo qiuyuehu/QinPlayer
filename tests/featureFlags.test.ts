@@ -28,6 +28,8 @@ const ALL_OFF: FeatureFlags = {
   fadeEffect: false,
   mediaSession: false,
   queuePanel: false,
+  lyricsMoreLines: false,
+  lyricsScrollbar: false,
 }
 
 describe('isNavAllowed — 导航守卫', () => {

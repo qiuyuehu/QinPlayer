@@ -127,8 +127,6 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  transition: transform 0.3s ease;
-  will-change: transform;
 }
 
 .lyrics-panel--empty {
@@ -148,7 +146,7 @@
 
 /* 上下留白（让歌词能滚动到中间） */
 .lyrics-panel__spacer {
-  height: 0vh;
+  height: 35vh;
   flex-shrink: 0;
 }
 
@@ -156,7 +154,7 @@
 .lyrics-panel__line {
   padding: 1.2vh 0;
   font-size: 2.5vw;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-secondary);
   text-align: center;
   transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1),
@@ -242,13 +240,12 @@
 
 .lyrics-page__mode-btn {
   position: absolute;
-  top: 50%;
+  top: 0;
   right: calc(50% + 104px);
-  transform: translateY(-50%);
 }
 
 .lyrics-page__mode-btn:active {
-  transform: translateY(-50%) scale(0.94);
+  transform: scale(0.94);
 }
 
 /* 传输控制按钮：白色图标，弱化按钮底 */
@@ -339,9 +336,8 @@
 
 .lyrics-page__volume-wrapper {
   position: absolute;
-  top: 50%;
+  top: 0;
   left: calc(50% + 104px);
-  transform: translateY(-50%);
 }
 
 .lyrics-page__volume-popup {
@@ -409,14 +405,36 @@
   pointer-events: none;
 }
 
-/* 隐藏歌词面板滚动条（保留滚动功能） */
-.lyrics-panel::-webkit-scrollbar {
-  display: none;
+.lyrics-panel--scrollbar {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
 }
 
-.lyrics-panel {
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
+.lyrics-panel--scrollbar:hover {
+  scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+}
+
+.lyrics-panel--scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.lyrics-panel--scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.lyrics-panel--scrollbar::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+  transition: background 0.3s ease;
+}
+
+.lyrics-panel--scrollbar:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.lyrics-panel--scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
 }
 
 /* 双语歌词文本 */

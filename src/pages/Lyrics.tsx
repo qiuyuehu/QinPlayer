@@ -45,6 +45,7 @@ function Lyrics() {
 
   // --- 导航状态 ---
   const setActiveNav = useUIStore((s) => s.setActiveNav)
+  const featureFlags = useUIStore((s) => s.featureFlags)
 
   // --- 歌词状态 ---
   const [lyrics, setLyrics] = useState<LyricLine[]>([])
@@ -148,8 +149,13 @@ function Lyrics() {
   useEffect(() => {
     if (!currentTrack) {
       setLyrics([])
+      setLyricsCurrentIndex(-1)
       return
     }
+
+    // 立即清空旧歌词，避免切歌时闪显上一首歌词。
+    setLyrics([])
+    setLyricsCurrentIndex(-1)
 
     // .lrc 文件路径：与音频文件同目录同名
     const audioPath = currentTrack.filePath
@@ -465,6 +471,7 @@ function Lyrics() {
           lyrics={lyrics}
           currentIndex={lyricsCurrentIndex}
           onLineClick={(time) => setSeekTime(time)}
+          featureFlags={featureFlags}
         />
       </div>
     </div>

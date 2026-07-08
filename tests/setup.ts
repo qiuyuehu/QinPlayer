@@ -25,6 +25,8 @@ window.electronAPI = {
     fadeEffect: true,
     mediaSession: true,
     queuePanel: true,
+    lyricsMoreLines: true,
+    lyricsScrollbar: true,
   }),
   invoke: async () => null,
   send: () => {},

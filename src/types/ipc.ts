@@ -26,6 +26,8 @@ export type FeatureFlagKey =
   | 'fadeEffect'
   | 'mediaSession'
   | 'queuePanel'
+  | 'lyricsMoreLines'
+  | 'lyricsScrollbar'
 
 export interface FeatureFlags {
   playback: boolean
@@ -42,6 +44,8 @@ export interface FeatureFlags {
   fadeEffect: boolean
   mediaSession: boolean
   queuePanel: boolean
+  lyricsMoreLines: boolean
+  lyricsScrollbar: boolean
 }
 
 // ---------------------------------------------------------------------------

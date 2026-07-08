@@ -1,6 +1,6 @@
 # QinPlayer — 纯本地音乐播放器
 
-> 基于源码分析更新至：2026-07-02
+> 基于源码分析更新至：2026-07-08
 
 ---
 
@@ -13,6 +13,133 @@
 | 技术栈 | Electron + React + TypeScript + Zustand + electron-vite |
 | 窗口 | 1000×680，可拉伸，适配 2K DPI |
 | 主题 | 亮色/暗色/跟随系统，暗色底色 #121212 |
+
+---
+
+## 目录结构
+
+```
+QinPlayer/
+├── electron/                          # Electron 主进程
+│   ├── main.ts                        # 主进程入口 (258行)
+│   ├── preload.ts                     # 预加载脚本
+│   ├── tray.ts                        # 系统托盘
+│   ├── db/
+│   │   └── database.ts                # SQLite 数据库 (180行)
+│   ├── ipc/
+│   │   ├── songs.ts                   # 歌曲 CRUD
+│   │   ├── playlists.ts               # 歌单管理 (171行)
+│   │   ├── scan.ts                    # 音乐扫描 (255行)
+│   │   ├── eq.ts                      # 均衡器
+│   │   ├── settings.ts                # 设置
+│   │   ├── window.ts                  # 窗口控制 (197行)
+│   │   └── protocol.ts               # 协议处理
+│   └── workers/
+│       └── scanner.ts                 # 扫描 Worker (393行)
+│
+├── src/                               # React 渲染层
+│   ├── main.tsx                       # React 入口
+│   ├── App.tsx                        # 根组件
+│   │
+│   ├── components/                    # 共享组件
+│   │   ├── PlayerBar.tsx              # 底部播放控制条 (379行)
+│   │   ├── SongList.tsx               # 歌曲列表（共享） (369行)
+│   │   ├── LyricsPanel.tsx            # 歌词滚动面板 (99行)
+│   │   ├── MiniPlayer.tsx             # 迷你模式 (263行)
+│   │   ├── Equalizer.tsx              # 均衡器
+│   │   ├── Sidebar.tsx                # 侧边栏导航
+│   │   ├── TitleBar.tsx               # 标题栏
+│   │   ├── Content.tsx                # 内容区路由
+│   │   ├── ContextMenu.tsx            # 右键菜单
+│   │   ├── PlaylistPanel.tsx          # 播放队列面板
+│   │   ├── CreatePlaylistDialog.tsx   # 创建歌单弹窗
+│   │   ├── SongInfoDialog.tsx         # 歌曲信息弹窗
+│   │   ├── Icons.tsx                  # SVG 图标库 (273行)
+│   │   └── Equalizer.css              # 均衡器样式 (274行)
+│   │
+│   ├── pages/                         # 页面
+│   │   ├── LocalMusic.tsx             # 本地音乐 (192行)
+│   │   ├── Lyrics.tsx                 # 歌词页面 (474行)
+│   │   ├── Albums.tsx                 # 专辑页面
+│   │   ├── Playlists.tsx              # 歌单页面 (337行)
+│   │   ├── RecentlyPlayed.tsx         # 最近播放
+│   │   ├── Liked.tsx                  # 我喜欢的
+│   │   ├── Search.tsx                 # 搜索结果
+│   │   └── Settings.tsx               # 设置页面 (495行)
+│   │
+│   ├── stores/                        # Zustand 状态管理
+│   │   ├── playerStore.ts             # 播放器状态 (280行)
+│   │   ├── eqStore.ts                 # 均衡器状态 (198行)
+│   │   └── uiStore.ts                 # UI 状态
+│   │
+│   ├── hooks/                         # React Hooks
+│   │   ├── useAudioSync.ts            # 音频同步 (261行)
+│   │   └── useTheme.ts                # 主题切换
+│   │
+│   ├── utils/                         # 工具函数
+│   │   ├── AudioEngine.ts             # 音频引擎 (459行)
+│   │   ├── lrcParser.ts               # LRC 歌词解析 (196行)
+│   │   ├── colorExtract.ts            # 封面取色
+│   │   ├── featureFlags.ts            # 功能开关
+│   │   ├── formatTime.ts              # 时间格式化
+│   │   ├── currentTimeRef.ts          # 播放时间 ref
+│   │   └── mediaSession.ts            # 系统媒体控制
+│   │
+│   ├── styles/                        # 样式
+│   │   ├── global.css                 # 全局样式
+│   │   ├── base.css                   # 基础变量
+│   │   ├── themes.css                 # 主题变量
+│   │   ├── lyrics.css                 # 歌词页面 (546行)
+│   │   ├── playerbar.css              # 播放控制条 (354行)
+│   │   ├── settings.css               # 设置页面 (290行)
+│   │   ├── playlist-panel.css         # 播放队列面板 (237行)
+│   │   ├── playlists.css              # 歌单页面 (196行)
+│   │   ├── songlist.css               # 歌曲列表 (191行)
+│   │   ├── sidebar.css                # 侧边栏
+│   │   ├── titlebar.css               # 标题栏
+│   │   ├── miniplayer.css             # 迷你模式 (184行)
+│   │   ├── content.css                # 内容区
+│   │   ├── localmusic.css             # 本地音乐 (163行)
+│   │   ├── albums.css                 # 专辑页面
+│   │   ├── recent-liked.css           # 最近/喜欢
+│   │   ├── search.css                 # 搜索
+│   │   ├── contextmenu.css            # 右键菜单
+│   │   └── dialog.css                 # 弹窗
+│   │
+│   └── types/                         # TypeScript 类型
+│       ├── ipc.ts                     # IPC 通道 + FeatureFlags 类型 (214行)
+│       ├── index.ts                   # 通用类型
+│       └── electron.d.ts              # Electron API 类型
+│
+├── tests/                             # 测试 (11 个文件)
+│   ├── playerStore.test.ts
+│   ├── uiStore.test.ts
+│   ├── useAudioSync.test.tsx
+│   ├── featureFlags.test.ts
+│   ├── lrcParser.test.ts
+│   ├── formatTime.test.ts
+│   ├── SongList.test.tsx
+│   ├── Sidebar.test.tsx
+│   ├── PlayerBar.test.tsx
+│   ├── Playlists.test.tsx
+│   └── PlaylistPanel.test.tsx
+│
+├── harness/                           # AI 工程约束
+│   ├── SPEC.md
+│   ├── CONSTRAINTS.md
+│   ├── DECISIONS.md
+│   └── TEST_CONVENTIONS.md
+│
+├── docs/                              # 文档
+│   ├── devlog/
+│   └── plans/
+│
+├── SPEC.md                            # 项目规格书
+├── package.json
+├── tsconfig.json
+├── electron.vite.config.ts
+└── vitest.config.ts
+```
 
 ---
 
