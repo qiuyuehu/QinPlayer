@@ -49,6 +49,14 @@ interface PlayerState {
 
 const PLAY_MODE_ORDER: PlayMode[] = ['sequential', 'loop', 'shuffle']
 
+function getTrackDuration(track: Track | null): number {
+  return track && Number.isFinite(track.duration) ? Math.max(0, track.duration) : 0
+}
+
+function resetTrackProgress(): void {
+  currentTimeRef.current = 0
+}
+
 // ---------------------------------------------------------------------------
 // Store 创建
 // ---------------------------------------------------------------------------
@@ -69,7 +77,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   setPlaying: (v) => set({ isPlaying: v }),
 
-  setCurrentTrack: (t) => set({ currentTrack: t, duration: 0 }),
+  setCurrentTrack: (t) => {
+    resetTrackProgress()
+    set({ currentTrack: t, duration: getTrackDuration(t) })
+  },
 
   setPlaylist: (list) => set({ playlist: list }),
 
@@ -106,7 +117,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         randomIndex = Math.floor(Math.random() * playlist.length)
       } while (randomIndex === currentIndex)
       const nextTrack = playlist[randomIndex]
-      set({ currentTrack: nextTrack, duration: 0, isPlaying: true })
+      resetTrackProgress()
+      set({ currentTrack: nextTrack, duration: getTrackDuration(nextTrack), isPlaying: true })
       // 记录播放历史
       if (flags.recent) {
         window.electronAPI.invoke('songs:recordPlay', { songId: nextTrack.id })
@@ -116,7 +128,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       // 顺序/单曲循环：取下一首索引，到末尾则回到第一首
       const nextIndex = (currentIndex + 1) % playlist.length
       const nextTrack = playlist[nextIndex]
-      set({ currentTrack: nextTrack, duration: 0, isPlaying: true })
+      resetTrackProgress()
+      set({ currentTrack: nextTrack, duration: getTrackDuration(nextTrack), isPlaying: true })
       // 记录播放历史
       if (flags.recent) {
         window.electronAPI.invoke('songs:recordPlay', { songId: nextTrack.id })
@@ -141,7 +154,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         randomIndex = Math.floor(Math.random() * playlist.length)
       } while (randomIndex === currentIndex)
       const prevTrack = playlist[randomIndex]
-      set({ currentTrack: prevTrack, duration: 0, isPlaying: true })
+      resetTrackProgress()
+      set({ currentTrack: prevTrack, duration: getTrackDuration(prevTrack), isPlaying: true })
       // 记录播放历史
       if (flags.recent) {
         window.electronAPI.invoke('songs:recordPlay', { songId: prevTrack.id })
@@ -151,7 +165,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       // 顺序/单曲循环：取上一首索引，到开头则回到最后一首
       const prevIndex = (currentIndex - 1 + playlist.length) % playlist.length
       const prevTrack = playlist[prevIndex]
-      set({ currentTrack: prevTrack, duration: 0, isPlaying: true })
+      resetTrackProgress()
+      set({ currentTrack: prevTrack, duration: getTrackDuration(prevTrack), isPlaying: true })
       // 记录播放历史
       if (flags.recent) {
         window.electronAPI.invoke('songs:recordPlay', { songId: prevTrack.id })
@@ -256,6 +271,7 @@ export async function restorePlayerState(): Promise<void> {
         if (track) {
           state.currentTrack = track
           state.playlist = allSongs
+          state.duration = getTrackDuration(track)
           // 恢复播放进度（通过 seekTime，useAudioSync 加载后会自动 seek）
           if (lastTimeStr) {
             const lastTime = parseFloat(lastTimeStr)

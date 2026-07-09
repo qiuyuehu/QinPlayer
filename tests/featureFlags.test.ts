@@ -5,6 +5,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   DEFAULT_FEATURE_FLAGS,
+  FEATURE_FLAG_KEYS,
   normalizeFeatureFlags,
   isNavAllowed,
   canPlay,
@@ -29,7 +30,7 @@ const ALL_OFF: FeatureFlags = {
   mediaSession: false,
   queuePanel: false,
   lyricsMoreLines: false,
-  lyricsScrollbar: false,
+  windowSizePersist: false,
 }
 
 describe('isNavAllowed — 导航守卫', () => {
@@ -74,6 +75,14 @@ describe('canPlay — 播放守卫', () => {
 })
 
 describe('hasFeature — 单项检查', () => {
+  it('windowSizePersist 默认开启', () => {
+    expect(hasFeature(DEFAULT_FEATURE_FLAGS, 'windowSizePersist')).toBe(true)
+  })
+
+  it('FEATURE_FLAG_KEYS 包含 windowSizePersist', () => {
+    expect(FEATURE_FLAG_KEYS).toContain('windowSizePersist')
+  })
+
   it('queuePanel 默认开启', () => {
     expect(hasFeature(DEFAULT_FEATURE_FLAGS, 'queuePanel')).toBe(true)
   })

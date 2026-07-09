@@ -127,6 +127,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  overflow: hidden;
 }
 
 .lyrics-panel--empty {
@@ -403,38 +404,6 @@
   background: var(--accent);
   border-radius: 50%;
   pointer-events: none;
-}
-
-.lyrics-panel--scrollbar {
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
-}
-
-.lyrics-panel--scrollbar:hover {
-  scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
-}
-
-.lyrics-panel--scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-
-.lyrics-panel--scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.lyrics-panel--scrollbar::-webkit-scrollbar-thumb {
-  background: transparent;
-  border-radius: 3px;
-  transition: background 0.3s ease;
-}
-
-.lyrics-panel--scrollbar:hover::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.3);
-}
-
-.lyrics-panel--scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.5);
 }
 
 /* 双语歌词文本 */

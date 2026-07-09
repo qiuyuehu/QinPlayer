@@ -26,6 +26,8 @@ import { registerProtocol } from './ipc/protocol'
 import { registerScanIPC, startIncrementalScan } from './ipc/scan'
 import { registerEqIPC } from './ipc/eq'
 import { createTray, updateMenu, destroyTray } from './tray'
+import { loadWindowBounds, loadWindowState, normalizeWindowBounds, saveWindowBounds, saveWindowState } from './windowBounds'
+import { DEFAULT_FEATURE_FLAGS } from '../src/utils/featureFlags'
 import type { FeatureFlags } from '../src/types/ipc'
 
 // ---------------------------------------------------------------------------
@@ -35,6 +37,9 @@ import type { FeatureFlags } from '../src/types/ipc'
 let mainWindow: BrowserWindow | null = null
 let isPlaying = false  // 播放状态（托盘菜单需要）
 let isQuitting = false  // 是否正在退出（关闭窗口时判断：退出 vs 最小化到托盘）
+let currentFeatureFlags: FeatureFlags = { ...DEFAULT_FEATURE_FLAGS }
+let isMiniMode = false  // 迷你模式期间暂停正常窗口 bounds 持久化
+let boundsTimer: ReturnType<typeof setTimeout> | null = null
 
 /** 获取主窗口引用（供各 IPC 模块使用） */
 function getMainWindow(): BrowserWindow | null {
@@ -49,6 +54,48 @@ function getIsPlaying(): boolean {
 /** 设置退出标记（托盘"退出"菜单调用） */
 function setIsQuitting(): void {
   isQuitting = true
+}
+
+function canSaveWindowBounds(win: BrowserWindow): boolean {
+  return currentFeatureFlags.windowSizePersist
+    && !isMiniMode
+    && !win.isMaximized()
+    && !win.isMinimized()
+    && win.isVisible()
+}
+
+function saveCurrentWindowStateNow(): void {
+  if (mainWindow && currentFeatureFlags.windowSizePersist && !isMiniMode) {
+    saveWindowState({
+      isMaximized: mainWindow.isMaximized(),
+      isMinimized: mainWindow.isMinimized(),
+    })
+  }
+}
+
+function saveCurrentWindowBoundsNow(): void {
+  if (boundsTimer) {
+    clearTimeout(boundsTimer)
+    boundsTimer = null
+  }
+
+  if (mainWindow && canSaveWindowBounds(mainWindow)) {
+    saveWindowBounds(mainWindow.getBounds())
+  }
+
+  saveCurrentWindowStateNow()
+}
+
+function debounceSaveWindowBounds(): void {
+  if (!mainWindow || !currentFeatureFlags.windowSizePersist || isMiniMode) return
+  if (boundsTimer) clearTimeout(boundsTimer)
+
+  boundsTimer = setTimeout(() => {
+    boundsTimer = null
+    if (mainWindow && canSaveWindowBounds(mainWindow)) {
+      saveWindowBounds(mainWindow.getBounds())
+    }
+  }, 500)
 }
 
 // ---------------------------------------------------------------------------
@@ -111,9 +158,21 @@ function createWindow(flags: FeatureFlags): void {
   
   console.log('[Main] 图标路径:', iconPath, 'exists:', require('fs').existsSync(iconPath))
 
+  let savedBounds: Partial<ReturnType<BrowserWindow['getBounds']>> = {}
+  const savedState = flags.windowSizePersist ? loadWindowState() : null
+  if (flags.windowSizePersist) {
+    const loadedBounds = loadWindowBounds()
+    if (loadedBounds) {
+      const normalizedBounds = normalizeWindowBounds(loadedBounds)
+      if (normalizedBounds) savedBounds = normalizedBounds
+    }
+  }
+
   mainWindow = new BrowserWindow({
-    width: 1000,
-    height: 680,
+    width: savedBounds.width || 1000,
+    height: savedBounds.height || 680,
+    ...(savedBounds.x !== undefined && { x: savedBounds.x }),
+    ...(savedBounds.y !== undefined && { y: savedBounds.y }),
     minWidth: 800,
     minHeight: 600,
     title: 'QinPlayer',
@@ -142,8 +201,25 @@ function createWindow(flags: FeatureFlags): void {
     mainWindow?.webContents.send('window:maximized', false)
   })
 
-  // 关闭窗口时隐藏到托盘（不退出）
+  if (flags.windowSizePersist) {
+    mainWindow.on('resize', debounceSaveWindowBounds)
+    mainWindow.on('move', debounceSaveWindowBounds)
+    mainWindow.on('maximize', saveCurrentWindowStateNow)
+    mainWindow.on('unmaximize', saveCurrentWindowStateNow)
+    mainWindow.on('minimize', saveCurrentWindowStateNow)
+    mainWindow.on('restore', saveCurrentWindowStateNow)
+  }
+
+  if (savedState?.isMaximized) {
+    mainWindow.maximize()
+  } else if (savedState?.isMinimized) {
+    mainWindow.minimize()
+  }
+
+  // 关闭窗口时保存 bounds，并按托盘规则隐藏或退出
   mainWindow.on('close', (e) => {
+    saveCurrentWindowBoundsNow()
+
     if (flags.tray && !isQuitting) {
       e.preventDefault()
       mainWindow?.hide()
@@ -174,12 +250,18 @@ app.whenReady().then(async () => {
 
   // 1.1 读取功能开关（必须早于窗口、托盘和渲染进程水合）
   const featureFlags = await loadFeatureFlags()
+  currentFeatureFlags = featureFlags
 
   // 2. 注册自定义协议拦截
   registerProtocol()
 
   // 3. 注册各模块 IPC 通道
-  registerWindowIPC(getMainWindow)
+  registerWindowIPC(
+    getMainWindow,
+    () => currentFeatureFlags,
+    (isMini) => { isMiniMode = isMini },
+    saveCurrentWindowBoundsNow
+  )
   registerScanIPC(getMainWindow)
   registerSongsIPC()
   registerPlaylistsIPC()
@@ -243,7 +325,7 @@ app.whenReady().then(async () => {
   // macOS：点击 dock 图标时重新创建窗口
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow()
+      createWindow(currentFeatureFlags)
     }
   })
 })

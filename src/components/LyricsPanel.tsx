@@ -3,13 +3,12 @@
 // =============================================================================
 // 职责：逐行渲染歌词，自动滚动到当前行，当前行高亮放大
 // 设计要点：
-//   - 使用 scrollTop 滚动 + 透明滚动条
+//   - 使用 scrollTop 自动滚动，隐藏原生滚动条
 //   - 当前行高亮：scale(1.1) + 颜色变化
 //   - 点击歌词行跳转到对应时间
 // =============================================================================
 
 import { useEffect, useRef, useCallback } from 'react'
-import type { WheelEvent } from 'react'
 import type { LyricLine } from '../types'
 import type { FeatureFlags } from '../types/ipc'
 
@@ -26,33 +25,6 @@ function LyricsPanel({ lyrics, currentIndex, onLineClick, featureFlags }: Lyrics
   const itemRefs = useRef<(HTMLDivElement | null)[]>([])
   const prevIndexRef = useRef(currentIndex)
   const prevLyricsRef = useRef(lyrics)
-  const userScrollingRef = useRef(false)
-  const scrollTimerRef = useRef<number>(0)
-  const autoScrollingRef = useRef(false)
-  const autoScrollTimerRef = useRef<number>(0)
-
-  // 标记用户手动滚动，暂停自动滚动 3 秒。
-  const markUserScrolling = useCallback(() => {
-    userScrollingRef.current = true
-    clearTimeout(scrollTimerRef.current)
-    scrollTimerRef.current = window.setTimeout(() => {
-      userScrollingRef.current = false
-    }, 3000)
-  }, [])
-
-  const handleUserScroll = markUserScrolling
-
-  const handleScroll = useCallback(() => {
-    if (autoScrollingRef.current) return
-    markUserScrolling()
-  }, [markUserScrolling])
-
-  useEffect(() => {
-    return () => {
-      clearTimeout(scrollTimerRef.current)
-      clearTimeout(autoScrollTimerRef.current)
-    }
-  }, [])
 
   // 当前行变化时，平滑滚动到当前行
   useEffect(() => {
@@ -73,21 +45,9 @@ function LyricsPanel({ lyrics, currentIndex, onLineClick, featureFlags }: Lyrics
     const isJump = isTrackChange || Math.abs(currentIndex - prevIndexRef.current) > 3 || currentIndex === 0
 
     if (isJump) {
-      userScrollingRef.current = false
-      clearTimeout(scrollTimerRef.current)
-      clearTimeout(autoScrollTimerRef.current)
-      autoScrollingRef.current = true
       container.scrollTo({ top: targetScroll, behavior: 'auto' })
-      autoScrollingRef.current = false
-    } else if (!userScrollingRef.current) {
-      autoScrollingRef.current = true
+    } else {
       container.scrollTo({ top: targetScroll, behavior: 'smooth' })
-      const scrollDistance = Math.abs(targetScroll - container.scrollTop)
-      const animDuration = Math.max(500, scrollDistance * 0.4)
-      clearTimeout(autoScrollTimerRef.current)
-      autoScrollTimerRef.current = window.setTimeout(() => {
-        autoScrollingRef.current = false
-      }, animDuration)
     }
 
     prevIndexRef.current = currentIndex
@@ -109,18 +69,11 @@ function LyricsPanel({ lyrics, currentIndex, onLineClick, featureFlags }: Lyrics
   }
 
   const moreLines = featureFlags?.lyricsMoreLines !== false
-  const scrollbarEnabled = featureFlags?.lyricsScrollbar !== false
-  const handleWheel = scrollbarEnabled
-    ? handleUserScroll
-    : (e: WheelEvent) => e.preventDefault()
 
   return (
     <div
-      className={`lyrics-panel ${scrollbarEnabled ? 'lyrics-panel--scrollbar' : ''}`}
+      className="lyrics-panel"
       ref={containerRef}
-      onWheel={handleWheel}
-      onScroll={scrollbarEnabled ? handleScroll : undefined}
-      style={!scrollbarEnabled ? { overflow: 'hidden' } : undefined}
     >
       {/* 顶部留白（让第一行歌词能滚动到中间） */}
       <div className="lyrics-panel__spacer" />
@@ -130,14 +83,13 @@ function LyricsPanel({ lyrics, currentIndex, onLineClick, featureFlags }: Lyrics
         const distance = index - currentIndex
 
         // 默认显示更多行；关闭 flag 时回退到当前行和后面 2 行。
-        // 开启滚动条时，远处歌词也需要保持可见，否则手动上滑看不到旧歌词。
         const isInFocusRange = index >= 0 && distance >= (moreLines ? -1 : 0) && distance <= (moreLines ? 4 : 2)
-        const isVisible = scrollbarEnabled || isInFocusRange
+        const isVisible = isInFocusRange
         const opacity = isVisible ? (
           distance === 0 ? 1 :
           Math.abs(distance) === 1 ? 0.5 :
           Math.abs(distance) === 2 ? 0.3 :
-          isInFocusRange ? 0.15 : 0.22
+          0.15
         ) : 0
         const isActive = index === currentIndex
 

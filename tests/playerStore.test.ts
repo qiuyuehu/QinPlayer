@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest'
 import { usePlayerStore, togglePlayMode } from '../src/stores/playerStore'
+import { currentTimeRef } from '../src/utils/currentTimeRef'
 import type { Track } from '../src/types'
 
 // 模拟 window.electronAPI（invoke 用于记录播放历史）
@@ -33,6 +34,7 @@ describe('playerStore', () => {
       duration: 0,
       seekTime: null,
     })
+    currentTimeRef.current = 0
   })
 
   // --- 音量边界 ---
@@ -63,12 +65,18 @@ describe('playerStore', () => {
     })
   })
 
-  // --- setCurrentTrack 重置 duration ---
+  // --- setCurrentTrack 使用歌曲库时长 ---
   describe('setCurrentTrack', () => {
-    it('设置当前歌曲时重置 duration 为 0', () => {
-      usePlayerStore.setState({ duration: 180 })
+    it('设置当前歌曲时先使用曲库 duration', () => {
+      usePlayerStore.setState({ duration: 999 })
       usePlayerStore.getState().setCurrentTrack(songs[0])
-      expect(usePlayerStore.getState().duration).toBe(0)
+      expect(usePlayerStore.getState().duration).toBe(180)
+    })
+
+    it('设置当前歌曲时重置共享播放时间', () => {
+      currentTimeRef.current = 123
+      usePlayerStore.getState().setCurrentTrack(songs[0])
+      expect(currentTimeRef.current).toBe(0)
     })
 
     it('设置 null 清空当前歌曲', () => {
@@ -110,10 +118,10 @@ describe('playerStore', () => {
       expect(usePlayerStore.getState().isPlaying).toBe(true)
     })
 
-    it('切歌后重置 duration', () => {
+    it('切歌后先使用下一首的曲库 duration', () => {
       usePlayerStore.setState({ playlist: songs, currentTrack: songs[0], duration: 180, playMode: 'sequential' })
       usePlayerStore.getState().nextTrack()
-      expect(usePlayerStore.getState().duration).toBe(0)
+      expect(usePlayerStore.getState().duration).toBe(200)
     })
   })
 

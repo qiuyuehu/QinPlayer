@@ -27,7 +27,7 @@ export type FeatureFlagKey =
   | 'mediaSession'
   | 'queuePanel'
   | 'lyricsMoreLines'
-  | 'lyricsScrollbar'
+  | 'windowSizePersist'
 
 export interface FeatureFlags {
   playback: boolean
@@ -45,7 +45,7 @@ export interface FeatureFlags {
   mediaSession: boolean
   queuePanel: boolean
   lyricsMoreLines: boolean
-  lyricsScrollbar: boolean
+  windowSizePersist: boolean
 }
 
 // ---------------------------------------------------------------------------

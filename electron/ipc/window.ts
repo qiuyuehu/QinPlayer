@@ -8,12 +8,19 @@ import { ipcMain, dialog, shell, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { app } from 'electron'
 import { initDatabase, closeDatabase, getDatabase } from '../db/database'
+import { loadWindowBounds, loadWindowState, normalizeWindowBounds } from '../windowBounds'
+import type { FeatureFlags } from '../../src/types/ipc'
 
 // ---------------------------------------------------------------------------
 // 注册窗口控制相关 IPC 通道
 // ---------------------------------------------------------------------------
 
-export function registerWindowIPC(getMainWindow: () => BrowserWindow | null): void {
+export function registerWindowIPC(
+  getMainWindow: () => BrowserWindow | null,
+  getFeatureFlags: () => FeatureFlags,
+  setMiniMode: (isMini: boolean) => void,
+  saveCurrentWindowBoundsNow: () => void
+): void {
   // --- 窗口控制 ---
 
   // 最小化窗口
@@ -175,21 +182,46 @@ export function registerWindowIPC(getMainWindow: () => BrowserWindow | null): vo
   ipcMain.on('window:set-mini-mode', (_event, isMini: boolean) => {
     const mainWindow = getMainWindow()
     if (!mainWindow) return
+    const flags = getFeatureFlags()
+
     if (isMini) {
-      // 进入迷你模式（先隐藏再改大小，避免 Windows 显示尺寸提示）
+      // 进入迷你模式前先保存正常窗口 bounds，并暂停持久化。
+      saveCurrentWindowBoundsNow()
+      setMiniMode(true)
+      if (mainWindow.isMaximized()) {
+        mainWindow.unmaximize()
+      }
       mainWindow.setAlwaysOnTop(true, 'screen-saver')
       mainWindow.setMinimumSize(350, 150)
       mainWindow.hide()
       mainWindow.setSize(350, 150)
       mainWindow.show()
     } else {
-      // 退出迷你模式
+      // 退出迷你模式时按 feature flag 恢复正常窗口 bounds。
+      setMiniMode(false)
       mainWindow.setAlwaysOnTop(false)
       mainWindow.setMinimumSize(800, 600)
       mainWindow.hide()
-      mainWindow.setSize(1000, 680)
-      mainWindow.center()
+
+      const savedState = flags.windowSizePersist ? loadWindowState() : null
+      if (flags.windowSizePersist) {
+        const savedBounds = loadWindowBounds()
+        const normalizedBounds = savedBounds ? normalizeWindowBounds(savedBounds) : null
+        if (normalizedBounds) {
+          mainWindow.setBounds(normalizedBounds)
+        } else {
+          mainWindow.setSize(1000, 680)
+          mainWindow.center()
+        }
+      } else {
+        mainWindow.setSize(1000, 680)
+        mainWindow.center()
+      }
+
       mainWindow.show()
+      if (savedState?.isMaximized) {
+        mainWindow.maximize()
+      }
     }
   })
 
