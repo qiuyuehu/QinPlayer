@@ -41,9 +41,8 @@ const SongList = forwardRef<SongListHandle, SongListProps>(function SongList(
   // --- Zustand store ---
   // 以下状态由 useAudioSync 统一驱动 AudioEngine，组件只操作 store
   const currentTrack = usePlayerStore((s) => s.currentTrack)
-  const setCurrentTrack = usePlayerStore((s) => s.setCurrentTrack)
+  const playTrack = usePlayerStore((s) => s.playTrack)
   const setPlaylist = usePlayerStore((s) => s.setPlaylist)
-  const setPlaying = usePlayerStore((s) => s.setPlaying)
   const featureFlags = useUIStore((s) => s.featureFlags)
 
   // --- 虚拟列表滚动容器 ref ---
@@ -124,14 +123,8 @@ const SongList = forwardRef<SongListHandle, SongListProps>(function SongList(
     if (!featureFlags.playback) return
 
     setPlaylist(tracks)
-    setCurrentTrack(track)
-    setPlaying(true)
-    // 记录播放 —— 同时写入"最近播放"表和更新"播放次数"，两个 IPC 互不依赖
-    if (featureFlags.recent) {
-      window.electronAPI.invoke('songs:recordPlay', { songId: track.id })
-    }
-    window.electronAPI.invoke('songs:updatePlayCount', { songId: track.id })
-  }, [tracks, featureFlags.playback, featureFlags.recent, setCurrentTrack, setPlaylist, setPlaying])
+    playTrack(track)
+  }, [tracks, featureFlags.playback, playTrack, setPlaylist])
 
   const handleAddToQueue = useCallback((track: Track) => {
     const { playlist, currentTrack, setPlaylist: updatePlaylist } = usePlayerStore.getState()

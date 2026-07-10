@@ -1,39 +1,62 @@
-import { formatTime } from "../utils/formatTime"
+import { formatTime } from '../utils/formatTime'
 // =============================================================================
 // QinPlayer — 迷你播放器
 // =============================================================================
-// 职责：紧凑的迷你控制窗口（350×150）
-// 布局：封面 + 歌曲信息 + 进度条 + 控制按钮
-// 交互：可拖拽、进度条可拖拽、音量点击静音
+// 职责：在固定 400×150 壳层中编排歌曲、歌词和队列三种视图
+// 布局：上方视图内容 + 下方公共控制栏，关闭按钮固定在右上角
+// 交互：窗口可拖拽、进度条可拖拽、音量点击静音、视图直接切换
 // =============================================================================
 
 import { useRef, useCallback, useState, useEffect } from 'react'
 import { usePlayerStore } from '../stores/playerStore'
 import { useUIStore } from '../stores/uiStore'
+import { useTrackLyrics } from '../hooks/useTrackLyrics'
 import { currentTimeRef } from '../utils/currentTimeRef'
+import { findCurrentLyricIndex } from '../utils/lrcParser'
+import MiniLyricsView from './MiniLyricsView'
+import MiniQueueView from './MiniQueueView'
 import {
   IconPlay, IconPause, IconPrev, IconNext,
   IconVolumeHigh, IconVolumeMuted,
-  IconClose, IconExpand,
+  IconClose, IconExpand, IconMusic, IconLyrics, IconList,
 } from './Icons'
+import type { LyricLine } from '../types'
 
-// MiniPlayer — 迷你模式播放条（300×80），封面 + 歌名 + 控制按钮 + 拖拽移动
+type MiniView = 'default' | 'lyrics' | 'queue'
+
 function MiniPlayer() {
   // --- 播放状态 ---
   const isPlaying = usePlayerStore((s) => s.isPlaying)
   const currentTrack = usePlayerStore((s) => s.currentTrack)
+  const playlist = usePlayerStore((s) => s.playlist)
   const duration = usePlayerStore((s) => s.duration)
   const volume = usePlayerStore((s) => s.volume)
+  const lyricOffset = usePlayerStore((s) => s.lyricOffset)
   const setPlaying = usePlayerStore((s) => s.setPlaying)
   const setVolume = usePlayerStore((s) => s.setVolume)
   const setSeekTime = usePlayerStore((s) => s.setSeekTime)
+  const playTrack = usePlayerStore((s) => s.playTrack)
   const nextTrack = usePlayerStore((s) => s.nextTrack)
   const prevTrack = usePlayerStore((s) => s.prevTrack)
 
   // --- UI 状态 ---
+  const isMiniMode = useUIStore((s) => s.isMiniMode)
   const setActiveNav = useUIStore((s) => s.setActiveNav)
   const setMiniMode = useUIStore((s) => s.setMiniMode)
   const featureFlags = useUIStore((s) => s.featureFlags)
+  const [miniView, setMiniView] = useState<MiniView>('default')
+
+  // Hook 必须无条件调用；功能关闭时传 null，避免后台读取歌词。
+  const lyricsEnabled = featureFlags.playback
+    && featureFlags.miniMode
+    && featureFlags.lyrics
+    && isMiniMode
+  const lyrics = useTrackLyrics(lyricsEnabled ? currentTrack : null)
+  const [lyricsCurrentIndex, setLyricsCurrentIndex] = useState(-1)
+  const lyricsRef = useRef<LyricLine[]>(lyrics)
+  const lastLyricsIndexRef = useRef(-1)
+  const lyricOffsetRef = useRef(lyricOffset)
+  const miniViewRef = useRef<MiniView>(miniView)
 
   // --- 进度条拖拽 ---
   const progressRef = useRef<HTMLDivElement>(null)
@@ -47,10 +70,38 @@ function MiniPlayer() {
 
   // --- 音量状态（点击静音/取消静音） ---
   const [isMuted, setIsMuted] = useState(false)
-  const prevVolumeRef = useRef(1)  // 静音前的音量
+  const prevVolumeRef = useRef(1)
+
+  useEffect(() => {
+    lyricsRef.current = lyrics
+    lastLyricsIndexRef.current = -1
+    if (lyrics.length === 0) setLyricsCurrentIndex(-1)
+  }, [lyrics])
+
+  useEffect(() => {
+    lyricOffsetRef.current = lyricOffset
+  }, [lyricOffset])
+
+  useEffect(() => {
+    miniViewRef.current = miniView
+  }, [miniView])
+
+  useEffect(() => {
+    lastLyricsIndexRef.current = -1
+    setLyricsCurrentIndex(-1)
+  }, [currentTrack?.id, currentTrack?.filePath])
+
+  // 当前视图入口被关闭时，立即回退到歌曲视图。
+  useEffect(() => {
+    if (miniView === 'lyrics' && !featureFlags.lyrics) {
+      setMiniView('default')
+    } else if (miniView === 'queue' && !featureFlags.queuePanel) {
+      setMiniView('default')
+    }
+  }, [miniView, featureFlags.lyrics, featureFlags.queuePanel])
 
   // ---------------------------------------------------------------------------
-  // 关闭迷你模式 → 返回主页面
+  // 关闭迷你模式 → 返回本地音乐页
   // ---------------------------------------------------------------------------
   const handleClose = useCallback(() => {
     setMiniMode(false)
@@ -58,29 +109,21 @@ function MiniPlayer() {
   }, [setMiniMode, setActiveNav])
 
   // ---------------------------------------------------------------------------
-  // 展开 → 恢复主窗口
+  // 展开 → 恢复主窗口并保留当前导航
   // ---------------------------------------------------------------------------
   const handleExpand = useCallback(() => {
     setMiniMode(false)
   }, [setMiniMode])
 
-  // ---------------------------------------------------------------------------
-  // 播放/暂停
-  // ---------------------------------------------------------------------------
   const handlePlayPause = useCallback(() => {
     setPlaying(!isPlaying)
   }, [isPlaying, setPlaying])
 
-  // ---------------------------------------------------------------------------
-  // 音量：点击静音/取消静音
-  // ---------------------------------------------------------------------------
   const handleVolumeClick = useCallback(() => {
     if (isMuted) {
-      // 取消静音：恢复之前的音量
       setVolume(prevVolumeRef.current)
       setIsMuted(false)
     } else {
-      // 静音：保存当前音量，设为 0
       prevVolumeRef.current = volume
       setVolume(0)
       setIsMuted(true)
@@ -90,28 +133,25 @@ function MiniPlayer() {
   // ---------------------------------------------------------------------------
   // 进度条拖拽逻辑
   // ---------------------------------------------------------------------------
-  const updateDragTime = useCallback((e: MouseEvent) => {
+  const updateDragTime = useCallback((event: MouseEvent) => {
     if (!progressRef.current || duration <= 0) return
     const rect = progressRef.current.getBoundingClientRect()
-    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
-    const time = ratio * duration
-    dragTimeRef.current = time  // RAF 循环直接读取，不触发 re-render
+    const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width))
+    dragTimeRef.current = ratio * duration
   }, [duration])
 
-  const handleProgressMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+  const handleProgressMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     isDraggingRef.current = true
-    updateDragTime(e as unknown as MouseEvent)
+    updateDragTime(event as unknown as MouseEvent)
 
-    const handleMouseMove = (ev: MouseEvent) => {
-      updateDragTime(ev)
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      updateDragTime(moveEvent)
     }
 
     const handleMouseUp = () => {
       isDraggingRef.current = false
       const seekTo = dragTimeRef.current
-      if (seekTo !== null) {
-        setSeekTime(seekTo)
-      }
+      if (seekTo !== null) setSeekTime(seekTo)
       dragTimeRef.current = null
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
@@ -121,14 +161,10 @@ function MiniPlayer() {
     document.addEventListener('mouseup', handleMouseUp)
   }, [updateDragTime, setSeekTime])
 
-  // ---------------------------------------------------------------------------
-  // 格式化时间
-  // ---------------------------------------------------------------------------
-
-  // ---------------------------------------------------------------------------
-  // RAF 循环：直接操作进度条 DOM，不触发 React re-render
-  // ---------------------------------------------------------------------------
+  // 一个 RAF 同时维护默认视图进度和歌词视图索引。
   useEffect(() => {
+    if (!featureFlags.playback || !featureFlags.miniMode || !isMiniMode) return
+
     let rafId: number
     const update = () => {
       const time = isDraggingRef.current
@@ -140,33 +176,38 @@ function MiniPlayer() {
       if (progressThumbRef.current) progressThumbRef.current.style.left = `${pct}%`
       if (currentTimeTextRef.current) currentTimeTextRef.current.textContent = formatTime(time)
 
+      if (miniViewRef.current === 'lyrics') {
+        const index = findCurrentLyricIndex(
+          lyricsRef.current,
+          time + lyricOffsetRef.current,
+        )
+        if (index !== lastLyricsIndexRef.current) {
+          lastLyricsIndexRef.current = index
+          setLyricsCurrentIndex(index)
+        }
+      }
+
       rafId = requestAnimationFrame(update)
     }
+
     rafId = requestAnimationFrame(update)
     return () => cancelAnimationFrame(rafId)
-  }, [duration])
+  }, [duration, featureFlags.playback, featureFlags.miniMode, isMiniMode])
 
-  // ---------------------------------------------------------------------------
-  // 渲染
-  // ---------------------------------------------------------------------------
-  // 进度条由 RAF 循环直接操作 DOM，不依赖 React state
+  if (!featureFlags.playback || !featureFlags.miniMode || !isMiniMode) return null
 
-  // 封面 URL
   const coverUrl = currentTrack?.coverPath
     ? window.electronAPI.getCoverUrl(currentTrack.coverPath)
     : null
 
-  if (!featureFlags.playback || !featureFlags.miniMode) return null
-
-  return (
-    <div className="mini-player">
-      {/* 顶部：封面 + 歌曲信息 */}
+  const defaultView = (
+    <div className="mini-player__default-view">
       <div className="mini-player__header">
         <div className="mini-player__cover">
           {coverUrl ? (
-            <img src={coverUrl} alt="封面" />
+            <img src={coverUrl} alt={`${currentTrack?.title ?? '歌曲'} 封面`} />
           ) : (
-            <div className="mini-player__cover-placeholder">
+            <div className="mini-player__cover-placeholder" aria-hidden="true">
               <span>♪</span>
             </div>
           )}
@@ -180,18 +221,8 @@ function MiniPlayer() {
             {currentTrack ? `${currentTrack.artist} — ${currentTrack.album}` : '-'}
           </div>
         </div>
-
-        {/* 关闭按钮 */}
-        <button
-          className="mini-player__close-btn"
-          onClick={handleClose}
-          title="关闭"
-        >
-          <IconClose width={14} height={14} />
-        </button>
       </div>
 
-      {/* 中间：进度条 */}
       <div className="mini-player__progress-row">
         <span className="mini-player__time" ref={currentTimeTextRef}>0:00</span>
         <div
@@ -199,24 +230,48 @@ function MiniPlayer() {
           ref={progressRef}
           onMouseDown={handleProgressMouseDown}
         >
-          <div
-            className="mini-player__progress-fill"
-            ref={progressFillRef}
-          />
-          <div
-            className="mini-player__progress-thumb"
-            ref={progressThumbRef}
-          />
+          <div className="mini-player__progress-fill" ref={progressFillRef} />
+          <div className="mini-player__progress-thumb" ref={progressThumbRef} />
         </div>
         <span className="mini-player__time">{formatTime(duration)}</span>
       </div>
+    </div>
+  )
 
-      {/* 底部：控制按钮 */}
-      <div className="mini-player__controls">
-        {/* 音量图标（点击静音/取消静音） */}
+  return (
+    <div className="mini-player">
+      <button
+        type="button"
+        className="mini-player__close-btn"
+        onClick={handleClose}
+        aria-label="关闭"
+        title="关闭"
+      >
+        <IconClose width={14} height={14} />
+      </button>
+
+      <div className="mini-player__content">
+        {miniView === 'lyrics' && featureFlags.lyrics ? (
+          <MiniLyricsView
+            currentTrack={currentTrack}
+            lyrics={lyrics}
+            currentIndex={lyricsCurrentIndex}
+          />
+        ) : miniView === 'queue' && featureFlags.queuePanel ? (
+          <MiniQueueView
+            tracks={playlist}
+            currentTrackId={currentTrack?.id ?? null}
+            onPlay={playTrack}
+          />
+        ) : defaultView}
+      </div>
+
+      <div className="mini-player__toolbar mini-player__controls">
         <button
+          type="button"
           className="mini-player__btn"
           onClick={handleVolumeClick}
+          aria-label={isMuted ? '取消静音' : '静音'}
           title={isMuted ? '取消静音' : '静音'}
         >
           {isMuted
@@ -225,13 +280,12 @@ function MiniPlayer() {
           }
         </button>
 
-        {/* 上一首 */}
-        <button className="mini-player__btn" onClick={prevTrack} title="上一首">
+        <button type="button" className="mini-player__btn" onClick={prevTrack} title="上一首">
           <IconPrev width={16} height={16} />
         </button>
 
-        {/* 播放/暂停 */}
         <button
+          type="button"
           className="mini-player__btn mini-player__btn--play"
           onClick={handlePlayPause}
           title={isPlaying ? '暂停' : '播放'}
@@ -242,15 +296,52 @@ function MiniPlayer() {
           }
         </button>
 
-        {/* 下一首 */}
-        <button className="mini-player__btn" onClick={nextTrack} title="下一首">
+        <button type="button" className="mini-player__btn" onClick={nextTrack} title="下一首">
           <IconNext width={16} height={16} />
         </button>
 
-        {/* 展开按钮 */}
+        <div className="mini-player__view-switcher" role="group" aria-label="迷你播放器视图">
+          <button
+            type="button"
+            className={`mini-player__view-btn ${miniView === 'default' ? 'mini-player__view-btn--active' : ''}`}
+            onClick={() => setMiniView('default')}
+            aria-label="歌曲视图"
+            aria-pressed={miniView === 'default'}
+            title="歌曲"
+          >
+            <IconMusic width={14} height={14} />
+          </button>
+          {featureFlags.lyrics && (
+            <button
+              type="button"
+              className={`mini-player__view-btn ${miniView === 'lyrics' ? 'mini-player__view-btn--active' : ''}`}
+              onClick={() => setMiniView('lyrics')}
+              aria-label="歌词视图"
+              aria-pressed={miniView === 'lyrics'}
+              title="歌词"
+            >
+              <IconLyrics width={14} height={14} />
+            </button>
+          )}
+          {featureFlags.queuePanel && (
+            <button
+              type="button"
+              className={`mini-player__view-btn ${miniView === 'queue' ? 'mini-player__view-btn--active' : ''}`}
+              onClick={() => setMiniView('queue')}
+              aria-label="队列视图"
+              aria-pressed={miniView === 'queue'}
+              title="队列"
+            >
+              <IconList width={14} height={14} />
+            </button>
+          )}
+        </div>
+
         <button
+          type="button"
           className="mini-player__btn"
           onClick={handleExpand}
+          aria-label="展开"
           title="展开"
         >
           <IconExpand width={14} height={14} />

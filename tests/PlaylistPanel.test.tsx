@@ -112,9 +112,10 @@ describe('PlaylistPanel', () => {
   })
 
   it('点击队列歌曲应该切换当前歌曲并记录播放', () => {
+    const originalPlaylist = [trackA, trackB]
     usePlayerStore.setState({
       currentTrack: trackA,
-      playlist: [trackA, trackB],
+      playlist: originalPlaylist,
     })
     render(<PlaylistPanel onClose={vi.fn()} />)
 
@@ -122,7 +123,11 @@ describe('PlaylistPanel', () => {
 
     expect(usePlayerStore.getState().currentTrack).toEqual(trackB)
     expect(usePlayerStore.getState().isPlaying).toBe(true)
+    expect(usePlayerStore.getState().playlist).toBe(originalPlaylist)
     expect(window.electronAPI.invoke).toHaveBeenCalledWith('songs:recordPlay', { songId: 2 })
     expect(window.electronAPI.invoke).toHaveBeenCalledWith('songs:updatePlayCount', { songId: 2 })
+    expect(vi.mocked(window.electronAPI.invoke).mock.calls.filter(
+      ([channel]) => channel === 'songs:recordPlay' || channel === 'songs:updatePlayCount',
+    )).toHaveLength(2)
   })
 })

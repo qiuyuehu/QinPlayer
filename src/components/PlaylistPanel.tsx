@@ -6,7 +6,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { usePlayerStore } from '../stores/playerStore'
-import { useUIStore } from '../stores/uiStore'
 import { formatTime } from '../utils/formatTime'
 import { IconMusic } from './Icons'
 import type { Track } from '../types'
@@ -19,9 +18,7 @@ function PlaylistPanel({ onClose }: PlaylistPanelProps) {
   const playlist = usePlayerStore((s) => s.playlist)
   const currentTrack = usePlayerStore((s) => s.currentTrack)
   const setPlaylist = usePlayerStore((s) => s.setPlaylist)
-  const setCurrentTrack = usePlayerStore((s) => s.setCurrentTrack)
-  const setPlaying = usePlayerStore((s) => s.setPlaying)
-  const featureFlags = useUIStore((s) => s.featureFlags)
+  const playTrack = usePlayerStore((s) => s.playTrack)
   const itemRefs = useRef<Map<number, HTMLButtonElement>>(new Map())
   const [brokenCoverIds, setBrokenCoverIds] = useState<Set<number>>(new Set())
 
@@ -61,16 +58,8 @@ function PlaylistPanel({ onClose }: PlaylistPanelProps) {
   }, [])
 
   const handlePlayTrack = useCallback((track: Track) => {
-    if (!featureFlags.playback) return
-
-    setCurrentTrack(track)
-    setPlaying(true)
-
-    if (featureFlags.recent) {
-      void window.electronAPI.invoke('songs:recordPlay', { songId: track.id })
-    }
-    void window.electronAPI.invoke('songs:updatePlayCount', { songId: track.id })
-  }, [featureFlags.playback, featureFlags.recent, setCurrentTrack, setPlaying])
+    playTrack(track)
+  }, [playTrack])
 
   const setItemRef = useCallback((trackId: number, element: HTMLButtonElement | null) => {
     if (element) {

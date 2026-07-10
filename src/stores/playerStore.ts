@@ -32,6 +32,7 @@ interface PlayerState {
   // --- actions ---
   setPlaying: (v: boolean) => void
   setCurrentTrack: (t: Track | null) => void
+  playTrack: (track: Track) => void
   setPlaylist: (list: Track[]) => void
   setVolume: (v: number) => void
   setPlayMode: (m: PlayMode) => void
@@ -82,6 +83,24 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     set({ currentTrack: t, duration: getTrackDuration(t) })
   },
 
+  // 用户主动播放歌曲的统一入口：原子更新状态并完成一次播放记账。
+  playTrack: (track) => {
+    const flags = useUIStore.getState().featureFlags
+    if (!flags.playback) return
+
+    resetTrackProgress()
+    set({
+      currentTrack: track,
+      duration: getTrackDuration(track),
+      isPlaying: true,
+    })
+
+    if (flags.recent) {
+      void window.electronAPI.invoke('songs:recordPlay', { songId: track.id })
+    }
+    void window.electronAPI.invoke('songs:updatePlayCount', { songId: track.id })
+  },
+
   setPlaylist: (list) => set({ playlist: list }),
 
   setVolume: (v) => {
@@ -117,24 +136,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         randomIndex = Math.floor(Math.random() * playlist.length)
       } while (randomIndex === currentIndex)
       const nextTrack = playlist[randomIndex]
-      resetTrackProgress()
-      set({ currentTrack: nextTrack, duration: getTrackDuration(nextTrack), isPlaying: true })
-      // 记录播放历史
-      if (flags.recent) {
-        window.electronAPI.invoke('songs:recordPlay', { songId: nextTrack.id })
-      }
-      window.electronAPI.invoke('songs:updatePlayCount', { songId: nextTrack.id })
+      get().playTrack(nextTrack)
     } else {
       // 顺序/单曲循环：取下一首索引，到末尾则回到第一首
       const nextIndex = (currentIndex + 1) % playlist.length
       const nextTrack = playlist[nextIndex]
-      resetTrackProgress()
-      set({ currentTrack: nextTrack, duration: getTrackDuration(nextTrack), isPlaying: true })
-      // 记录播放历史
-      if (flags.recent) {
-        window.electronAPI.invoke('songs:recordPlay', { songId: nextTrack.id })
-      }
-      window.electronAPI.invoke('songs:updatePlayCount', { songId: nextTrack.id })
+      get().playTrack(nextTrack)
     }
   },
 
@@ -154,24 +161,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         randomIndex = Math.floor(Math.random() * playlist.length)
       } while (randomIndex === currentIndex)
       const prevTrack = playlist[randomIndex]
-      resetTrackProgress()
-      set({ currentTrack: prevTrack, duration: getTrackDuration(prevTrack), isPlaying: true })
-      // 记录播放历史
-      if (flags.recent) {
-        window.electronAPI.invoke('songs:recordPlay', { songId: prevTrack.id })
-      }
-      window.electronAPI.invoke('songs:updatePlayCount', { songId: prevTrack.id })
+      get().playTrack(prevTrack)
     } else {
       // 顺序/单曲循环：取上一首索引，到开头则回到最后一首
       const prevIndex = (currentIndex - 1 + playlist.length) % playlist.length
       const prevTrack = playlist[prevIndex]
-      resetTrackProgress()
-      set({ currentTrack: prevTrack, duration: getTrackDuration(prevTrack), isPlaying: true })
-      // 记录播放历史
-      if (flags.recent) {
-        window.electronAPI.invoke('songs:recordPlay', { songId: prevTrack.id })
-      }
-      window.electronAPI.invoke('songs:updatePlayCount', { songId: prevTrack.id })
+      get().playTrack(prevTrack)
     }
   },
 }))

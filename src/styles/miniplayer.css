@@ -1,18 +1,21 @@
 /* ===========================================================================
-   迷你播放器样式
+   迷你播放器：固定内容区 + 公共工具栏
    =========================================================================== */
 
 .mini-player {
+  position: relative;
   width: 100%;
   height: 100%;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 34px;
+  gap: 4px;
+  padding: 8px;
+  overflow: hidden;
   background: var(--bg-primary);
-  display: flex;
-  flex-direction: column;
-  padding: 12px;
-  gap: 8px;
-  -webkit-app-region: drag;  /* 整个区域可拖拽 */
+  color: var(--text-primary);
+  -webkit-app-region: drag;
   user-select: none;
-  animation: miniFadeIn 0.2s ease;  /* 迷你模式切换淡入 */
+  animation: miniFadeIn 0.2s ease;
 }
 
 @keyframes miniFadeIn {
@@ -20,32 +23,54 @@
   to { opacity: 1; }
 }
 
-/* 顶部：封面 + 歌曲信息 */
+/* 内容区统一为固定壳层，视图切换不会改变外部尺寸。 */
+.mini-player__content {
+  min-width: 0;
+  min-height: 0;
+  padding-right: 28px;
+  overflow: hidden;
+}
+
+.mini-player__default-view {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 18px;
+  gap: 6px;
+}
+
+/* 默认视图：封面 + 歌曲信息 */
 .mini-player__header {
+  min-width: 0;
+  min-height: 0;
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
 .mini-player__cover {
-  width: 50px;
-  height: 50px;
-  border-radius: 4px;
+  width: 56px;
+  height: 56px;
+  flex: 0 0 56px;
   overflow: hidden;
-  flex-shrink: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  background: var(--bg-tertiary);
   -webkit-app-region: no-drag;
 }
 
 .mini-player__cover img {
   width: 100%;
   height: 100%;
+  display: block;
   object-fit: cover;
 }
 
 .mini-player__cover-placeholder {
   width: 100%;
   height: 100%;
-  background: var(--bg-tertiary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -56,130 +81,370 @@
 .mini-player__info {
   flex: 1;
   min-width: 0;
-  -webkit-app-region: no-drag;
+  padding-right: 4px;
+}
+
+.mini-player__title,
+.mini-player__artist {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mini-player__title {
+  color: var(--text-primary);
   font-size: 14px;
   font-weight: 600;
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 20px;
 }
 
 .mini-player__artist {
-  font-size: 11px;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   margin-top: 2px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 16px;
 }
 
+/* 关闭按钮固定在右上角，内容区为它预留了宽度。 */
 .mini-player__close-btn {
-  width: 24px;
-  height: 24px;
-  border: none;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 18px;
-  cursor: pointer;
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  width: 26px;
+  height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
+  border: 1px solid transparent;
   border-radius: 4px;
-  -webkit-app-region: no-drag;
-  transition: all 0.2s ease;
-  flex-shrink: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
 .mini-player__close-btn:hover {
-  background: var(--bg-tertiary);
+  border-color: var(--border-subtle);
+  background: var(--control-hover);
   color: var(--text-primary);
 }
 
-/* 中间：进度条 */
+/* 默认视图进度条 */
 .mini-player__progress-row {
+  min-width: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
-  -webkit-app-region: no-drag;
+  gap: 7px;
 }
 
 .mini-player__time {
-  font-size: 10px;
+  width: 30px;
+  flex: 0 0 30px;
   color: var(--text-muted);
-  min-width: 30px;
+  font-size: 10px;
+  line-height: 14px;
   text-align: center;
 }
 
 .mini-player__progress-bar {
-  flex: 1;
-  height: 4px;
-  background: var(--bg-tertiary);
-  border-radius: 2px;
   position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--progress-track);
   cursor: pointer;
 }
 
 .mini-player__progress-fill {
+  width: 0;
   height: 100%;
-  background: var(--accent);
   border-radius: 2px;
-  transition: width 0.1s linear;
+  background: var(--progress-fill);
 }
 
 .mini-player__progress-thumb {
   position: absolute;
   top: 50%;
-  transform: translate(-50%, -50%);
+  left: 0;
   width: 10px;
   height: 10px;
-  background: var(--accent);
   border-radius: 50%;
+  background: var(--accent);
   opacity: 0;
-  transition: opacity 0.2s ease;
+  transform: translate(-50%, -50%);
+  transition: opacity 0.15s ease;
 }
 
-.mini-player__progress-bar:hover .mini-player__progress-thumb {
+.mini-player__progress-bar:hover .mini-player__progress-thumb,
+.mini-player__progress-bar:focus-within .mini-player__progress-thumb {
   opacity: 1;
 }
 
-/* 底部：控制按钮 */
-.mini-player__controls {
+/* 歌词视图最多显示当前句和下一句，双语内容仍保持单行省略。 */
+.mini-lyrics-view {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  -webkit-app-region: no-drag;
+  overflow: hidden;
+  text-align: center;
 }
 
-.mini-player__btn {
-  width: 32px;
-  height: 32px;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
+.mini-lyrics-view--empty {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.mini-lyrics-view__line {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
   color: var(--text-secondary);
-  cursor: pointer;
+}
+
+.mini-lyrics-view__line--active {
+  color: var(--text-primary);
+}
+
+.mini-lyrics-view__text,
+.mini-lyrics-view__translation {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mini-lyrics-view__text {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 17px;
+}
+
+.mini-lyrics-view__line--active .mini-lyrics-view__text {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.mini-lyrics-view__translation {
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 13px;
+}
+
+/* 队列视图保持固定列宽，400×150 下可完整显示至少两项。 */
+.mini-queue-view {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+.mini-queue-view::-webkit-scrollbar {
+  width: 4px;
+}
+
+.mini-queue-view::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.mini-queue-view::-webkit-scrollbar-thumb {
+  border-radius: 2px;
+  background: var(--scrollbar-thumb);
+}
+
+.mini-queue-view--empty {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
-.mini-player__btn:hover {
+.mini-queue-view__item {
+  width: 100%;
+  height: 42px;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.mini-queue-view__item:hover {
+  background: var(--control-hover);
+}
+
+.mini-queue-view__item--active {
+  border-color: var(--border-subtle);
+  background: var(--accent-subtle);
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.08);
+}
+
+.mini-queue-view__cover {
+  width: 30px;
+  height: 30px;
+  display: block;
+  border-radius: 3px;
+  object-fit: cover;
+}
+
+.mini-queue-view__cover--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+}
+
+.mini-queue-view__info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.mini-queue-view__title,
+.mini-queue-view__artist {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mini-queue-view__title {
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 14px;
+}
+
+.mini-queue-view__artist,
+.mini-queue-view__duration {
+  color: var(--text-muted);
+  font-size: 9px;
+  line-height: 12px;
+}
+
+.mini-queue-view__duration {
+  width: 34px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* 公共工具栏在三种内容视图中保持同一位置。 */
+.mini-player__toolbar {
+  min-width: 0;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding-top: 1px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.mini-player__btn,
+.mini-player__view-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.mini-player__btn {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border-radius: 50%;
+}
+
+.mini-player__btn:hover,
+.mini-player__view-btn:hover {
+  background: var(--control-hover);
+  color: var(--text-primary);
 }
 
 .mini-player__btn--play {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
+  flex-basis: 32px;
   color: var(--text-primary);
 }
 
-.mini-player__btn--play:hover {
-  background: rgba(255, 255, 255, 0.12);
+.mini-player__view-switcher {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  padding: 1px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+}
+
+.mini-player__view-btn {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  border-radius: 3px;
+}
+
+.mini-player__view-btn--active {
+  border-color: var(--accent);
+  background: var(--control-active);
+  color: var(--accent);
+}
+
+/* Electron drag 区会吞掉点击，所有交互与滚动容器都必须显式退出。 */
+.mini-player button,
+.mini-player input[type="range"],
+.mini-player__progress-bar,
+.mini-queue-view,
+.mini-queue-view__item {
+  -webkit-app-region: no-drag;
+}
+
+.mini-player button:focus-visible,
+.mini-player__progress-bar:focus-visible,
+.mini-queue-view__item:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mini-player {
+    animation: none;
+  }
+
+  .mini-player__close-btn,
+  .mini-player__progress-thumb,
+  .mini-queue-view__item,
+  .mini-player__btn,
+  .mini-player__view-btn {
+    transition: none;
+  }
 }

@@ -2,15 +2,18 @@
  * playerStore 测试
  * 覆盖：nextTrack/prevTrack 切歌逻辑、播放模式循环、音量边界、togglePlayMode
  */
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { usePlayerStore, togglePlayMode } from '../src/stores/playerStore'
+import { useUIStore } from '../src/stores/uiStore'
 import { currentTimeRef } from '../src/utils/currentTimeRef'
+import { DEFAULT_FEATURE_FLAGS } from '../src/utils/featureFlags'
 import type { Track } from '../src/types'
 
 // 模拟 window.electronAPI（invoke 用于记录播放历史）
+const invokeMock = vi.fn(async () => null)
 window.electronAPI = {
   ...window.electronAPI,
-  invoke: async () => null,
+  invoke: invokeMock,
 }
 
 // 测试用歌曲数据
@@ -22,6 +25,9 @@ const songs: Track[] = [
 
 describe('playerStore', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
+    window.electronAPI.invoke = invokeMock
+    useUIStore.setState({ featureFlags: { ...DEFAULT_FEATURE_FLAGS } })
     // 重置 store 到初始状态
     usePlayerStore.setState({
       isPlaying: false,
@@ -35,6 +41,67 @@ describe('playerStore', () => {
       seekTime: null,
     })
     currentTimeRef.current = 0
+  })
+
+  // --- 统一播放入口 ---
+  describe('playTrack', () => {
+    it('播放歌曲时应该原子更新播放状态并重置时间', () => {
+      currentTimeRef.current = 123
+
+      usePlayerStore.getState().playTrack(songs[1])
+
+      expect(usePlayerStore.getState()).toMatchObject({
+        currentTrack: songs[1],
+        duration: songs[1].duration,
+        isPlaying: true,
+      })
+      expect(currentTimeRef.current).toBe(0)
+    })
+
+    it('播放歌曲且 recent=true 时应该各记录一次播放历史和次数', () => {
+      usePlayerStore.getState().playTrack(songs[1])
+
+      expect(invokeMock.mock.calls.filter(([channel]) => channel === 'songs:recordPlay')).toEqual([
+        ['songs:recordPlay', { songId: songs[1].id }],
+      ])
+      expect(invokeMock.mock.calls.filter(([channel]) => channel === 'songs:updatePlayCount')).toEqual([
+        ['songs:updatePlayCount', { songId: songs[1].id }],
+      ])
+    })
+
+    it('播放歌曲且 recent=false 时应该只更新播放次数', () => {
+      useUIStore.setState({
+        featureFlags: { ...DEFAULT_FEATURE_FLAGS, recent: false },
+      })
+
+      usePlayerStore.getState().playTrack(songs[1])
+
+      expect(invokeMock).not.toHaveBeenCalledWith('songs:recordPlay', { songId: songs[1].id })
+      expect(invokeMock).toHaveBeenCalledTimes(1)
+      expect(invokeMock).toHaveBeenCalledWith('songs:updatePlayCount', { songId: songs[1].id })
+    })
+
+    it('关闭播放功能时应该保持状态且不产生记账', () => {
+      useUIStore.setState({
+        featureFlags: { ...DEFAULT_FEATURE_FLAGS, playback: false },
+      })
+      usePlayerStore.setState({
+        currentTrack: songs[0],
+        duration: songs[0].duration,
+        isPlaying: false,
+      })
+      currentTimeRef.current = 88
+
+      usePlayerStore.getState().playTrack(songs[1])
+
+      expect(usePlayerStore.getState()).toMatchObject({
+        currentTrack: songs[0],
+        duration: songs[0].duration,
+        isPlaying: false,
+      })
+      expect(currentTimeRef.current).toBe(88)
+      expect(invokeMock).not.toHaveBeenCalled()
+    })
   })
 
   // --- 音量边界 ---

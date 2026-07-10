@@ -220,6 +220,16 @@ export function IconMusic({ width = 20, height = 20, className }: IconProps) {
   )
 }
 
+/** 歌词 */
+export function IconLyrics({ width = 20, height = 20, className }: IconProps) {
+  return (
+    <svg width={width} height={height} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M4 4h12v9H9l-3.5 3v-3H4V4z" />
+      <path d="M7 7h6M7 10h4" />
+    </svg>
+  )
+}
+
 /** 光盘（专辑） */
 export function IconDisc({ width = 20, height = 20, className }: IconProps) {
   return (

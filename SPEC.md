@@ -32,7 +32,7 @@ QinPlayer/
 │   │   ├── scan.ts                    # 音乐扫描 (255行)
 │   │   ├── eq.ts                      # 均衡器
 │   │   ├── settings.ts                # 设置
-│   │   ├── window.ts                  # 窗口控制 (229行)
+│   │   ├── window.ts                  # 窗口控制
 │   │   └── protocol.ts               # 协议处理
 │   ├── windowBounds.ts                # 窗口 bounds 持久化 (152行)
 │   └── workers/
@@ -44,9 +44,11 @@ QinPlayer/
 │   │
 │   ├── components/                    # 共享组件
 │   │   ├── PlayerBar.tsx              # 底部播放控制条 (379行)
-│   │   ├── SongList.tsx               # 歌曲列表（共享） (369行)
+│   │   ├── SongList.tsx               # 歌曲列表（共享）
 │   │   ├── LyricsPanel.tsx            # 歌词滚动面板 (121行)
-│   │   ├── MiniPlayer.tsx             # 迷你模式 (263行)
+│   │   ├── MiniPlayer.tsx             # 迷你模式三视图壳层
+│   │   ├── MiniLyricsView.tsx         # 迷你歌词紧凑视图
+│   │   ├── MiniQueueView.tsx          # 迷你队列紧凑视图
 │   │   ├── Equalizer.tsx              # 均衡器
 │   │   ├── Sidebar.tsx                # 侧边栏导航
 │   │   ├── TitleBar.tsx               # 标题栏
@@ -55,12 +57,12 @@ QinPlayer/
 │   │   ├── PlaylistPanel.tsx          # 播放队列面板
 │   │   ├── CreatePlaylistDialog.tsx   # 创建歌单弹窗
 │   │   ├── SongInfoDialog.tsx         # 歌曲信息弹窗
-│   │   ├── Icons.tsx                  # SVG 图标库 (273行)
+│   │   ├── Icons.tsx                  # SVG 图标库
 │   │   └── Equalizer.css              # 均衡器样式 (274行)
 │   │
 │   ├── pages/                         # 页面
 │   │   ├── LocalMusic.tsx             # 本地音乐 (192行)
-│   │   ├── Lyrics.tsx                 # 歌词页面 (474行)
+│   │   ├── Lyrics.tsx                 # 歌词页面
 │   │   ├── Albums.tsx                 # 专辑页面
 │   │   ├── Playlists.tsx              # 歌单页面 (337行)
 │   │   ├── RecentlyPlayed.tsx         # 最近播放
@@ -69,12 +71,13 @@ QinPlayer/
 │   │   └── Settings.tsx               # 设置页面 (495行)
 │   │
 │   ├── stores/                        # Zustand 状态管理
-│   │   ├── playerStore.ts             # 播放器状态 (280行)
+│   │   ├── playerStore.ts             # 播放器状态与统一播放入口
 │   │   ├── eqStore.ts                 # 均衡器状态 (198行)
 │   │   └── uiStore.ts                 # UI 状态
 │   │
 │   ├── hooks/                         # React Hooks
 │   │   ├── useAudioSync.ts            # 音频同步 (261行)
+│   │   ├── useTrackLyrics.ts          # 曲目歌词加载与竞态隔离
 │   │   └── useTheme.ts                # 主题切换
 │   │
 │   ├── utils/                         # 工具函数
@@ -98,7 +101,7 @@ QinPlayer/
 │   │   ├── songlist.css               # 歌曲列表 (191行)
 │   │   ├── sidebar.css                # 侧边栏
 │   │   ├── titlebar.css               # 标题栏
-│   │   ├── miniplayer.css             # 迷你模式 (184行)
+│   │   ├── miniplayer.css             # 迷你模式固定壳层与三视图
 │   │   ├── content.css                # 内容区
 │   │   ├── localmusic.css             # 本地音乐 (163行)
 │   │   ├── albums.css                 # 专辑页面
@@ -112,7 +115,7 @@ QinPlayer/
 │       ├── index.ts                   # 通用类型
 │       └── electron.d.ts              # Electron API 类型
 │
-├── tests/                             # 测试 (14 个测试文件)
+├── tests/                             # 测试 (19 个测试文件)
 │   ├── playerStore.test.ts
 │   ├── uiStore.test.ts
 │   ├── useAudioSync.test.tsx
@@ -123,6 +126,11 @@ QinPlayer/
 │   ├── Sidebar.test.tsx
 │   ├── PlayerBar.test.tsx
 │   ├── LyricsPanel.test.tsx
+│   ├── LyricsFullscreen.test.tsx
+│   ├── MiniPlayer.test.tsx
+│   ├── MiniLyricsView.test.tsx
+│   ├── MiniQueueView.test.tsx
+│   ├── useTrackLyrics.test.tsx
 │   ├── Playlists.test.tsx
 │   ├── PlaylistPanel.test.tsx
 │   ├── windowBounds.test.ts
@@ -186,8 +194,11 @@ QinPlayer/
 - 列表里每首歌旁心形按钮标记
 
 ### 迷你模式
-- 300×80 控制条：封面缩略图 + 歌曲名 + 上一首/播放/下一首
-- 主窗口按钮触发
+- 固定 `400×150` 壳层，歌曲、歌词、队列三种视图切换时不改变窗口尺寸或位置
+- 歌曲视图显示封面、歌名、歌手/专辑、进度与时长；歌词视图显示当前句和下一句；队列视图支持滚动、当前项定位与点击播放
+- 音量、上一首、播放/暂停、下一首、视图选择、展开和关闭位于三视图共用工具栏
+- `playback` 或 `miniMode` 关闭时不渲染；`lyrics` / `queuePanel` 关闭时隐藏对应入口，并从失效视图安全回退到歌曲视图
+- 主窗口按钮触发；进入前保存正常 bounds，退出时恢复，视图切换不发送窗口 IPC
 
 ### 系统托盘
 - 最小化到托盘继续播放
@@ -272,6 +283,83 @@ Apple Music 风，精致克制。
 
 ---
 
+## 架构总览
+
+### 运行时架构
+
+```
+┌─────────────────────────────────────────┐
+│            React Renderer               │
+│                                         │
+│  App → Sidebar / Content / PlayerBar    │
+│              ↓                          │
+│     Zustand Stores（3 个）              │
+│     playerStore / uiStore / eqStore     │
+│              ↓                          │
+│     useAudioSync（状态→引擎同步）       │
+│              ↓                          │
+│     AudioEngine（HTMLAudio + Web Audio）│
+│              ↓                          │
+│     Web Audio API（GainNode / EQ）      │
+└────────────────┬────────────────────────┘
+                 │ IPC（invoke / send / on）
+┌────────────────▼────────────────────────┐
+│         Electron Main Process           │
+│                                         │
+│  IPC Handlers（songs/playlists/settings）│
+│       ↓                                 │
+│  SQLite（better-sqlite3，同步 API）      │
+│  Window Bounds / Tray / Protocol        │
+│       ↓                                 │
+│  Scanner Worker（ID3 解析，不写库）      │
+└─────────────────────────────────────────┘
+```
+
+### 核心播放数据流
+
+```
+用户点击歌曲
+    ↓
+playerStore.playTrack()（原子更新曲目、时长、播放状态与播放记账）
+    ↓
+useAudioSync 监听 currentTrack 变化
+    ↓
+AudioEngine.load() → Web Audio API
+    ↓
+timeupdate 事件（250ms 节流）
+    ↓
+currentTimeRef（模块级 ref，不触发 re-render）
+    ├──→ RAF 循环 → PlayerBar 进度条 DOM 直接操作
+    └──→ RAF 循环 → 歌词索引二分查找 → LyricsPanel
+```
+
+### 状态所有权
+
+| 状态 | 唯一负责人 | 不允许谁管理 |
+|------|-----------|-------------|
+| 当前歌曲 | playerStore | React 局部 state |
+| 播放队列 | playerStore | AudioEngine 自行维护 |
+| 当前播放时间 | currentTimeRef | Zustand |
+| 播放/暂停 | playerStore.isPlaying | AudioEngine 内部状态 |
+| EQ 参数 | eqStore | UI 组件 |
+| 主题/迷你模式 | uiStore | playerStore |
+| 歌曲数据库 | 主进程 + SQLite | Renderer 直接操作 |
+| 音频播放 | AudioEngine 单例 | React 组件创建第二个实例 |
+| 歌词数据 | useTrackLyrics 的组件局部 state | playerStore |
+
+### 进程与模块边界
+
+```
+Renderer Components → 可依赖 → Stores / Hooks / Utils
+Stores → 可依赖 → 纯工具模块、类型
+AudioEngine ✗ 不依赖 React 组件 ✗ 不直接操作 UI
+Renderer ✗ 不直接访问 SQLite ✗ 不用 Node.js fs
+Worker ✗ 不直接写 SQLite ✓ 仅扫描+解析
+Main Process ✓ 负责 SQLite、文件系统、窗口、IPC
+```
+
+---
+
 ## 技术架构
 
 ### 核心播放引擎
@@ -314,7 +402,8 @@ Apple Music 风，精致克制。
 **进度条状态降级处理**
 
 - `currentTime`（当前播放秒数）不放入 Zustand 全局 Store
-- 在 PlayerBar 组件内部用 `useRef` + `<audio>` 的 `timeupdate` 事件直接更新 DOM
+- `useAudioSync` 监听 AudioEngine 的 `timeupdate` 事件（250ms 节流），写入模块级 `currentTimeRef`
+- RAF 循环读取 `currentTimeRef`，直接操作进度条 DOM + 歌词索引二分查找
 - Zustand 仅在用户主动拖拽进度条时，派发 Action 修改播放引擎时间
 
 ### 歌词滚动
@@ -385,8 +474,8 @@ Apple Music 风，精致克制。
 ## 测试覆盖
 
 - 框架：Vitest + @testing-library/react
-- 用例数：169 个（15 个测试文件）
-- 覆盖范围：formatTime、lrcParser、playerStore、uiStore、PlayerBar、LyricsPanel、LyricsFullscreen、SongList、featureFlags、Sidebar、useAudioSync、windowBounds、Harness checks
+- 用例数：207 个（19 个测试文件）
+- 覆盖范围：formatTime、lrcParser、playerStore、uiStore、PlayerBar、LyricsPanel、LyricsFullscreen、MiniPlayer、MiniLyricsView、MiniQueueView、SongList、PlaylistPanel、featureFlags、Sidebar、useAudioSync、useTrackLyrics、windowBounds、Harness checks
 - Feature Flags 消融验证：16 个 flag 逐个关闭不影响其他 flag
 
 ---

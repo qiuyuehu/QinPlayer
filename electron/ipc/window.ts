@@ -11,6 +11,9 @@ import { initDatabase, closeDatabase, getDatabase } from '../db/database'
 import { loadWindowBounds, loadWindowState, normalizeWindowBounds } from '../windowBounds'
 import type { FeatureFlags } from '../../src/types/ipc'
 
+const MINI_PLAYER_WIDTH = 400
+const MINI_PLAYER_HEIGHT = 150
+
 // ---------------------------------------------------------------------------
 // 注册窗口控制相关 IPC 通道
 // ---------------------------------------------------------------------------
@@ -192,9 +195,9 @@ export function registerWindowIPC(
         mainWindow.unmaximize()
       }
       mainWindow.setAlwaysOnTop(true, 'screen-saver')
-      mainWindow.setMinimumSize(350, 150)
+      mainWindow.setMinimumSize(MINI_PLAYER_WIDTH, MINI_PLAYER_HEIGHT)
       mainWindow.hide()
-      mainWindow.setSize(350, 150)
+      mainWindow.setSize(MINI_PLAYER_WIDTH, MINI_PLAYER_HEIGHT)
       mainWindow.show()
     } else {
       // 退出迷你模式时按 feature flag 恢复正常窗口 bounds。

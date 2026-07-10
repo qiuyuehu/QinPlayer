@@ -17,7 +17,8 @@ import { usePlayerStore, togglePlayMode } from '../stores/playerStore'
 import { useUIStore } from '../stores/uiStore'
 import { currentTimeRef } from '../utils/currentTimeRef'
 import LyricsPanel from '../components/LyricsPanel'
-import { parseLrc } from '../utils/lrcParser'
+import { useTrackLyrics } from '../hooks/useTrackLyrics'
+import { findCurrentLyricIndex } from '../utils/lrcParser'
 import { extractMainColor } from '../utils/colorExtract'
 import type { LyricLine } from '../types'
 import {
@@ -48,11 +49,7 @@ function Lyrics() {
   const featureFlags = useUIStore((s) => s.featureFlags)
 
   // --- 歌词状态 ---
-  const [lyricsData, setLyricsData] = useState<{
-    trackId: number | null
-    lines: LyricLine[]
-  }>({ trackId: null, lines: [] })
-  const lyrics = lyricsData.trackId === currentTrack?.id ? lyricsData.lines : []
+  const lyrics = useTrackLyrics(currentTrack)
   const [bgColor, setBgColor] = useState('')
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isPinned, setIsPinned] = useState(false)
@@ -73,11 +70,15 @@ function Lyrics() {
   // --- 歌词面板用的 currentIndex（只在行索引变化时才更新，避免高频 re-render） ---
   const [lyricsCurrentIndex, setLyricsCurrentIndex] = useState(-1)
   const lyricsRef = useRef<LyricLine[]>([])
-  const lrcRequestRef = useRef(0)
+  const colorRequestRef = useRef(0)
   const lyricOffsetRef = useRef(0)
 
   // 同步 lyrics 和 lyricOffset 到 ref（供 RAF 使用）
-  useEffect(() => { lyricsRef.current = lyrics }, [lyrics])
+  useEffect(() => {
+    lyricsRef.current = lyrics
+    if (lyrics.length === 0) setLyricsCurrentIndex(-1)
+  }, [lyrics])
+  useEffect(() => { setLyricsCurrentIndex(-1) }, [currentTrack?.id, currentTrack?.filePath])
   useEffect(() => { lyricOffsetRef.current = lyricOffset }, [lyricOffset])
 
   // ---------------------------------------------------------------------------
@@ -149,54 +150,36 @@ function Lyrics() {
   }, [])
 
   // ---------------------------------------------------------------------------
-  // 切歌时加载 .lrc 文件
+  // 切歌时提取封面主色；歌词读取由 useTrackLyrics 统一负责。
   // ---------------------------------------------------------------------------
   useEffect(() => {
-    const requestId = ++lrcRequestRef.current
+    const requestId = ++colorRequestRef.current
+    let active = true
 
     if (!currentTrack) {
-      setLyricsData({ trackId: null, lines: [] })
-      setLyricsCurrentIndex(-1)
-      return
+      setBgColor('')
+      return () => {
+        active = false
+        if (colorRequestRef.current === requestId) colorRequestRef.current++
+      }
     }
-
-    // 立即清空旧歌词，避免切歌时闪显上一首歌词。
-    setLyricsData({ trackId: currentTrack.id, lines: [] })
-    setLyricsCurrentIndex(-1)
-
-    // .lrc 文件路径：与音频文件同目录同名
-    const audioPath = currentTrack.filePath
-    const lrcPath = audioPath.replace(/\.[^.]+$/, '.lrc')
-
-    // 通过 IPC 读取 .lrc 文件内容
-    window.electronAPI.invoke('read-lrc-file', lrcPath)
-      .then((content: string | null) => {
-        if (requestId !== lrcRequestRef.current) return
-
-        if (content) {
-          const parsed = parseLrc(content)
-          setLyricsData({ trackId: currentTrack.id, lines: parsed })
-          console.log('[Lyrics] 歌词加载成功，共', parsed.length, '行')
-        } else {
-          setLyricsData({ trackId: currentTrack.id, lines: [] })
-        }
-      })
-      .catch(() => {
-        if (requestId !== lrcRequestRef.current) return
-        setLyricsData({ trackId: currentTrack.id, lines: [] })
-      })
 
     // 提取封面主色作为背景（⚠️ 暗礁 2：50x50 Canvas 采样）
     if (currentTrack.coverPath) {
       const coverUrl = window.electronAPI.getCoverUrl(currentTrack.coverPath)
       extractMainColor(coverUrl).then((color) => {
-        if (requestId !== lrcRequestRef.current) return
+        if (!active || requestId !== colorRequestRef.current) return
         setBgColor(color)
       })
     } else {
       setBgColor('')
     }
-  }, [currentTrack])
+
+    return () => {
+      active = false
+      if (colorRequestRef.current === requestId) colorRequestRef.current++
+    }
+  }, [currentTrack?.id, currentTrack?.coverPath])
 
   // ---------------------------------------------------------------------------
   // 进度条拖拽逻辑
@@ -291,23 +274,10 @@ function Lyrics() {
       // 歌词索引：只在行索引变化时才 setState（避免每 100ms re-render）
       const currentLyrics = lyricsRef.current
       const offset = lyricOffsetRef.current
-      if (currentLyrics.length > 0) {
-        const adjustedTime = time + offset
-        // 二分查找当前行索引
-        let left = 0, right = currentLyrics.length - 1, result = -1
-        while (left <= right) {
-          const mid = Math.floor((left + right) / 2)
-          if (currentLyrics[mid].time <= adjustedTime) {
-            result = mid
-            left = mid + 1
-          } else {
-            right = mid - 1
-          }
-        }
-        if (result !== lastLyricsIndex) {
-          lastLyricsIndex = result
-          setLyricsCurrentIndex(result)
-        }
+      const result = findCurrentLyricIndex(currentLyrics, time + offset)
+      if (result !== lastLyricsIndex) {
+        lastLyricsIndex = result
+        setLyricsCurrentIndex(result)
       }
 
       rafId = requestAnimationFrame(update)

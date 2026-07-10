@@ -124,7 +124,25 @@ describe('SongList', () => {
     fireEvent.doubleClick(screen.getByText('晴天'))
 
     expect(usePlayerStore.getState().currentTrack).toBeNull()
+    expect(usePlayerStore.getState().playlist).toEqual([])
+    expect(invokeMock).not.toHaveBeenCalledWith('songs:recordPlay', { songId: 1 })
     expect(invokeMock).not.toHaveBeenCalledWith('songs:updatePlayCount', { songId: 1 })
+  })
+
+  it('双击歌曲时应该设置来源列表并且只产生一组播放记账', () => {
+    render(<SongList tracks={tracks} />)
+
+    fireEvent.doubleClick(screen.getByText('晴天'))
+
+    expect(usePlayerStore.getState().playlist).toEqual(tracks)
+    expect(usePlayerStore.getState().currentTrack).toEqual(tracks[0])
+    expect(usePlayerStore.getState().isPlaying).toBe(true)
+    expect(invokeMock.mock.calls.filter(([channel]) => channel === 'songs:recordPlay')).toEqual([
+      ['songs:recordPlay', { songId: 1 }],
+    ])
+    expect(invokeMock.mock.calls.filter(([channel]) => channel === 'songs:updatePlayCount')).toEqual([
+      ['songs:updatePlayCount', { songId: 1 }],
+    ])
   })
 
   it('playlists=false 时右键菜单不显示添加到歌单', async () => {
