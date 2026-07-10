@@ -90,7 +90,7 @@ export function registerWindowIPC(
 
       const fs = require('fs') as typeof import('fs')
       const dbPath = join(app.getPath('userData'), 'qinplayer.db')
-      fs.copyFileSync(dbPath, result.filePath)
+      await fs.promises.copyFile(dbPath, result.filePath)
 
       console.log('[备份] 导出成功:', result.filePath)
       return { success: true, path: result.filePath }
@@ -114,7 +114,7 @@ export function registerWindowIPC(
 
   // 导入数据库备份（第二步：替换并重启）
   // 关闭当前数据库 → 替换 .db 文件 → 重启应用
-  ipcMain.handle('db:import-apply', (_event, backupPath: string) => {
+  ipcMain.handle('db:import-apply', async (_event, backupPath: string) => {
     const mainWindow = getMainWindow()
     try {
       const fs = require('fs') as typeof import('fs')
@@ -124,7 +124,7 @@ export function registerWindowIPC(
       closeDatabase()
 
       // 用备份文件替换当前数据库
-      fs.copyFileSync(backupPath, dbPath)
+      await fs.promises.copyFile(backupPath, dbPath)
 
       // 删除 WAL 和 SHM 残留文件（旧数据库的，防止恢复后数据混乱）
       const walPath = dbPath + '-wal'
@@ -133,7 +133,7 @@ export function registerWindowIPC(
       try { if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath) } catch { /* 忽略 */ }
 
       // 重新初始化数据库连接
-      initDatabase()
+      await initDatabase()
 
       console.log('[备份] 导入成功，正在重启...')
 

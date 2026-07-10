@@ -9,7 +9,7 @@
 import Database from 'better-sqlite3'
 import { app } from 'electron'
 import { join } from 'path'
-import { mkdirSync } from 'fs'
+import { mkdir } from 'fs/promises'
 
 // ---------------------------------------------------------------------------
 // 数据库实例（模块级单例）
@@ -26,7 +26,7 @@ let db: Database.Database | null = null
  *
  * 必须在 app.whenReady() 之后调用
  */
-export function initDatabase(): Database.Database {
+export async function initDatabase(): Promise<Database.Database> {
   // 数据库存储在 userData 目录（Windows: AppData/Roaming/QinPlayer）
   // 绝对不能存项目目录，否则应用更新会丢失用户数据
   const dbPath = join(app.getPath('userData'), 'qinplayer.db')
@@ -47,7 +47,7 @@ export function initDatabase(): Database.Database {
 
     // 创建封面缓存目录
     const coversDir = join(app.getPath('userData'), 'covers')
-    mkdirSync(coversDir, { recursive: true })
+    await mkdir(coversDir, { recursive: true })
     console.log('[Database] 封面缓存目录:', coversDir)
 
     return db

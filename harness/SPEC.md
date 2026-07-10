@@ -11,8 +11,18 @@ harness/
 ├── CONSTRAINTS.md        ← 代码约束（怎么写）
 ├── DECISIONS.md          ← 决策记录（为什么这么写）
 ├── TEST_CONVENTIONS.md   ← 测试规范（怎么测）
-└── SPEC.md               ← 本文件（Harness 工程规范）
+├── SPEC.md               ← 本文件（Harness 工程规范）
+├── checks.js             ← 自动约束检查脚本
+└── checks-whitelist.json ← 历史违规精确白名单
 ```
+
+---
+
+## 自动门禁
+
+- `node harness/checks.js`：单独运行 AST 约束检查
+- `npm test`：通过 `pretest` 自动先运行约束检查，再执行 Vitest
+- `npm run verify`：依次运行约束检查、生产构建和全量测试
 
 ---
 

@@ -1,6 +1,6 @@
 # QinPlayer — 纯本地音乐播放器
 
-> 基于源码分析更新至：2026-07-09
+> 基于源码分析更新至：2026-07-10
 
 ---
 
@@ -112,7 +112,7 @@ QinPlayer/
 │       ├── index.ts                   # 通用类型
 │       └── electron.d.ts              # Electron API 类型
 │
-├── tests/                             # 测试 (12 个文件)
+├── tests/                             # 测试 (14 个测试文件)
 │   ├── playerStore.test.ts
 │   ├── uiStore.test.ts
 │   ├── useAudioSync.test.tsx
@@ -122,9 +122,11 @@ QinPlayer/
 │   ├── SongList.test.tsx
 │   ├── Sidebar.test.tsx
 │   ├── PlayerBar.test.tsx
+│   ├── LyricsPanel.test.tsx
 │   ├── Playlists.test.tsx
-│   └── PlaylistPanel.test.tsx
-│   └── windowBounds.test.ts
+│   ├── PlaylistPanel.test.tsx
+│   ├── windowBounds.test.ts
+│   └── harnessChecks.test.ts
 │
 ├── harness/                           # AI 工程约束
 │   ├── SPEC.md
@@ -315,10 +317,10 @@ Apple Music 风，精致克制。
 - 在 PlayerBar 组件内部用 `useRef` + `<audio>` 的 `timeupdate` 事件直接更新 DOM
 - Zustand 仅在用户主动拖拽进度条时，派发 Action 修改播放引擎时间
 
-### 歌词滚动硬件加速
+### 歌词滚动
 
-- 歌词滚动容器禁止使用 `top` / `scrollTop`（易掉帧）
-- 使用 CSS `transform: translateY()` + `will-change: transform` 开启 GPU 硬件加速
+- 普通行切换使用 `scrollTo()` + `behavior: 'smooth'` 平滑滚动
+- 切歌或大跨度跳转使用 `behavior: 'auto'` 立即定位，并隐藏原生滚动条
 
 ### 歌曲列表表头对齐
 
@@ -383,8 +385,8 @@ Apple Music 风，精致克制。
 ## 测试覆盖
 
 - 框架：Vitest + @testing-library/react
-- 用例数：133 个（11 个测试文件）
-- 覆盖范围：formatTime、lrcParser、playerStore、uiStore、PlayerBar、SongList、featureFlags、Sidebar、useAudioSync
+- 用例数：158 个（14 个测试文件）
+- 覆盖范围：formatTime、lrcParser、playerStore、uiStore、PlayerBar、LyricsPanel、SongList、featureFlags、Sidebar、useAudioSync、windowBounds、Harness checks
 - Feature Flags 消融验证：16 个 flag 逐个关闭不影响其他 flag
 
 ---
@@ -406,9 +408,11 @@ Apple Music 风，精致克制。
 ```
 harness/
 ├── CONSTRAINTS.md        ← 代码约束（10 大类，200 行）
-├── DECISIONS.md          ← 决策记录（10 条）
+├── DECISIONS.md          ← 决策记录（11 条）
 ├── TEST_CONVENTIONS.md   ← 测试规范
-└── SPEC.md               ← Harness 工程规范
+├── SPEC.md               ← Harness 工程规范
+├── checks.js             ← AST 自动约束检查
+└── checks-whitelist.json ← 历史违规精确白名单
 ```
 
 详见 `harness/CONSTRAINTS.md`。

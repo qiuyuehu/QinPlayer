@@ -61,14 +61,17 @@ describe('LRC 歌词解析器', () => {
 ## 四、运行方式
 
 ```bash
-# 运行全部测试
-vitest run
+# 标准入口：先运行 Harness 约束检查，再运行全部测试
+npm test
 
-# 监听模式
-vitest
+# 完整验证：约束检查 + 生产构建 + 全量测试
+npm run verify
 
-# 运行指定文件
-vitest run tests/lrcParser.test.ts
+# 定向调试（会绕过 pretest，最终验收前仍需运行 npm test）
+npx vitest run tests/lrcParser.test.ts
+
+# 监听模式（会绕过 pretest）
+npm run test:watch
 ```
 
 ---

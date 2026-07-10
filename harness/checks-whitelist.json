@@ -1,0 +1,29 @@
+{
+  "no-sync-io": [
+    {
+      "file": "electron/main.ts",
+      "pattern": "require('fs').existsSync(iconPath)",
+      "reason": "开发调试时输出图标路径是否存在"
+    },
+    {
+      "file": "electron/ipc/window.ts",
+      "pattern": "fs.existsSync(walPath)",
+      "reason": "导入数据库后清理历史 WAL 文件"
+    },
+    {
+      "file": "electron/ipc/window.ts",
+      "pattern": "fs.unlinkSync(walPath)",
+      "reason": "导入数据库后清理历史 WAL 文件"
+    },
+    {
+      "file": "electron/ipc/window.ts",
+      "pattern": "fs.existsSync(shmPath)",
+      "reason": "导入数据库后清理历史 SHM 文件"
+    },
+    {
+      "file": "electron/ipc/window.ts",
+      "pattern": "fs.unlinkSync(shmPath)",
+      "reason": "导入数据库后清理历史 SHM 文件"
+    }
+  ]
+}

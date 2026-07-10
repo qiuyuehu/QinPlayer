@@ -9,8 +9,10 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "dist": "electron-vite build && electron-builder --win",
+    "pretest": "node harness/checks.js",
     "test": "vitest run",
     "test:watch": "vitest",
+    "verify": "node harness/checks.js && npm run build && npm test",
     "postinstall": "electron-rebuild"
   },
   "build": {

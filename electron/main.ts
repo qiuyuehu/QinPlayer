@@ -246,7 +246,7 @@ function createWindow(flags: FeatureFlags): void {
 
 app.whenReady().then(async () => {
   // 1. 初始化数据库（最先，其他模块可能依赖数据库）
-  initDatabase()
+  await initDatabase()
 
   // 1.1 读取功能开关（必须早于窗口、托盘和渲染进程水合）
   const featureFlags = await loadFeatureFlags()

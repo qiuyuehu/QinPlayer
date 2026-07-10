@@ -68,7 +68,7 @@
 ### 架构红线
 - `currentTime`（播放秒数）不放入 Zustand 全局 Store（高频 ~4次/秒，会导致全量 re-render）
 - `scanProgress` 也不放 Zustand（临时状态，扫描结束就不需要了，用组件内部 useState）
-- 歌词滚动禁止 `top`/`scrollTop`，必须用 `transform: translateY()` + `will-change: transform`
+- 歌词滚动使用 `scrollTo()` + `behavior: 'smooth'`（普通滚动）或 `behavior: 'auto'`（切歌跳转），隐藏原生滚动条
 - 表头放在滚动容器内部，用 `position: sticky; top: 0`
 - 窗口关闭最小化到托盘，不退出应用
 
@@ -139,7 +139,7 @@
 ### 文件规范
 - 测试文件名：`*.test.ts` 或 `*.test.tsx`
 - 测试目录：`tests/`
-- 运行命令：`vitest run`
+- 标准运行命令：`npm test`（自动先执行 Harness 约束检查）
 
 ### 验收标准
 - 全量测试通过（0 失败）
@@ -163,9 +163,9 @@
 4. 保持代码可读性
 
 ### 改动后
-1. 运行测试：`vitest run`
-2. 确保 0 失败
-3. 语法检查：`npx tsc --noEmit`
+1. 语法检查：`npx tsc --noEmit`
+2. 完整验证：`npm run verify`
+3. 确保约束检查、构建和测试全部 0 失败
 4. 等主人验证后再打包
 
 ---
