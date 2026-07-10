@@ -10,6 +10,7 @@ window.electronAPI = {
   minimize: () => {},
   maximize: () => {},
   close: () => {},
+  setAlwaysOnTop: () => {},
   getFeatureFlags: async () => ({
     playback: true,
     equalizer: true,
@@ -31,4 +32,11 @@ window.electronAPI = {
   invoke: async () => null,
   send: () => {},
   on: () => () => {},
+}
+
+// 歌词页依赖 RAF 驱动进度；单元测试只需稳定的调度 ID，不执行循环回调。
+if (!globalThis.requestAnimationFrame) {
+  let rafId = 0
+  globalThis.requestAnimationFrame = (_cb: FrameRequestCallback) => ++rafId
+  globalThis.cancelAnimationFrame = (_id: number) => {}
 }

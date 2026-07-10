@@ -48,7 +48,11 @@ function Lyrics() {
   const featureFlags = useUIStore((s) => s.featureFlags)
 
   // --- 歌词状态 ---
-  const [lyrics, setLyrics] = useState<LyricLine[]>([])
+  const [lyricsData, setLyricsData] = useState<{
+    trackId: number | null
+    lines: LyricLine[]
+  }>({ trackId: null, lines: [] })
+  const lyrics = lyricsData.trackId === currentTrack?.id ? lyricsData.lines : []
   const [bgColor, setBgColor] = useState('')
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isPinned, setIsPinned] = useState(false)
@@ -69,6 +73,7 @@ function Lyrics() {
   // --- 歌词面板用的 currentIndex（只在行索引变化时才更新，避免高频 re-render） ---
   const [lyricsCurrentIndex, setLyricsCurrentIndex] = useState(-1)
   const lyricsRef = useRef<LyricLine[]>([])
+  const lrcRequestRef = useRef(0)
   const lyricOffsetRef = useRef(0)
 
   // 同步 lyrics 和 lyricOffset 到 ref（供 RAF 使用）
@@ -147,14 +152,16 @@ function Lyrics() {
   // 切歌时加载 .lrc 文件
   // ---------------------------------------------------------------------------
   useEffect(() => {
+    const requestId = ++lrcRequestRef.current
+
     if (!currentTrack) {
-      setLyrics([])
+      setLyricsData({ trackId: null, lines: [] })
       setLyricsCurrentIndex(-1)
       return
     }
 
     // 立即清空旧歌词，避免切歌时闪显上一首歌词。
-    setLyrics([])
+    setLyricsData({ trackId: currentTrack.id, lines: [] })
     setLyricsCurrentIndex(-1)
 
     // .lrc 文件路径：与音频文件同目录同名
@@ -164,22 +171,26 @@ function Lyrics() {
     // 通过 IPC 读取 .lrc 文件内容
     window.electronAPI.invoke('read-lrc-file', lrcPath)
       .then((content: string | null) => {
+        if (requestId !== lrcRequestRef.current) return
+
         if (content) {
           const parsed = parseLrc(content)
-          setLyrics(parsed)
+          setLyricsData({ trackId: currentTrack.id, lines: parsed })
           console.log('[Lyrics] 歌词加载成功，共', parsed.length, '行')
         } else {
-          setLyrics([])
+          setLyricsData({ trackId: currentTrack.id, lines: [] })
         }
       })
       .catch(() => {
-        setLyrics([])
+        if (requestId !== lrcRequestRef.current) return
+        setLyricsData({ trackId: currentTrack.id, lines: [] })
       })
 
     // 提取封面主色作为背景（⚠️ 暗礁 2：50x50 Canvas 采样）
     if (currentTrack.coverPath) {
       const coverUrl = window.electronAPI.getCoverUrl(currentTrack.coverPath)
       extractMainColor(coverUrl).then((color) => {
+        if (requestId !== lrcRequestRef.current) return
         setBgColor(color)
       })
     } else {
@@ -468,6 +479,7 @@ function Lyrics() {
       {/* 右侧：歌词滚动面板 */}
       <div className="lyrics-page__right">
         <LyricsPanel
+          key={currentTrack?.id ?? 'no-track'}
           lyrics={lyrics}
           currentIndex={lyricsCurrentIndex}
           onLineClick={(time) => setSeekTime(time)}
