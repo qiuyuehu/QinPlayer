@@ -1,60 +1,59 @@
-# Harness 补全方案（checks.js + npm run verify）
-
-> 创建：2026-07-10
-> 修订：2026-07-10（Codex 审核后重写）
-> 状态：待确认
-
----
+# Codex 任务包：Harness 补全（checks.js + npm run verify）
 
 ## 背景
+- QinPlayer 的 harness/ 只有规范文档，没有可执行的约束检查脚本
+- 当前"Harness 约束检查"只能人工核对，无法自动化阻断违规
+- 方案已经过 3 轮审查，文档状态已就绪
 
-QinPlayer 的 `harness/` 只有四份规范文档（CONSTRAINTS.md、DECISIONS.md、TEST_CONVENTIONS.md、SPEC.md），没有可执行的约束检查脚本。当前"Harness 约束检查"只能人工核对，无法自动化阻断违规。
+## 目标
+- 新建 `harness/checks.js`，自动检查明确的永久约束违规
+- 新建 `harness/checks-whitelist.json`，标记历史遗留问题
+- 新增 `npm run verify` 脚本（约束检查 + 构建 + 测试）
+- 新增 `pretest` hook，防止直接 `npm test` 绕过检查
+- 新建 `tests/harnessChecks.test.ts`，确保检查器本身正确工作
+- 更新 CONSTRAINTS.md、SPEC.md、DECISIONS.md、harness/SPEC.md
 
-## 问题
+## 非目标
+- 不引入新依赖（使用 TypeScript Compiler API）
+- 不新建 runner.js（npm test 已由 Vitest 充当统一测试入口）
+- 不实现 CI/pre-commit hook（本方案暂不涉及）
 
-1. **缺少自动约束检查** — 约束文档定义了永久性规则，但没有代码强制执行
-2. **历史矛盾** — CONSTRAINTS.md 要求歌词滚动用 `transform: translateY()`，但实际调用 `scrollTo()`（主人决定：更新文档，保留当前实现）
-3. **runner.js 不必要** — `npm test` 已由 Vitest 充当统一测试入口，不需要重复造 runner
-4. **verify 可被绕过** — 直接 `npm test` 可以跳过约束检查，需要增加 pretest hook
+## 相关文件
+- `docs/plans/PLAN-harness-checks.md`（已确认方案）
+- `harness/CONSTRAINTS.md`
+- `harness/DECISIONS.md`
+- `harness/SPEC.md`
+- `harness/TEST_CONVENTIONS.md`
+- `SPEC.md`
+- `tsconfig.node.json`
+- `tsconfig.web.json`
+- `package.json`
+- `electron/main.ts`
+- `electron/ipc/window.ts`
+- `electron/workers/scanner.ts`
+- `src/utils/AudioEngine.ts`
 
-## 方案
-
-新增 `harness/checks.js`，在测试之前自动检查明确的永久约束违规。使用 TypeScript Compiler API 做 AST 检查，不增加依赖。
-
----
+## 约束
+- 不引入新依赖
+- 不修改 `tsconfig.json`、`tsconfig.node.json`、`tsconfig.web.json`
+- 不删除现有测试用例
+- 遵守 harness 约束（中文注释、禁止 any、测试独立）
 
 ## 当前代码检查结果
 
 | 检查项 | 现状 | 处理方式 |
 |--------|------|----------|
-| 主进程同步 I/O | 5 处同步调用：`existsSync` 3 处（main.ts 调试用，window.ts 清理 WAL）、`unlinkSync` 2 处（window.ts 清理 WAL） | 白名单标记 |
-| Worker 写 SQLite | 无违规 | 检查项保留，预防未来误用 |
-| currentTime 放 Zustand | 无违规（用 ref + RAF） | 检查项保留，预防未来误用 |
-| 裸字符串 IPC | 本轮未检查，存在历史类型覆盖缺口（preload.ts 有不在 IpcChannels 中的通道） | P2 后续实现，需比较 preload 白名单、ipcMain 注册和 IPC 类型映射 |
-| any 类型 | 2 处 `as any`（AudioEngine.ts 的 setSinkId，合理使用） | 白名单标记 |
+| 主进程同步 I/O | 5 处同步调用 | 白名单标记 |
+| Worker 写 SQLite | 无违规 | 检查项保留 |
+| currentTime 放 Zustand | 无违规 | 检查项保留 |
+| 裸字符串 IPC | 本轮未检查 | P2 后续实现 |
+| any 类型 | 2 处 `as any` | P2 后续实现 |
 
----
+## 需要 Codex 做什么
 
-## 改动范围
+### Task 1: 新建 harness/checks.js
 
-| 文件 | 改动 |
-|------|------|
-| `harness/checks.js` | **新建**，约束检查脚本（导出 `runChecks()`，CLI 入口只设置 `process.exitCode`） |
-| `harness/checks-whitelist.json` | **新建**，历史遗留问题白名单 |
-| `package.json` | 新增 `verify` 脚本（`node harness/checks.js && npm run build && npm test`）、修改 `pretest`（`node harness/checks.js`） |
-| `harness/CONSTRAINTS.md` | 更新歌词滚动方式（删除 scrollTo 禁令） |
-| `SPEC.md` | 更新歌词滚动方式、同步更新 DECISIONS |
-| `harness/DECISIONS.md` | 追加"旧决策已被替代"记录 |
-| `harness/SPEC.md` | 补上新增脚本结构 |
-| `tests/harnessChecks.test.ts` | **新建**，检查器测试 |
-
----
-
-## Task 1: 新建 harness/checks.js
-
-**目标：** 自动检查明确的永久约束违规
-
-**文件格式：** JavaScript（Node.js 脚本，不需要编译，直接 `node harness/checks.js` 运行）
+**文件格式：** JavaScript（Node.js 脚本，直接 `node harness/checks.js` 运行）
 
 **架构：**
 - 导出 `runChecks()` 函数（供测试调用），接口定义：
@@ -79,26 +78,18 @@ QinPlayer 的 `harness/` 只有四份规范文档（CONSTRAINTS.md、DECISIONS.m
 **tsconfig 处理：**
 - 根 `tsconfig.json` 是 `files: []` 加项目引用，不能直接解析
 - 必须读取 `tsconfig.node.json` 和 `tsconfig.web.json`，合并扫描
+- 扫描文件数为 0 时退出码 1（防止假绿）
 
 **检查项（AST 级别，P0 必须实现）：**
 
 1. **主进程禁止同步 I/O** — 追踪来自 `fs`/`node:fs` 的所有 `*Sync` 调用（包括 `readdirSync`、`statSync`、`readFileSync`、`writeFileSync`、`existsSync`、`unlinkSync`、`renameSync` 等），支持命名导入、别名导入、namespace import 和 `require('fs')`
 2. **Worker 禁止导入数据库模块** — 检查 `electron/workers/` 目录下是否导入 `better-sqlite3`、`electron/db/database` 等数据库模块（比检测调用更可靠）
 
-**检查项（AST 级别，P1 后续补充）：**
-
-3. **currentTime 不放 Zustand** — 检查 `src/stores/` 目录下是否有 `currentTime` 字段定义
-
-**检查项（文本级别，P2 后续补充）：**
-
-4. **禁止裸字符串 IPC** — 检查 `src/` 下是否有 `ipcRenderer.invoke('` 但不在 `src/types/ipc.ts` 定义的通道名
-5. **禁止 any 类型** — 检查 `src/` 和 `electron/` 下是否有 `: any` 或 `as any`（排除注释和测试）
-
 **白名单机制：**
 
 白名单按 `rule + file + AST 表达式/规范化源码` 匹配，不按行号（行号会漂移）。
 
-对历史遗留问题提供 `harness/checks-whitelist.json`（不需要 gitignore，提交到仓库），格式：
+新建 `harness/checks-whitelist.json`，格式：
 ```json
 {
   "no-sync-io": [
@@ -111,24 +102,13 @@ QinPlayer 的 `harness/` 只有四份规范文档（CONSTRAINTS.md、DECISIONS.m
 }
 ```
 
-> no-any 规则是 P2 后续实现，当前版本不加入白名单。等规则实现时再添加豁免。
-
 白名单规则：
 - 每条必须附带 `pattern`（AST 表达式或规范化源码）和 `reason`
 - 新代码不允许加入白名单（必须修复）
 - 白名单变更需要主人确认
 - 每个白名单条目必须实际消费一个违规；失效或多余白名单也要报错
 
-**完成标准：**
-- [ ] `node harness/checks.js` 运行无报错
-- [ ] 当前代码通过（白名单标记已知违规）
-- [ ] 扫描文件数为 0 时退出码 1
-
----
-
-## Task 2: npm 脚本
-
-**目标：** 统一验证入口，先检查约束再跑测试；防止直接 `npm test` 绕过检查
+### Task 2: npm 脚本
 
 **package.json 脚本：**
 ```json
@@ -145,18 +125,8 @@ QinPlayer 的 `harness/` 只有四份规范文档（CONSTRAINTS.md、DECISIONS.m
 
 **门禁范围说明：**
 - `pretest` 只保护 `npm test`，不保护 `npm run test:watch` 和 `npx vitest run`
-- 如需完整门禁，应配置 CI/pre-commit hook（本方案暂不涉及）
 
-**完成标准：**
-- [ ] `npm run verify` 运行无报错
-- [ ] `npm test` 前自动运行约束检查
-- [ ] 约束检查失败时阻断测试（退出码非 0）
-
----
-
-## Task 3: 更新约束文档
-
-**主人决定：选项 B（更新文档，保留当前实现）**
+### Task 3: 更新约束文档
 
 **3.1 CONSTRAINTS.md 第 71 行：**
 ```
@@ -201,14 +171,9 @@ harness/
 └── checks-whitelist.json  ← 新增：白名单
 ```
 
----
+### Task 4: 检查器测试
 
-## Task 4: 检查器测试
-
-**目标：** 确保检查器本身正确工作，防止假绿
-
-**文件：**
-- 新建：`tests/harnessChecks.test.ts`
+**文件：** 新建 `tests/harnessChecks.test.ts`
 
 **测试用例：**
 1. 合法代码 → 无违规
@@ -219,17 +184,15 @@ harness/
 6. 零文件扫描 → 退出码 1
 
 **实现：**
-- `harness/checks.js` 导出 `runChecks()` 函数
 - 测试中使用临时目录与临时 tsconfig，不依赖 cwd 或扫描真实项目
 - 按作用域检查扫描文件数：electron/、electron/workers/、src/ 分别必须命中
 
-**完成标准：**
-- [ ] `npm test` 通过（含新增测试）
-
----
+## 已验证
+- 方案已通过 Claude Code 自审 + Codex 三审
+- 白名单示例已补全 5 处同步调用
+- runChecks() 接口已明确定义
 
 ## 验收标准
-
 1. `node harness/checks.js` 运行无报错
 2. `npm run verify` 运行无报错（约束检查 + 构建 + 测试）
 3. `npm test` 前自动运行约束检查（pretest hook）
@@ -239,16 +202,10 @@ harness/
 7. CONSTRAINTS.md、SPEC.md、DECISIONS.md、harness/SPEC.md 已同步更新
 8. 检查器测试通过（6 个用例）
 
-## 风险
-
-- AST 检查可能误报 — 通过白名单机制解决
-- 白名单可能被滥用 — 规则限制：新代码不允许加入白名单，白名单变更需主人确认
-- tsconfig 项目引用 — 必须读取 tsconfig.node.json 和 tsconfig.web.json，不能只读根 tsconfig
-
----
-
-## 需要主人确认
-
-1. ~~歌词滚动方式~~ — 已决定：选项 B（更新文档）
-2. ~~检查项优先级~~ — 已决定：P0 现在实现，P1/P2 后续补充
-3. ~~白名单机制~~ — 已决定：可以用，必须附带 pattern 和 reason
+## 返回格式
+- 结论：已完成 / 需要返工
+- 变更：改了哪些文件、改了什么行为
+- 验证：运行了哪些命令、哪些通过、哪些失败
+- 风险：仍需注意的问题
+- 需要主人确认：UI/体验取舍
+- 给 Claude Code 的记录：devlog 建议、SPEC/DECISIONS 是否需要更新
