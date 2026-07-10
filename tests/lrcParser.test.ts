@@ -56,6 +56,14 @@ describe('parseLrc', () => {
     expect(result[0].translation).toBe('你好世界')
   })
 
+  it('不把包含英文姓名的中文制作信息误判为双语', () => {
+    const lrc = '[00:08.997]音乐监制：沐可Linda，Grass，Steven Tang，SmileL'
+    const result = parseLrc(lrc)
+    expect(result).toHaveLength(1)
+    expect(result[0].text).toBe('音乐监制：沐可Linda，Grass，Steven Tang，SmileL')
+    expect(result[0].translation).toBeUndefined()
+  })
+
   // --- 偏移量 ---
   it('解析 [offset:xxx] 全局偏移量', () => {
     const lrc = '[offset:500]\n[00:12.34]歌词'

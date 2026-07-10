@@ -1,6 +1,6 @@
 # QinPlayer — 纯本地音乐播放器
 
-> 基于源码分析更新至：2026-07-08
+> 基于源码分析更新至：2026-07-09
 
 ---
 
@@ -11,7 +11,7 @@
 | 定位 | 纯本地音乐播放器，不联网 |
 | 作者 | 秋月 + 衾衾 (Hermes Agent) |
 | 技术栈 | Electron + React + TypeScript + Zustand + electron-vite |
-| 窗口 | 1000×680，可拉伸，适配 2K DPI |
+| 窗口 | 1000×680，可拉伸，适配 2K DPI，支持尺寸持久化 |
 | 主题 | 亮色/暗色/跟随系统，暗色底色 #121212 |
 
 ---
@@ -21,7 +21,7 @@
 ```
 QinPlayer/
 ├── electron/                          # Electron 主进程
-│   ├── main.ts                        # 主进程入口 (258行)
+│   ├── main.ts                        # 主进程入口 (340行)
 │   ├── preload.ts                     # 预加载脚本
 │   ├── tray.ts                        # 系统托盘
 │   ├── db/
@@ -32,8 +32,9 @@ QinPlayer/
 │   │   ├── scan.ts                    # 音乐扫描 (255行)
 │   │   ├── eq.ts                      # 均衡器
 │   │   ├── settings.ts                # 设置
-│   │   ├── window.ts                  # 窗口控制 (197行)
+│   │   ├── window.ts                  # 窗口控制 (229行)
 │   │   └── protocol.ts               # 协议处理
+│   ├── windowBounds.ts                # 窗口 bounds 持久化 (152行)
 │   └── workers/
 │       └── scanner.ts                 # 扫描 Worker (393行)
 │
@@ -44,7 +45,7 @@ QinPlayer/
 │   ├── components/                    # 共享组件
 │   │   ├── PlayerBar.tsx              # 底部播放控制条 (379行)
 │   │   ├── SongList.tsx               # 歌曲列表（共享） (369行)
-│   │   ├── LyricsPanel.tsx            # 歌词滚动面板 (99行)
+│   │   ├── LyricsPanel.tsx            # 歌词滚动面板 (121行)
 │   │   ├── MiniPlayer.tsx             # 迷你模式 (263行)
 │   │   ├── Equalizer.tsx              # 均衡器
 │   │   ├── Sidebar.tsx                # 侧边栏导航
@@ -107,11 +108,11 @@ QinPlayer/
 │   │   └── dialog.css                 # 弹窗
 │   │
 │   └── types/                         # TypeScript 类型
-│       ├── ipc.ts                     # IPC 通道 + FeatureFlags 类型 (214行)
+│       ├── ipc.ts                     # IPC 通道 + FeatureFlags 类型 (218行)
 │       ├── index.ts                   # 通用类型
 │       └── electron.d.ts              # Electron API 类型
 │
-├── tests/                             # 测试 (11 个文件)
+├── tests/                             # 测试 (12 个文件)
 │   ├── playerStore.test.ts
 │   ├── uiStore.test.ts
 │   ├── useAudioSync.test.tsx
@@ -123,6 +124,7 @@ QinPlayer/
 │   ├── PlayerBar.test.tsx
 │   ├── Playlists.test.tsx
 │   └── PlaylistPanel.test.tsx
+│   └── windowBounds.test.ts
 │
 ├── harness/                           # AI 工程约束
 │   ├── SPEC.md
@@ -167,6 +169,7 @@ QinPlayer/
 - 支持三种双语格式：同时间戳双行（原文+翻译）、｜分隔、空格分隔
 - 歌词界面：左右分屏，左封面+歌曲信息，右歌词滚动
 - 无歌词时歌词区域显示空白（不显示提示文字）
+- 单语歌词默认显示约 6 行（关闭 lyricsMoreLines 后回退 3 行），双语歌词始终显示约 3 行
 - 背景：封面主色纯色背景（HSL 亮度过滤，自动压暗到安全范围）
 - 歌词时间轴偏移设置（±0.5s），兼容不准的 LRC 文件
 
@@ -191,6 +194,13 @@ QinPlayer/
 ### 系统媒体控制
 - Media Session API 接管 Windows 任务栏媒体控制
 - 响应键盘多媒体按键（播放/暂停/切歌）
+
+### 窗口尺寸持久化
+- 退出时保存窗口位置和尺寸，下次启动恢复
+- 迷你模式进入前保存正常 bounds，退出时恢复
+- 最大化/最小化状态保存与恢复
+- 多显示器变化时自动 clamp 到可见区域，标题栏至少 60px 可见
+- feature flag `windowSizePersist` 控制，默认开启
 
 ---
 
@@ -375,7 +385,7 @@ Apple Music 风，精致克制。
 - 框架：Vitest + @testing-library/react
 - 用例数：133 个（11 个测试文件）
 - 覆盖范围：formatTime、lrcParser、playerStore、uiStore、PlayerBar、SongList、featureFlags、Sidebar、useAudioSync
-- Feature Flags 消融验证：14 个 flag 逐个关闭不影响其他 flag
+- Feature Flags 消融验证：16 个 flag 逐个关闭不影响其他 flag
 
 ---
 
@@ -385,7 +395,7 @@ Apple Music 风，精致克制。
 - 默认值：代码内 `DEFAULT_FEATURE_FLAGS`，全部 true（全开）
 - 读取时机：App.tsx 水合第一步，先于播放状态和均衡器加载
 - 关闭行为：导航栏隐藏入口 + 功能逻辑完全禁用 + 所有入口点统一拦截
-- 14 个 flag：playback、equalizer、lyrics、albums、recent、liked、search、miniMode、tray、playlists、settings、fadeEffect、mediaSession、queuePanel
+- 16 个 flag：playback、equalizer、lyrics、albums、recent、liked、search、miniMode、tray、playlists、settings、fadeEffect、mediaSession、queuePanel、lyricsMoreLines、windowSizePersist
 - 类型安全：`FeatureFlagKey` / `FeatureFlags` 强类型，IPC 通道 `config:getFeatureFlags`
 - 限制：虚拟列表（react-virtual）和颜色提取（Canvas API）需真实浏览器环境验证
 

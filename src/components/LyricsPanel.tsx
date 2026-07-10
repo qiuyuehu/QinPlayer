@@ -69,6 +69,12 @@ function LyricsPanel({ lyrics, currentIndex, onLineClick, featureFlags }: Lyrics
   }
 
   const moreLines = featureFlags?.lyricsMoreLines !== false
+  const hasTranslation = lyrics.some((line) => Boolean(line.translation))
+
+  // 双语歌词始终保持 3 行；只有单语歌词受更多行开关控制。
+  const showMoreLines = moreLines && !hasTranslation
+  const focusStart = showMoreLines ? -1 : 0
+  const focusEnd = showMoreLines ? 4 : 2
 
   return (
     <div
@@ -82,8 +88,7 @@ function LyricsPanel({ lyrics, currentIndex, onLineClick, featureFlags }: Lyrics
         // 计算当前行与激活行的距离（渐进式披露）
         const distance = index - currentIndex
 
-        // 默认显示更多行；关闭 flag 时回退到当前行和后面 2 行。
-        const isInFocusRange = index >= 0 && distance >= (moreLines ? -1 : 0) && distance <= (moreLines ? 4 : 2)
+        const isInFocusRange = index >= 0 && distance >= focusStart && distance <= focusEnd
         const isVisible = isInFocusRange
         const opacity = isVisible ? (
           distance === 0 ? 1 :

@@ -32,10 +32,10 @@ function parseTimestamp(minutes: string, seconds: string, ms: string): number {
 }
 
 /**
- * 检测文本是否包含中文字符
+ * 检测文本是否包含中日韩文字，排除全角标点。
  */
 function hasCJK(s: string): boolean {
-  return /[\u4e00-\u9fff\u3400-\u4dbf\u3000-\u303f\uff00-\uffef]/.test(s)
+  return /[\u3400-\u4dbf\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/.test(s)
 }
 
 /**
@@ -64,7 +64,7 @@ function detectBilingualInline(raw: string): { text: string; translation?: strin
     if (spaceIndex > 0) {
       const left = raw.substring(0, spaceIndex).trim()
       const right = raw.substring(spaceIndex + 1).trim()
-      if (left && right && hasLatin(left) && hasCJK(right)) {
+      if (left && right && hasLatin(left) && !hasCJK(left) && hasCJK(right)) {
         return { text: left, translation: right }
       }
     }
