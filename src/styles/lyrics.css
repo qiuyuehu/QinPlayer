@@ -151,28 +151,49 @@
   flex-shrink: 0;
 }
 
-/* 歌词行（统一字号，靠透明度区分层次） */
+/* 歌词行（列表由 scrollTo 定位，单行只做轻微方向过渡） */
 .lyrics-panel__line {
   padding: 1.2vh 0;
   font-size: 2.5vw;
-  font-weight: 400;
+  font-weight: 600;
   color: var(--text-secondary);
   text-align: center;
-  transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1),
-              color 0.3s ease;
+  transform: translateY(4px) scale(1);
+  transition:
+    transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 260ms ease;
   cursor: pointer;
-  will-change: opacity;
 }
 
 .lyrics-panel__line:hover {
   color: var(--text-primary);
 }
 
-/* 当前播放行：白色加粗 */
+/* 已播放行轻微上移，增强歌词向上流动的方向感 */
+.lyrics-panel__line--past {
+  transform: translateY(-4px) scale(1);
+}
+
+.lyrics-panel__line--future {
+  transform: translateY(4px) scale(1);
+}
+
+/* 当前播放行：回到基准位置并轻微放大 */
 .lyrics-panel__line--active {
+  transform: translateY(0) scale(1.02);
   font-size: 2.5vw;
-  font-weight: 700;
   color: var(--text-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lyrics-panel__line,
+  .lyrics-panel__line--past,
+  .lyrics-panel__line--future,
+  .lyrics-panel__line--active {
+    transform: none;
+    transition: none;
+  }
 }
 
 /* 双语歌词文本 */

@@ -484,6 +484,7 @@ function Lyrics() {
           currentIndex={lyricsCurrentIndex}
           onLineClick={(time) => setSeekTime(time)}
           featureFlags={featureFlags}
+          layoutRevision={isFullscreen ? 1 : 0}
         />
       </div>
     </div>

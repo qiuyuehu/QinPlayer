@@ -36,6 +36,8 @@ export function useAudioSync() {
   // 标记：音频加载完毕后需要自动播放
   const pendingAutoPlay = useRef(false)
   const pendingSeekRef = useRef<number | null>(null)  // 启动时恢复的 seek 位置
+  // 曲目切换期间旧音频仍可能在淡出并发送事件；新 metadata 就绪前忽略这些事件。
+  const trackTransitionRef = useRef(false)
   const fadeEnabled = usePlayerStore((s) => s.fadeEnabled)  // 淡入淡出开关
 
   // 标记：引擎事件是否已注册
@@ -48,11 +50,13 @@ export function useAudioSync() {
   // ---------------------------------------------------------------------------
   const registerEngineEvents = (engine: ReturnType<typeof getAudioEngine>) => {
     engine.onTimeUpdate((time, dur) => {
+      if (trackTransitionRef.current) return
       currentTimeRef.current = time    // 写入共享 ref，不触发 re-render
       if (dur > 0) setDuration(dur)
     })
 
     engine.onLoadedMetadata((dur) => {
+      trackTransitionRef.current = false
       setDuration(dur)
       // 音频加载完毕，如果有待播放标记，立即播放
       if (pendingAutoPlay.current) {
@@ -64,6 +68,8 @@ export function useAudioSync() {
     })
 
     engine.onEnded(() => {
+      // 手动切歌的淡出阶段可能收到旧歌曲 ended，不能因此再跳一首。
+      if (trackTransitionRef.current) return
       if (!useUIStore.getState().featureFlags.playback) return
 
       const mode = usePlayerStore.getState().playMode
@@ -119,8 +125,18 @@ export function useAudioSync() {
   // currentTrack 变化 → 加载音频
   // ---------------------------------------------------------------------------
   useEffect(() => {
-    if (!featureFlags.playback) return
-    if (!currentTrack) return
+    if (!featureFlags.playback) {
+      trackTransitionRef.current = false
+      return
+    }
+    if (!currentTrack) {
+      trackTransitionRef.current = false
+      currentTimeRef.current = 0
+      return
+    }
+
+    trackTransitionRef.current = true
+    currentTimeRef.current = 0
 
     // 懒创建引擎（此时可能已有用户交互上下文）
     const engine = getAudioEngine()
@@ -138,8 +154,7 @@ export function useAudioSync() {
       updateMediaSession(currentTrack)
     }
 
-    // ⚠️ 用 getState() 实时读取，避免闭包陷阱
-    // 依赖数组只有 [currentTrack]，fadeEnabled/isPlaying 可能是旧值
+    // ⚠️ 用 getState() 实时读取，避免未列入依赖的 fadeEnabled/isPlaying 形成旧闭包
     const { fadeEnabled: currentFade, isPlaying: currentPlaying } = usePlayerStore.getState()
     const shouldFade = featureFlags.fadeEffect && currentFade
 

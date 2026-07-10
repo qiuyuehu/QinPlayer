@@ -1,14 +1,14 @@
 // =============================================================================
 // QinPlayer — 歌词滚动面板组件
 // =============================================================================
-// 职责：逐行渲染歌词，自动滚动到当前行，当前行高亮放大
+// 职责：逐行渲染歌词，自动滚动到当前行，当前行高亮
 // 设计要点：
-//   - 使用 scrollTop 自动滚动，隐藏原生滚动条
-//   - 当前行高亮：scale(1.1) + 颜色变化
+//   - 列表使用 scrollTo 定位，隐藏原生滚动条
+//   - 单行使用透明度、颜色和轻微 transform 过渡
 //   - 点击歌词行跳转到对应时间
 // =============================================================================
 
-import { useEffect, useRef, useCallback } from 'react'
+import { useLayoutEffect, useRef, useCallback } from 'react'
 import type { LyricLine } from '../types'
 import type { FeatureFlags } from '../types/ipc'
 
@@ -17,17 +17,25 @@ interface LyricsPanelProps {
   currentIndex: number         // 当前歌词行索引（由父组件计算）
   onLineClick?: (time: number) => void  // 点击歌词行回调
   featureFlags?: FeatureFlags
+  layoutRevision?: number
 }
 
 // LyricsPanel — 歌词滚动面板，逐行高亮 + 点击跳转
-function LyricsPanel({ lyrics, currentIndex, onLineClick, featureFlags }: LyricsPanelProps) {
+function LyricsPanel({
+  lyrics,
+  currentIndex,
+  onLineClick,
+  featureFlags,
+  layoutRevision = 0,
+}: LyricsPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const itemRefs = useRef<(HTMLDivElement | null)[]>([])
   const prevIndexRef = useRef(currentIndex)
   const prevLyricsRef = useRef(lyrics)
+  const prevLayoutRevisionRef = useRef(layoutRevision)
 
   // 当前行变化时，平滑滚动到当前行
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (currentIndex < 0 || !containerRef.current) return
 
     const currentElement = itemRefs.current[currentIndex]
@@ -42,17 +50,22 @@ function LyricsPanel({ lyrics, currentIndex, onLineClick, featureFlags }: Lyrics
     const targetScroll = elementTop - containerHeight * 0.35 + elementHeight / 2
 
     const isTrackChange = lyrics !== prevLyricsRef.current
-    const isJump = isTrackChange || Math.abs(currentIndex - prevIndexRef.current) > 3 || currentIndex === 0
+    const isLayoutChange = layoutRevision !== prevLayoutRevisionRef.current
+    const isJump = isTrackChange
+      || isLayoutChange
+      || Math.abs(currentIndex - prevIndexRef.current) > 3
+      || currentIndex === 0
+    const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
 
-    if (isJump) {
-      container.scrollTo({ top: targetScroll, behavior: 'auto' })
-    } else {
-      container.scrollTo({ top: targetScroll, behavior: 'smooth' })
-    }
+    container.scrollTo({
+      top: targetScroll,
+      behavior: isJump || prefersReducedMotion ? 'auto' : 'smooth',
+    })
 
     prevIndexRef.current = currentIndex
     prevLyricsRef.current = lyrics
-  }, [currentIndex, lyrics])
+    prevLayoutRevisionRef.current = layoutRevision
+  }, [currentIndex, lyrics, layoutRevision])
 
   // 点击歌词行跳转
   const handleLineClick = useCallback((time: number) => {
@@ -97,12 +110,17 @@ function LyricsPanel({ lyrics, currentIndex, onLineClick, featureFlags }: Lyrics
           0.15
         ) : 0
         const isActive = index === currentIndex
+        const directionClass = distance < 0
+          ? 'lyrics-panel__line--past'
+          : distance > 0
+            ? 'lyrics-panel__line--future'
+            : ''
 
         return (
           <div
             key={`${line.time}-${index}`}
             ref={(el) => { itemRefs.current[index] = el }}
-            className={`lyrics-panel__line ${isActive ? 'lyrics-panel__line--active' : ''}`}
+            className={`lyrics-panel__line ${isActive ? 'lyrics-panel__line--active' : ''} ${directionClass}`}
             onClick={() => handleLineClick(line.time)}
             style={{
               opacity,

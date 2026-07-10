@@ -104,6 +104,62 @@ async function resolveLrc(deferred: Deferred<string | null>, content: string | n
 }
 
 describe('LyricsPanel 歌词行数', () => {
+  it('切换当前歌词时应该更新方向状态类', () => {
+    const lyrics = createLyrics()
+    const { container, rerender } = render(
+      <LyricsPanel
+        lyrics={lyrics}
+        currentIndex={4}
+        featureFlags={DEFAULT_FEATURE_FLAGS}
+      />,
+    )
+    let lines = container.querySelectorAll('.lyrics-panel__line')
+
+    expect(lines[3]).toHaveClass('lyrics-panel__line--past')
+    expect(lines[4]).toHaveClass('lyrics-panel__line--active')
+    expect(lines[5]).toHaveClass('lyrics-panel__line--future')
+
+    rerender(
+      <LyricsPanel
+        lyrics={lyrics}
+        currentIndex={5}
+        featureFlags={DEFAULT_FEATURE_FLAGS}
+      />,
+    )
+    lines = container.querySelectorAll('.lyrics-panel__line')
+
+    expect(lines[4]).toHaveClass('lyrics-panel__line--past')
+    expect(lines[5]).toHaveClass('lyrics-panel__line--active')
+  })
+
+  it('布局版本变化时应该立即重新定位当前歌词', () => {
+    const lyrics = createLyrics()
+    const { rerender } = render(
+      <LyricsPanel
+        lyrics={lyrics}
+        currentIndex={4}
+        featureFlags={DEFAULT_FEATURE_FLAGS}
+        layoutRevision={0}
+      />,
+    )
+    const scrollToMock = vi.mocked(HTMLElement.prototype.scrollTo)
+    scrollToMock.mockClear()
+
+    rerender(
+      <LyricsPanel
+        lyrics={lyrics}
+        currentIndex={4}
+        featureFlags={DEFAULT_FEATURE_FLAGS}
+        layoutRevision={1}
+      />,
+    )
+
+    expect(scrollToMock).toHaveBeenCalled()
+    expect(scrollToMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ behavior: 'auto' }),
+    )
+  })
+
   it('单语歌词开启更多行时应该显示 6 行', () => {
     const { container } = render(
       <LyricsPanel
