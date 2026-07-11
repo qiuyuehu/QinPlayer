@@ -46,6 +46,7 @@ function Lyrics() {
 
   // --- 导航状态 ---
   const setActiveNav = useUIStore((s) => s.setActiveNav)
+  const previousNav = useUIStore((s) => s.previousNav)
   const featureFlags = useUIStore((s) => s.featureFlags)
 
   // --- 歌词状态 ---
@@ -87,8 +88,9 @@ function Lyrics() {
   const leaveLyrics = useCallback(() => {
     window.electronAPI.setAlwaysOnTop(false)
     setIsPinned(false)
-    setActiveNav('local')
-  }, [setActiveNav])
+    // 恢复进入歌词前的页面，兜底 'local'
+    setActiveNav(previousNav || 'local')
+  }, [setActiveNav, previousNav])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

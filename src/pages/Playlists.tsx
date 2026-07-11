@@ -166,7 +166,10 @@ function Playlists() {
           {/* 点击返回按钮清空选中状态，回到歌单列表视图 */}
           <button
             className="playlists__back-btn"
-            onClick={() => setSelectedPlaylist(null)}
+            onClick={() => {
+              setSelectedPlaylist(null)
+              loadPlaylists()  // 刷新歌单列表（封面可能已更新）
+            }}
           >
             ← 返回
           </button>

@@ -84,4 +84,39 @@ describe('Content motion', () => {
     expect(screen.getByText('local page')).toBeInTheDocument()
     expect(vi.getTimerCount()).toBe(0)
   })
+
+  it('进入歌词时应先显示 enter 再转为 active（300ms）', () => {
+    render(<Content />)
+
+    act(() => useUIStore.getState().setActiveNav('lyrics'))
+
+    // enter 状态：歌词层可见，有 --enter 类
+    const lyricsLayer = document.querySelector('.content__lyrics-layer--enter')
+    expect(lyricsLayer).toBeInTheDocument()
+
+    // 299ms 后仍为 enter
+    act(() => vi.advanceTimersByTime(299))
+    expect(document.querySelector('.content__lyrics-layer--enter')).toBeInTheDocument()
+
+    // 再推进 1ms，变为 active
+    act(() => vi.advanceTimersByTime(1))
+    expect(document.querySelector('.content__lyrics-layer--enter')).not.toBeInTheDocument()
+    expect(document.querySelector('.content__lyrics-layer--active')).toBeInTheDocument()
+  })
+
+  it('减弱动画时进入歌词应直接显示 active', () => {
+    document.documentElement.setAttribute('data-reduced-motion', 'true')
+    render(<Content />)
+
+    act(() => useUIStore.getState().setActiveNav('lyrics'))
+
+    // 直接为 active，无 enter 阶段
+    expect(document.querySelector('.content__lyrics-layer--active')).toBeInTheDocument()
+    expect(document.querySelector('.content__lyrics-layer--enter')).not.toBeInTheDocument()
+
+    // 无定时器残留
+    expect(vi.getTimerCount()).toBe(0)
+
+    document.documentElement.removeAttribute('data-reduced-motion')
+  })
 })

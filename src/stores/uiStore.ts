@@ -16,6 +16,7 @@ import { DEFAULT_FEATURE_FLAGS } from '../utils/featureFlags'
 
 interface UIState {
   activeNav: string              // 当前选中的导航项 ID
+  previousNav: string | null     // 进入歌词前的导航项（退出歌词时恢复用）
   isMiniMode: boolean            // 是否处于迷你模式
   theme: Theme                   // 当前主题
   reducedMotion: boolean         // 是否手动减少界面动画
@@ -40,6 +41,7 @@ interface UIState {
 export const useUIStore = create<UIState>((set) => ({
   // 初始状态
   activeNav: 'local',            // 默认显示本地音乐页面
+  previousNav: null,             // 进入歌词前的导航项
   isMiniMode: false,
   theme: 'dark',                 // 默认暗色主题
   reducedMotion: false,
@@ -48,7 +50,13 @@ export const useUIStore = create<UIState>((set) => ({
   featureFlags: { ...DEFAULT_FEATURE_FLAGS },
 
   // actions
-  setActiveNav: (nav) => set({ activeNav: nav }),
+  setActiveNav: (nav) => set((state) => ({
+    activeNav: nav,
+    // 切换到歌词时保存当前导航；已在歌词页时保留；切到其他页面时清空
+    previousNav: nav === 'lyrics'
+      ? (state.activeNav !== 'lyrics' ? state.activeNav : state.previousNav)
+      : null,
+  })),
   setMiniMode: (v) => set({ isMiniMode: v }),
   setTheme: (t) => set({ theme: t }),
   setReducedMotion: (enabled) => set({ reducedMotion: enabled }),

@@ -46,14 +46,18 @@ function Content() {
 
     if (activeNav === 'lyrics' && featureFlags.lyrics) {
       setLyricsVisible(true)
-      setLyricsPhase('enter')
       setShowMainContent(false)
-      rafRef.current = requestAnimationFrame(() => {
-        rafRef.current = requestAnimationFrame(() => {
+
+      // 减弱动画时直接跳到 active，否则播放 300ms 进入动画
+      if (isReducedMotionActive()) {
+        setLyricsPhase('active')
+      } else {
+        setLyricsPhase('enter')
+        timerRef.current = setTimeout(() => {
           setLyricsPhase('active')
-          rafRef.current = null
-        })
-      })
+          timerRef.current = null
+        }, 300)
+      }
       return
     }
 

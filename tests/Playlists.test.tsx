@@ -31,6 +31,7 @@ describe('Playlists', () => {
     vi.clearAllMocks()
     invokeMock = vi.fn(async (channel: string) => {
       if (channel === 'playlists:getAll') return playlists
+      if (channel === 'playlists:getSongs') return []
       return null
     })
     window.electronAPI = {
@@ -108,5 +109,37 @@ describe('Playlists', () => {
       expect(screen.queryByDisplayValue('取消改名')).not.toBeInTheDocument()
     })
     expect(invokeMock).not.toHaveBeenCalledWith('playlists:rename', expect.anything())
+  })
+
+  it('从歌单详情返回列表时应重新加载歌单数据（封面刷新）', async () => {
+    render(<Playlists />)
+
+    // 等待初始加载完成
+    await screen.findByText('有封面歌单')
+
+    // 记录初始调用次数
+    const initialCallCount = invokeMock.mock.calls.filter(
+      (call: string[]) => call[0] === 'playlists:getAll'
+    ).length
+
+    // 点击卡片进入详情
+    const card = screen.getByText('有封面歌单').closest('.playlists__card')!
+    fireEvent.click(card)
+
+    // 确认进入详情视图
+    await waitFor(() => {
+      expect(screen.getByText('← 返回')).toBeInTheDocument()
+    })
+
+    // 点击返回按钮
+    fireEvent.click(screen.getByText('← 返回'))
+
+    // 验证 playlists:getAll 被再次调用
+    await waitFor(() => {
+      const totalCalls = invokeMock.mock.calls.filter(
+        (call: string[]) => call[0] === 'playlists:getAll'
+      ).length
+      expect(totalCalls).toBe(initialCallCount + 1)
+    })
   })
 })
