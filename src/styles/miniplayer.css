@@ -419,6 +419,10 @@
   color: var(--text-primary);
 }
 
+.mini-player__btn--pinned {
+  color: var(--accent);
+}
+
 .mini-player__view-switcher {
   height: 28px;
   display: flex;

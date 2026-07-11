@@ -20,6 +20,7 @@ import {
   IconVolumeHigh, IconVolumeMuted,
   IconClose, IconExpand, IconMusic, IconLyrics, IconList,
   IconRepeat, IconRepeatOne, IconShuffle,
+  IconPin,
 } from './Icons'
 import type { LyricLine } from '../types'
 
@@ -75,6 +76,9 @@ function MiniPlayer() {
   const [isMuted, setIsMuted] = useState(false)
   const prevVolumeRef = useRef(1)
 
+  // --- 置顶状态 ---
+  const [isPinned, setIsPinned] = useState(false)
+
   useEffect(() => {
     lyricsRef.current = lyrics
     lastLyricsIndexRef.current = -1
@@ -107,16 +111,20 @@ function MiniPlayer() {
   // 关闭迷你模式 → 返回本地音乐页
   // ---------------------------------------------------------------------------
   const handleClose = useCallback(() => {
+    if (isPinned) window.electronAPI.setAlwaysOnTop(false)
+    setIsPinned(false)
     setMiniMode(false)
     setActiveNav('local')
-  }, [setMiniMode, setActiveNav])
+  }, [setMiniMode, setActiveNav, isPinned])
 
   // ---------------------------------------------------------------------------
   // 展开 → 恢复主窗口并保留当前导航
   // ---------------------------------------------------------------------------
   const handleExpand = useCallback(() => {
+    if (isPinned) window.electronAPI.setAlwaysOnTop(false)
+    setIsPinned(false)
     setMiniMode(false)
-  }, [setMiniMode])
+  }, [setMiniMode, isPinned])
 
   // --- 播放方式（内联常量，与 PlayerBar 保持一致） ---
   const PLAY_MODE_ICON = {
@@ -149,6 +157,17 @@ function MiniPlayer() {
       setIsMuted(true)
     }
   }, [isMuted, volume, setVolume])
+
+  // ---------------------------------------------------------------------------
+  // 置顶切换
+  // ---------------------------------------------------------------------------
+  const togglePinned = useCallback(() => {
+    setIsPinned(prev => {
+      const next = !prev
+      window.electronAPI.setAlwaysOnTop(next)
+      return next
+    })
+  }, [])
 
   // ---------------------------------------------------------------------------
   // 进度条拖拽逻辑
@@ -357,6 +376,16 @@ function MiniPlayer() {
             </button>
           )}
         </div>
+
+        <button
+          type="button"
+          className={`mini-player__btn ${isPinned ? 'mini-player__btn--pinned' : ''}`}
+          onClick={togglePinned}
+          aria-label={isPinned ? '取消置顶' : '置顶'}
+          title={isPinned ? '取消置顶' : '置顶'}
+        >
+          <IconPin width={14} height={14} />
+        </button>
 
         <button
           type="button"

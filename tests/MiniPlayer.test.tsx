@@ -37,6 +37,7 @@ const trackB: Track = {
 
 const invokeMock = vi.fn()
 const originalInvoke = window.electronAPI.invoke
+const originalSend = window.electronAPI.send
 const originalRequestAnimationFrame = globalThis.requestAnimationFrame
 const originalCancelAnimationFrame = globalThis.cancelAnimationFrame
 
@@ -93,6 +94,7 @@ describe('MiniPlayer', () => {
 
   afterEach(() => {
     window.electronAPI.invoke = originalInvoke
+    window.electronAPI.send = originalSend
     globalThis.requestAnimationFrame = originalRequestAnimationFrame
     globalThis.cancelAnimationFrame = originalCancelAnimationFrame
   })
@@ -320,5 +322,60 @@ describe('MiniPlayer', () => {
 
     fireEvent.click(screen.getByTitle('随机播放'))
     expect(usePlayerStore.getState().playMode).toBe('sequential')
+  })
+
+  it('置顶按钮应该切换窗口置顶状态', () => {
+    const sendMock = vi.fn()
+    window.electronAPI.send = sendMock
+
+    render(<MiniPlayer />)
+
+    // 初始不置顶
+    expect(screen.getByTitle('置顶')).toBeInTheDocument()
+
+    // 点击置顶
+    fireEvent.click(screen.getByTitle('置顶'))
+    expect(sendMock).toHaveBeenCalledWith('window:set-always-on-top', true)
+    expect(screen.getByTitle('取消置顶')).toBeInTheDocument()
+
+    // 再点取消置顶
+    fireEvent.click(screen.getByTitle('取消置顶'))
+    expect(sendMock).toHaveBeenCalledWith('window:set-always-on-top', false)
+    expect(screen.getByTitle('置顶')).toBeInTheDocument()
+  })
+
+  it('关闭迷你模式时应该自动取消置顶', () => {
+    const sendMock = vi.fn()
+    window.electronAPI.send = sendMock
+
+    render(<MiniPlayer />)
+
+    // 先置顶
+    fireEvent.click(screen.getByTitle('置顶'))
+    expect(sendMock).toHaveBeenCalledWith('window:set-always-on-top', true)
+
+    // 关闭迷你模式
+    fireEvent.click(screen.getByTitle('关闭'))
+
+    // 应该自动取消置顶
+    expect(sendMock).toHaveBeenCalledWith('window:set-always-on-top', false)
+    expect(useUIStore.getState().isMiniMode).toBe(false)
+  })
+
+  it('展开时应该自动取消置顶', () => {
+    const sendMock = vi.fn()
+    window.electronAPI.send = sendMock
+
+    render(<MiniPlayer />)
+
+    // 先置顶
+    fireEvent.click(screen.getByTitle('置顶'))
+
+    // 展开
+    fireEvent.click(screen.getByTitle('展开'))
+
+    // 应该自动取消置顶
+    expect(sendMock).toHaveBeenCalledWith('window:set-always-on-top', false)
+    expect(useUIStore.getState().isMiniMode).toBe(false)
   })
 })
