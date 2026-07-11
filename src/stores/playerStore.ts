@@ -187,32 +187,52 @@ export function togglePlayMode(current: PlayMode): PlayMode {
 // 防抖保存，避免频繁写入
 // ---------------------------------------------------------------------------
 
-let saveTimer: ReturnType<typeof setTimeout> | null = null
+type PersistentPlayerSettingKey = 'volume' | 'playMode' | 'lastTrackId'
 
-/** 防抖保存播放状态到数据库 */
-function debouncedSave(state: PlayerState): void {
-  if (saveTimer) clearTimeout(saveTimer)
+let saveTimer: ReturnType<typeof setTimeout> | null = null
+let suppressPlayerSettingsPersistence = false
+const pendingPlayerSettings = new Map<PersistentPlayerSettingKey, string>()
+
+function schedulePlayerSettingSave(key: PersistentPlayerSettingKey, value: string): void {
+  pendingPlayerSettings.set(key, value)
+  if (saveTimer) return
+
   saveTimer = setTimeout(() => {
-    const settings = [
-      { key: 'volume', value: String(state.volume) },
-      { key: 'playMode', value: state.playMode },
-      { key: 'lastTrackId', value: state.currentTrack ? String(state.currentTrack.id) : '' },
-    ]
-    for (const s of settings) {
-      window.electronAPI.invoke('settings:set', s).catch(() => {})
+    saveTimer = null
+    const settings = Array.from(pendingPlayerSettings.entries())
+    pendingPlayerSettings.clear()
+
+    for (const [settingKey, settingValue] of settings) {
+      window.electronAPI
+        .invoke('settings:set', { key: settingKey, value: settingValue })
+        .catch((error) => {
+          console.error(`[PlayerStore] 保存设置 ${settingKey} 失败:`, error)
+        })
     }
   }, 500)
 }
 
-// 监听 store 变化，自动保存（排除 currentTime 高频更新）
-usePlayerStore.subscribe((state) => {
-  debouncedSave(state)
+// 只记录真正变化的持久化字段；无关状态不创建或延后 timer。
+usePlayerStore.subscribe((state, previousState) => {
+  if (suppressPlayerSettingsPersistence) return
+
+  if (state.volume !== previousState.volume) {
+    schedulePlayerSettingSave('volume', String(state.volume))
+  }
+  if (state.playMode !== previousState.playMode) {
+    schedulePlayerSettingSave('playMode', state.playMode)
+  }
+  if (state.currentTrack?.id !== previousState.currentTrack?.id) {
+    schedulePlayerSettingSave('lastTrackId', state.currentTrack ? String(state.currentTrack.id) : '')
+  }
 })
 
 // 播放中每 5 秒保存 currentTime（独立定时器，不走防抖）
 // 从 currentTimeRef 读取（不依赖 Zustand，避免高频 re-render）
 let progressSaveTimer: ReturnType<typeof setInterval> | null = null
-usePlayerStore.subscribe((state) => {
+usePlayerStore.subscribe((state, previousState) => {
+  if (state.isPlaying === previousState.isPlaying) return
+
   if (state.isPlaying && !progressSaveTimer) {
     progressSaveTimer = setInterval(() => {
       const ct = currentTimeRef.current
@@ -283,7 +303,12 @@ export async function restorePlayerState(): Promise<void> {
       }
     }
 
-    usePlayerStore.setState(state)
+    suppressPlayerSettingsPersistence = true
+    try {
+      usePlayerStore.setState(state)
+    } finally {
+      suppressPlayerSettingsPersistence = false
+    }
     console.log('[PlayerStore] 恢复完成:', state)
   } catch (e) {
     console.error('[PlayerStore] 恢复状态失败:', e)

@@ -2,8 +2,8 @@
  * playerStore 测试
  * 覆盖：nextTrack/prevTrack 切歌逻辑、播放模式循环、音量边界、togglePlayMode
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { usePlayerStore, togglePlayMode } from '../src/stores/playerStore'
+import { afterEach, describe, it, expect, beforeEach, vi } from 'vitest'
+import { restorePlayerState, usePlayerStore, togglePlayMode } from '../src/stores/playerStore'
 import { useUIStore } from '../src/stores/uiStore'
 import { currentTimeRef } from '../src/utils/currentTimeRef'
 import { DEFAULT_FEATURE_FLAGS } from '../src/utils/featureFlags'
@@ -25,6 +25,8 @@ const songs: Track[] = [
 
 describe('playerStore', () => {
   beforeEach(() => {
+    vi.useFakeTimers()
+    vi.clearAllTimers()
     vi.clearAllMocks()
     window.electronAPI.invoke = invokeMock
     useUIStore.setState({ featureFlags: { ...DEFAULT_FEATURE_FLAGS } })
@@ -41,6 +43,15 @@ describe('playerStore', () => {
       seekTime: null,
     })
     currentTimeRef.current = 0
+    vi.advanceTimersByTime(500)
+    invokeMock.mockClear()
+  })
+
+  afterEach(() => {
+    usePlayerStore.setState({ isPlaying: false })
+    vi.advanceTimersByTime(500)
+    vi.clearAllTimers()
+    vi.useRealTimers()
   })
 
   // --- 统一播放入口 ---
@@ -247,6 +258,140 @@ describe('playerStore', () => {
 
     it('shuffle → sequential', () => {
       expect(togglePlayMode('shuffle')).toBe('sequential')
+    })
+  })
+
+  describe('关键设置持久化', () => {
+    const settingWrites = () => invokeMock.mock.calls.filter(([channel]) => channel === 'settings:set')
+
+    it('无关状态变化不应写入三个关键设置', () => {
+      usePlayerStore.setState({
+        isPlaying: true,
+        duration: 42,
+        seekTime: 12,
+        playlist: songs,
+      })
+      vi.advanceTimersByTime(500)
+
+      expect(settingWrites()).toHaveLength(0)
+    })
+
+    it('连续音量变化只应写一次最终值', () => {
+      for (let index = 1; index <= 20; index++) {
+        usePlayerStore.getState().setVolume(index / 20)
+      }
+      vi.advanceTimersByTime(500)
+
+      expect(settingWrites()).toEqual([
+        ['settings:set', { key: 'volume', value: '1' }],
+      ])
+    })
+
+    it('播放模式变化只应写 playMode', () => {
+      usePlayerStore.getState().setPlayMode('shuffle')
+      vi.advanceTimersByTime(500)
+
+      expect(settingWrites()).toEqual([
+        ['settings:set', { key: 'playMode', value: 'shuffle' }],
+      ])
+    })
+
+    it('当前歌曲变化只应写 lastTrackId', () => {
+      usePlayerStore.getState().setCurrentTrack(songs[1])
+      vi.advanceTimersByTime(500)
+
+      expect(settingWrites()).toEqual([
+        ['settings:set', { key: 'lastTrackId', value: '2' }],
+      ])
+    })
+
+    it('同一窗口的不同 dirty key 应各写一次最终值', () => {
+      usePlayerStore.getState().setVolume(0.3)
+      usePlayerStore.getState().setPlayMode('loop')
+      usePlayerStore.getState().setVolume(0.4)
+      vi.advanceTimersByTime(500)
+
+      expect(settingWrites()).toEqual([
+        ['settings:set', { key: 'volume', value: '0.4' }],
+        ['settings:set', { key: 'playMode', value: 'loop' }],
+      ])
+    })
+
+    it('恢复数据库状态时不应回写相同设置', async () => {
+      invokeMock.mockImplementation(async (channel: string, payload?: { key?: string }) => {
+        if (channel !== 'settings:get') return null
+        if (payload?.key === 'volume') return '0.35'
+        if (payload?.key === 'playMode') return 'shuffle'
+        return null
+      })
+
+      await restorePlayerState()
+      vi.advanceTimersByTime(500)
+
+      expect(settingWrites()).toHaveLength(0)
+      expect(usePlayerStore.getState()).toMatchObject({ volume: 0.35, playMode: 'shuffle' })
+    })
+
+    it('flush 后应清空 dirty map，下一轮变化仍可保存', () => {
+      usePlayerStore.getState().setVolume(0.3)
+      vi.advanceTimersByTime(500)
+      invokeMock.mockClear()
+
+      usePlayerStore.getState().setVolume(0.6)
+      vi.advanceTimersByTime(500)
+
+      expect(settingWrites()).toEqual([
+        ['settings:set', { key: 'volume', value: '0.6' }],
+      ])
+    })
+
+    it('播放中仍应每 5 秒保存一次当前进度', () => {
+      currentTimeRef.current = 15
+      usePlayerStore.getState().setPlaying(true)
+      vi.advanceTimersByTime(4999)
+      expect(settingWrites()).toHaveLength(0)
+
+      vi.advanceTimersByTime(1)
+      expect(settingWrites()).toEqual([
+        ['settings:set', { key: 'lastCurrentTime', value: '15' }],
+      ])
+    })
+
+    it('无关状态变化不应推迟已有 dirty timer', () => {
+      usePlayerStore.getState().setVolume(0.25)
+      vi.advanceTimersByTime(400)
+      usePlayerStore.getState().setDuration(99)
+      vi.advanceTimersByTime(99)
+      expect(settingWrites()).toHaveLength(0)
+
+      vi.advanceTimersByTime(1)
+      expect(settingWrites()).toEqual([
+        ['settings:set', { key: 'volume', value: '0.25' }],
+      ])
+    })
+
+    it('单键保存失败不应阻塞其他键且日志必须包含键名', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      invokeMock.mockImplementation(async (channel: string, payload?: { key?: string }) => {
+        if (channel === 'settings:set' && payload?.key === 'volume') {
+          throw new Error('database unavailable')
+        }
+        return null
+      })
+
+      usePlayerStore.getState().setVolume(0.2)
+      usePlayerStore.getState().setPlayMode('loop')
+      vi.advanceTimersByTime(500)
+      await Promise.resolve()
+
+      expect(settingWrites()).toEqual([
+        ['settings:set', { key: 'volume', value: '0.2' }],
+        ['settings:set', { key: 'playMode', value: 'loop' }],
+      ])
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('volume'),
+        expect.any(Error),
+      )
     })
   })
 })

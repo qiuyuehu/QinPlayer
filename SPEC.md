@@ -484,7 +484,7 @@ Main Process ✓ 负责 SQLite、文件系统、窗口、IPC
 ## 测试覆盖
 
 - 框架：Vitest + @testing-library/react
-- 用例数：271 个（29 个测试文件）
+- 用例数：317 个（34 个测试文件）
 - 覆盖范围：formatTime、lrcParser、albumSort、playerStore、uiStore、PlayerBar、LyricsPanel、LyricsFullscreen、MiniPlayer、MiniLyricsView、MiniQueueView、AlbumSortMenu、Albums、SongList、PlaylistPanel、featureFlags、Sidebar、useAudioSync、useTrackLyrics、windowBounds、Harness checks
 - Feature Flags 消融验证：16 个 flag 逐个关闭不影响其他 flag
 
@@ -499,6 +499,18 @@ Main Process ✓ 负责 SQLite、文件系统、窗口、IPC
 - 设置页“减少动画”是手动偏好，保存在 SQLite 并由 `uiStore` 水合；手动偏好与系统 `prefers-reduced-motion` 使用 OR 规则，任一开启即降级动态效果。
 - CSS 通过 `motion.css` 统一降级；歌词滚动、歌词层退出和 overlay/panel 退出通过同一 reduced-motion helper 同步降级，不保留可见等待。
 - Dialog 和 QueuePanel 在根动画结束后卸载，并以幂等 fallback 防止 `animationend` 丢失；创建歌单提交期间禁止重复确认或提前关闭。
+
+---
+
+## 性能与生命周期不变量
+
+- PlayerBar、Lyrics、MiniPlayer 仅在可见且正在播放或拖拽进度时运行 RAF；暂停空闲时不保留 RAF，暂停拖拽和恢复播放会重新启用。
+- App 的普通、歌词、迷你三种壳层互斥挂载，任意时刻最多存在一条播放器进度 RAF。
+- document 级拖拽统一由 `useDocumentMouseDrag` 管理；重新开始、功能关闭、视图离开和卸载均先清理 listener。
+- MiniPlayer 只有 queue 视图挂载 playlist connector；default/lyrics 不订阅 playlist 数组。
+- `volume`、`playMode`、`lastTrackId` 仅在实际变化时按 dirty key 合并保存；状态恢复不回写刚读取的值。
+- 播放中每 5 秒保存 `lastCurrentTime` 的安全网必须保留；无关状态不能重启该 interval 的边沿逻辑。
+- 性能优化以可复现计数和真实环境门槛为准，不以 memo、effect 或组件数量作为收益指标。
 
 ---
 

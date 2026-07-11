@@ -11,10 +11,12 @@ import { useRef, useCallback, useState, useEffect } from 'react'
 import { usePlayerStore, togglePlayMode } from '../stores/playerStore'
 import { useUIStore } from '../stores/uiStore'
 import { useTrackLyrics } from '../hooks/useTrackLyrics'
+import { useDocumentMouseDrag } from '../hooks/useDocumentMouseDrag'
+import { useRafLoop } from '../hooks/useRafLoop'
 import { currentTimeRef } from '../utils/currentTimeRef'
 import { findCurrentLyricIndex } from '../utils/lrcParser'
 import MiniLyricsView from './MiniLyricsView'
-import MiniQueueView from './MiniQueueView'
+import MiniQueueViewContainer from './MiniQueueViewContainer'
 import {
   IconPlay, IconPause, IconPrev, IconNext,
   IconVolumeHigh, IconVolumeMuted,
@@ -30,14 +32,12 @@ function MiniPlayer() {
   // --- 播放状态 ---
   const isPlaying = usePlayerStore((s) => s.isPlaying)
   const currentTrack = usePlayerStore((s) => s.currentTrack)
-  const playlist = usePlayerStore((s) => s.playlist)
   const duration = usePlayerStore((s) => s.duration)
   const volume = usePlayerStore((s) => s.volume)
   const lyricOffset = usePlayerStore((s) => s.lyricOffset)
   const setPlaying = usePlayerStore((s) => s.setPlaying)
   const setVolume = usePlayerStore((s) => s.setVolume)
   const setSeekTime = usePlayerStore((s) => s.setSeekTime)
-  const playTrack = usePlayerStore((s) => s.playTrack)
   const nextTrack = usePlayerStore((s) => s.nextTrack)
   const prevTrack = usePlayerStore((s) => s.prevTrack)
   const playMode = usePlayerStore((s) => s.playMode)
@@ -66,6 +66,8 @@ function MiniPlayer() {
   const progressRef = useRef<HTMLDivElement>(null)
   const isDraggingRef = useRef(false)
   const dragTimeRef = useRef<number | null>(null)
+  const [isProgressDragging, setIsProgressDragging] = useState(false)
+  const { startDocumentMouseDrag, cancelDocumentMouseDrag } = useDocumentMouseDrag()
 
   // --- 进度条 DOM 元素 ref（RAF 直接操作，不触发 re-render） ---
   const progressFillRef = useRef<HTMLDivElement>(null)
@@ -172,6 +174,24 @@ function MiniPlayer() {
   // ---------------------------------------------------------------------------
   // 进度条拖拽逻辑
   // ---------------------------------------------------------------------------
+  const updatePlaybackView = useCallback((time: number) => {
+    const pct = duration > 0 ? (time / duration) * 100 : 0
+    if (progressFillRef.current) progressFillRef.current.style.width = `${pct}%`
+    if (progressThumbRef.current) progressThumbRef.current.style.left = `${pct}%`
+    if (currentTimeTextRef.current) currentTimeTextRef.current.textContent = formatTime(time)
+
+    if (miniViewRef.current === 'lyrics') {
+      const index = findCurrentLyricIndex(
+        lyricsRef.current,
+        time + lyricOffsetRef.current,
+      )
+      if (index !== lastLyricsIndexRef.current) {
+        lastLyricsIndexRef.current = index
+        setLyricsCurrentIndex(index)
+      }
+    }
+  }, [duration])
+
   const updateDragTime = useCallback((event: MouseEvent) => {
     if (!progressRef.current || duration <= 0) return
     const rect = progressRef.current.getBoundingClientRect()
@@ -179,59 +199,61 @@ function MiniPlayer() {
     dragTimeRef.current = ratio * duration
   }, [duration])
 
+  const resetProgressDrag = useCallback(() => {
+    isDraggingRef.current = false
+    dragTimeRef.current = null
+    setIsProgressDragging(false)
+  }, [])
+
   const handleProgressMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    resetProgressDrag()
+    cancelDocumentMouseDrag()
     isDraggingRef.current = true
+    setIsProgressDragging(true)
     updateDragTime(event as unknown as MouseEvent)
 
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      updateDragTime(moveEvent)
-    }
-
-    const handleMouseUp = () => {
-      isDraggingRef.current = false
-      const seekTo = dragTimeRef.current
-      if (seekTo !== null) setSeekTime(seekTo)
-      dragTimeRef.current = null
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-    }
-
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-  }, [updateDragTime, setSeekTime])
-
-  // 一个 RAF 同时维护默认视图进度和歌词视图索引。
-  useEffect(() => {
-    if (!featureFlags.playback || !featureFlags.miniMode || !isMiniMode) return
-
-    let rafId: number
-    const update = () => {
-      const time = isDraggingRef.current
-        ? (dragTimeRef.current ?? 0)
-        : currentTimeRef.current
-      const pct = duration > 0 ? (time / duration) * 100 : 0
-
-      if (progressFillRef.current) progressFillRef.current.style.width = `${pct}%`
-      if (progressThumbRef.current) progressThumbRef.current.style.left = `${pct}%`
-      if (currentTimeTextRef.current) currentTimeTextRef.current.textContent = formatTime(time)
-
-      if (miniViewRef.current === 'lyrics') {
-        const index = findCurrentLyricIndex(
-          lyricsRef.current,
-          time + lyricOffsetRef.current,
-        )
-        if (index !== lastLyricsIndexRef.current) {
-          lastLyricsIndexRef.current = index
-          setLyricsCurrentIndex(index)
+    startDocumentMouseDrag({
+      onMove: updateDragTime,
+      onEnd: () => {
+        isDraggingRef.current = false
+        setIsProgressDragging(false)
+        const seekTo = dragTimeRef.current
+        if (seekTo !== null) {
+          updatePlaybackView(seekTo)
+          setSeekTime(seekTo)
         }
-      }
+        dragTimeRef.current = null
+      },
+    })
+  }, [cancelDocumentMouseDrag, resetProgressDrag, setSeekTime, startDocumentMouseDrag, updateDragTime, updatePlaybackView])
 
-      rafId = requestAnimationFrame(update)
-    }
+  useEffect(() => {
+    if (featureFlags.playback && featureFlags.miniMode && isMiniMode) return
+    resetProgressDrag()
+    cancelDocumentMouseDrag()
+  }, [
+    cancelDocumentMouseDrag,
+    featureFlags.miniMode,
+    featureFlags.playback,
+    isMiniMode,
+    resetProgressDrag,
+  ])
 
-    rafId = requestAnimationFrame(update)
-    return () => cancelAnimationFrame(rafId)
-  }, [duration, featureFlags.playback, featureFlags.miniMode, isMiniMode])
+  // 一个按需 RAF 同时维护默认视图进度和歌词视图索引。
+  const renderPlaybackFrame = useCallback(() => {
+    const time = isDraggingRef.current
+      ? (dragTimeRef.current ?? 0)
+      : currentTimeRef.current
+    updatePlaybackView(time)
+  }, [updatePlaybackView])
+
+  const miniPlayerVisible = featureFlags.playback && featureFlags.miniMode && isMiniMode
+  useRafLoop(miniPlayerVisible && (isPlaying || isProgressDragging), renderPlaybackFrame)
+
+  useEffect(() => {
+    if (!miniPlayerVisible || isPlaying || isProgressDragging) return
+    renderPlaybackFrame()
+  }, [currentTrack?.id, duration, lyricOffset, lyrics, miniPlayerVisible, miniView, isPlaying, isProgressDragging, renderPlaybackFrame])
 
   if (!featureFlags.playback || !featureFlags.miniMode || !isMiniMode) return null
 
@@ -298,11 +320,7 @@ function MiniPlayer() {
             currentIndex={lyricsCurrentIndex}
           />
         ) : miniView === 'queue' && featureFlags.queuePanel ? (
-          <MiniQueueView
-            tracks={playlist}
-            currentTrackId={currentTrack?.id ?? null}
-            onPlay={playTrack}
-          />
+          <MiniQueueViewContainer />
         ) : defaultView}
       </div>
 

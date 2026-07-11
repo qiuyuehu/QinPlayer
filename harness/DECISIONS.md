@@ -14,6 +14,16 @@
 - **权衡**：普通页面和集合只做入场，只有歌词层、overlay 和 panel 承担退场状态，避免为所有内容引入常驻生命周期复杂度
 - **状态**：自动化实现完成，最终 Electron 视觉体感待主人验证
 
+## 2026-07-11 播放器按活跃状态调度与 dirty-key 持久化
+
+- **背景**：三个播放器在暂停时仍持续 RAF，document 拖拽缺少统一异常清理，MiniPlayer 顶层订阅 playlist，任意 store 更新都会重排并固定写入三项设置
+- **决策**：RAF 由可见性、播放和拖拽状态驱动；document drag 使用统一 cleanup hook；Mini queue 以条件 connector 隔离 playlist selector；播放器设置按 dirty key 在首个 500ms 窗口合并保存
+- **原因**：直接消除可测的空闲调度、无关提交、listener 生命周期风险和 SQLite 写放大，同时保留暂停拖拽、歌词点击和崩溃恢复语义
+- **权衡**：增加两个小 Hook 和一个 queue connector；暂停状态需要在 duration、seek、歌词变化时显式执行一次同步
+- **边界**：保留 5 秒 `lastCurrentTime` 安全网；不改 React.lazy、AudioEngine、useAudioSync、数据库 schema；songs snapshot 与 React.memo 未达到门槛，不实施
+- **指标**：不以 memo/effect 数量作为性能指标，只接受 RAF、listener、Profiler、IPC 与 settings write 的可复现结果
+- **状态**：自动化验证通过，真实 Electron CPU 与视觉交互待主人验证
+
 ## 2026-07-10 迷你播放器三视图共用固定壳层
 
 - **背景**：歌曲、歌词和队列视图的内容高度不同，动态调整 BrowserWindow 会造成切换抖动和位置漂移

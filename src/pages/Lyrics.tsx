@@ -18,6 +18,8 @@ import { useUIStore } from '../stores/uiStore'
 import { currentTimeRef } from '../utils/currentTimeRef'
 import LyricsPanel from '../components/LyricsPanel'
 import { useTrackLyrics } from '../hooks/useTrackLyrics'
+import { useDocumentMouseDrag } from '../hooks/useDocumentMouseDrag'
+import { useRafLoop } from '../hooks/useRafLoop'
 import { findCurrentLyricIndex } from '../utils/lrcParser'
 import { extractMainColor } from '../utils/colorExtract'
 import type { LyricLine } from '../types'
@@ -46,6 +48,7 @@ function Lyrics() {
 
   // --- 导航状态 ---
   const setActiveNav = useUIStore((s) => s.setActiveNav)
+  const activeNav = useUIStore((s) => s.activeNav)
   const previousNav = useUIStore((s) => s.previousNav)
   const featureFlags = useUIStore((s) => s.featureFlags)
 
@@ -59,6 +62,8 @@ function Lyrics() {
   const progressRef = useRef<HTMLDivElement>(null)
   const isDraggingRef = useRef(false)
   const dragTimeRef = useRef<number | null>(null)
+  const [isProgressDragging, setIsProgressDragging] = useState(false)
+  const { startDocumentMouseDrag, cancelDocumentMouseDrag } = useDocumentMouseDrag()
 
   // --- 进度条 DOM 元素 ref（RAF 直接操作，不触发 re-render） ---
   const progressFillRef = useRef<HTMLDivElement>(null)
@@ -71,15 +76,20 @@ function Lyrics() {
   // --- 歌词面板用的 currentIndex（只在行索引变化时才更新，避免高频 re-render） ---
   const [lyricsCurrentIndex, setLyricsCurrentIndex] = useState(-1)
   const lyricsRef = useRef<LyricLine[]>([])
+  const lastLyricsIndexRef = useRef(-1)
   const colorRequestRef = useRef(0)
   const lyricOffsetRef = useRef(0)
 
   // 同步 lyrics 和 lyricOffset 到 ref（供 RAF 使用）
   useEffect(() => {
     lyricsRef.current = lyrics
+    lastLyricsIndexRef.current = -1
     if (lyrics.length === 0) setLyricsCurrentIndex(-1)
   }, [lyrics])
-  useEffect(() => { setLyricsCurrentIndex(-1) }, [currentTrack?.id, currentTrack?.filePath])
+  useEffect(() => {
+    lastLyricsIndexRef.current = -1
+    setLyricsCurrentIndex(-1)
+  }, [currentTrack?.id, currentTrack?.filePath])
   useEffect(() => { lyricOffsetRef.current = lyricOffset }, [lyricOffset])
 
   // ---------------------------------------------------------------------------
@@ -186,6 +196,19 @@ function Lyrics() {
   // ---------------------------------------------------------------------------
   // 进度条拖拽逻辑
   // ---------------------------------------------------------------------------
+  const updatePlaybackView = useCallback((time: number) => {
+    const pct = duration > 0 ? (time / duration) * 100 : 0
+    if (progressFillRef.current) progressFillRef.current.style.width = `${pct}%`
+    if (progressThumbRef.current) progressThumbRef.current.style.left = `${pct}%`
+    if (currentTimeTextRef.current) currentTimeTextRef.current.textContent = formatTime(time)
+
+    const index = findCurrentLyricIndex(lyricsRef.current, time + lyricOffsetRef.current)
+    if (index !== lastLyricsIndexRef.current) {
+      lastLyricsIndexRef.current = index
+      setLyricsCurrentIndex(index)
+    }
+  }, [duration])
+
   const updateDragTime = useCallback((e: MouseEvent) => {
     if (!progressRef.current || duration <= 0) return
     const rect = progressRef.current.getBoundingClientRect()
@@ -194,28 +217,33 @@ function Lyrics() {
     dragTimeRef.current = time
   }, [duration])
 
+  const resetProgressDrag = useCallback(() => {
+    isDraggingRef.current = false
+    dragTimeRef.current = null
+    setIsProgressDragging(false)
+  }, [])
+
   const handleProgressMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    resetProgressDrag()
+    cancelDocumentMouseDrag()
     isDraggingRef.current = true
+    setIsProgressDragging(true)
     updateDragTime(e as unknown as MouseEvent)
 
-    const handleMouseMove = (ev: MouseEvent) => {
-      updateDragTime(ev)
-    }
-
-    const handleMouseUp = () => {
-      isDraggingRef.current = false
-      const seekTo = dragTimeRef.current
-      if (seekTo !== null) {
-        setSeekTime(seekTo)
-      }
-      dragTimeRef.current = null
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-    }
-
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-  }, [updateDragTime, setSeekTime])
+    startDocumentMouseDrag({
+      onMove: updateDragTime,
+      onEnd: () => {
+        isDraggingRef.current = false
+        setIsProgressDragging(false)
+        const seekTo = dragTimeRef.current
+        if (seekTo !== null) {
+          updatePlaybackView(seekTo)
+          setSeekTime(seekTo)
+        }
+        dragTimeRef.current = null
+      },
+    })
+  }, [cancelDocumentMouseDrag, resetProgressDrag, setSeekTime, startDocumentMouseDrag, updateDragTime, updatePlaybackView])
 
   const updateVolume = useCallback((e: MouseEvent) => {
     if (!volumeBarRef.current) return
@@ -226,20 +254,28 @@ function Lyrics() {
 
   const handleVolumeMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault()
+    resetProgressDrag()
+    cancelDocumentMouseDrag()
     updateVolume(e.nativeEvent)
 
-    const handleMouseMove = (ev: MouseEvent) => {
-      updateVolume(ev)
-    }
+    startDocumentMouseDrag({
+      onMove: updateVolume,
+      onEnd: () => {},
+    })
+  }, [cancelDocumentMouseDrag, resetProgressDrag, startDocumentMouseDrag, updateVolume])
 
-    const handleMouseUp = () => {
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-    }
-
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-  }, [updateVolume])
+  useEffect(() => {
+    if (featureFlags.playback && featureFlags.lyrics && activeNav === 'lyrics') return
+    resetProgressDrag()
+    cancelDocumentMouseDrag()
+    setShowVolume(false)
+  }, [
+    activeNav,
+    cancelDocumentMouseDrag,
+    featureFlags.lyrics,
+    featureFlags.playback,
+    resetProgressDrag,
+  ])
 
   const handleVolumeBtnClick = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation()
@@ -250,43 +286,35 @@ function Lyrics() {
     setPlayMode(togglePlayMode(playMode))
   }, [playMode, setPlayMode])
 
+  const handleLyricLineClick = useCallback((time: number) => {
+    updatePlaybackView(time)
+    setSeekTime(time)
+  }, [setSeekTime, updatePlaybackView])
+
   // ---------------------------------------------------------------------------
   // 格式化时间
   // ---------------------------------------------------------------------------
 
   // ---------------------------------------------------------------------------
-  // RAF 循环：进度条 DOM 直接操作 + 歌词索引变化时才 re-render
+  // RAF 只在播放或拖拽时运行，歌词索引变化时才 re-render。
   // ---------------------------------------------------------------------------
-  // 进度条每帧更新（60fps），歌词只在行索引变化时触发一次 re-render
+  const renderPlaybackFrame = useCallback(() => {
+    const time = isDraggingRef.current
+      ? (dragTimeRef.current ?? 0)
+      : currentTimeRef.current
+    updatePlaybackView(time)
+  }, [updatePlaybackView])
+
+  const lyricsVisible = featureFlags.playback
+    && featureFlags.lyrics
+    && activeNav === 'lyrics'
+    && currentTrack !== null
+  useRafLoop(lyricsVisible && (isPlaying || isProgressDragging), renderPlaybackFrame)
+
   useEffect(() => {
-    let rafId: number
-    let lastLyricsIndex = -1
-
-    const update = () => {
-      const time = isDraggingRef.current
-        ? (dragTimeRef.current ?? 0)
-        : currentTimeRef.current
-      const pct = duration > 0 ? (time / duration) * 100 : 0
-
-      // 进度条：每帧直接操作 DOM
-      if (progressFillRef.current) progressFillRef.current.style.width = `${pct}%`
-      if (progressThumbRef.current) progressThumbRef.current.style.left = `${pct}%`
-      if (currentTimeTextRef.current) currentTimeTextRef.current.textContent = formatTime(time)
-
-      // 歌词索引：只在行索引变化时才 setState（避免每 100ms re-render）
-      const currentLyrics = lyricsRef.current
-      const offset = lyricOffsetRef.current
-      const result = findCurrentLyricIndex(currentLyrics, time + offset)
-      if (result !== lastLyricsIndex) {
-        lastLyricsIndex = result
-        setLyricsCurrentIndex(result)
-      }
-
-      rafId = requestAnimationFrame(update)
-    }
-    rafId = requestAnimationFrame(update)
-    return () => cancelAnimationFrame(rafId)
-  }, [duration])
+    if (!lyricsVisible || isPlaying || isProgressDragging) return
+    renderPlaybackFrame()
+  }, [currentTrack?.id, duration, lyricOffset, lyrics, lyricsVisible, isPlaying, isProgressDragging, renderPlaybackFrame])
 
   // ---------------------------------------------------------------------------
   // 无歌曲时显示空状态
@@ -454,7 +482,7 @@ function Lyrics() {
           key={currentTrack?.id ?? 'no-track'}
           lyrics={lyrics}
           currentIndex={lyricsCurrentIndex}
-          onLineClick={(time) => setSeekTime(time)}
+          onLineClick={handleLyricLineClick}
           featureFlags={featureFlags}
           layoutRevision={isFullscreen ? 1 : 0}
         />

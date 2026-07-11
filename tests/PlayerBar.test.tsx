@@ -3,7 +3,7 @@
  * TDD 方式：先写测试，再实现
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import PlayerBar from '../src/components/PlayerBar'
 import { usePlayerStore } from '../src/stores/playerStore'
@@ -155,5 +155,51 @@ describe('PlayerBar', () => {
 
     expect(screen.queryByTitle('播放列表')).not.toBeInTheDocument()
     expect(screen.queryByText('当前播放队列为空')).not.toBeInTheDocument()
+  })
+
+  it('拖拽中关闭 playback 应主动清理 document listener 且不提交 seek', () => {
+    const removeSpy = vi.spyOn(document, 'removeEventListener')
+    usePlayerStore.setState({ duration: 100, seekTime: null })
+    render(<PlayerBar />)
+
+    fireEvent.mouseDown(document.querySelector('.player-bar__progress-bar')!, { clientX: 10 })
+    act(() => useUIStore.getState().setFeatureFlags({ ...DEFAULT_FEATURE_FLAGS, playback: false }))
+    document.dispatchEvent(new MouseEvent('mouseup'))
+
+    expect(removeSpy.mock.calls.filter(([type]) => type === 'mousemove')).toHaveLength(1)
+    expect(removeSpy.mock.calls.filter(([type]) => type === 'mouseup')).toHaveLength(1)
+    expect(usePlayerStore.getState().seekTime).toBeNull()
+    removeSpy.mockRestore()
+  })
+
+  it('暂停空闲不应调度 RAF，拖拽和恢复播放应按需启停', () => {
+    const originalRequest = globalThis.requestAnimationFrame
+    const originalCancel = globalThis.cancelAnimationFrame
+    const requestRaf = vi.fn((_callback: FrameRequestCallback) => 1)
+    const cancelRaf = vi.fn()
+    globalThis.requestAnimationFrame = requestRaf
+    globalThis.cancelAnimationFrame = cancelRaf
+    usePlayerStore.setState({ isPlaying: false, duration: 100, seekTime: null })
+    const view = render(<PlayerBar />)
+
+    expect(requestRaf).not.toHaveBeenCalled()
+    const progress = document.querySelector('.player-bar__progress-bar') as HTMLElement
+    vi.spyOn(progress, 'getBoundingClientRect').mockReturnValue({
+      left: 0, width: 100, top: 0, right: 100, bottom: 4, height: 4, x: 0, y: 0,
+      toJSON: () => ({}),
+    })
+    fireEvent.mouseDown(progress, { clientX: 50 })
+    expect(requestRaf).toHaveBeenCalledTimes(1)
+
+    fireEvent.mouseUp(document)
+    expect(cancelRaf).toHaveBeenCalledWith(1)
+    expect(usePlayerStore.getState().seekTime).toBe(50)
+
+    act(() => usePlayerStore.getState().setPlaying(true))
+    expect(requestRaf).toHaveBeenCalledTimes(2)
+
+    view.unmount()
+    globalThis.requestAnimationFrame = originalRequest
+    globalThis.cancelAnimationFrame = originalCancel
   })
 })

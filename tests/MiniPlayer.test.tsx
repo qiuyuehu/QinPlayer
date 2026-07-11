@@ -3,6 +3,7 @@
  * 覆盖视图切换、共同控制、feature flags、播放入口和共享 RAF
  */
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { Profiler } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import MiniPlayer from '../src/components/MiniPlayer'
 import { usePlayerStore } from '../src/stores/playerStore'
@@ -232,6 +233,50 @@ describe('MiniPlayer', () => {
     expect(invokeMock.mock.calls.filter(([channel]) => channel === 'songs:updatePlayCount')).toHaveLength(1)
   })
 
+  it('只有队列视图应订阅 playlist 变化', async () => {
+    const commits: string[] = []
+    render(
+      <Profiler id="mini-player" onRender={(_id, phase) => commits.push(phase)}>
+        <MiniPlayer />
+      </Profiler>,
+    )
+    await waitFor(() => {
+      expect(invokeMock.mock.calls.some(([channel]) => channel === 'read-lrc-file')).toBe(true)
+    })
+    await act(async () => {})
+    commits.length = 0
+
+    act(() => {
+      for (let index = 0; index < 50; index++) {
+        usePlayerStore.getState().setPlaylist([{ ...trackA }, { ...trackB }])
+      }
+    })
+    expect(commits).toHaveLength(0)
+
+    fireEvent.click(screen.getByRole('button', { name: '队列视图' }))
+    commits.length = 0
+    act(() => usePlayerStore.getState().setPlaylist([trackB]))
+    expect(screen.getByRole('button', { name: /歌曲 B - 歌手 B/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /歌曲 A - 歌手 A/ })).not.toBeInTheDocument()
+    expect(commits.length).toBeGreaterThan(0)
+
+    fireEvent.click(screen.getByRole('button', { name: '歌曲视图' }))
+    commits.length = 0
+    act(() => usePlayerStore.getState().setPlaylist([trackA]))
+    expect(commits).toHaveLength(0)
+
+    for (let index = 0; index < 50; index++) {
+      fireEvent.click(screen.getByRole('button', { name: '队列视图' }))
+      act(() => usePlayerStore.getState().setPlaylist([trackB]))
+      expect(screen.getByRole('button', { name: /歌曲 B - 歌手 B/ })).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: '歌曲视图' }))
+      commits.length = 0
+      act(() => usePlayerStore.getState().setPlaylist([trackA]))
+      expect(commits).toHaveLength(0)
+    }
+  })
+
   it('推进共享 RAF 时应该更新歌词视图的 active 行', async () => {
     let frameCallback: FrameRequestCallback | undefined
     globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
@@ -324,9 +369,44 @@ describe('MiniPlayer', () => {
     expect(usePlayerStore.getState().playMode).toBe('sequential')
   })
 
+  it('进度拖拽中退出迷你模式应主动清理 document listener 且不提交 seek', () => {
+    const removeSpy = vi.spyOn(document, 'removeEventListener')
+    act(() => usePlayerStore.setState({ duration: 100, seekTime: null }))
+    render(<MiniPlayer />)
+
+    fireEvent.mouseDown(document.querySelector('.mini-player__progress-bar')!, { clientX: 10 })
+    act(() => useUIStore.getState().setMiniMode(false))
+    document.dispatchEvent(new MouseEvent('mouseup'))
+
+    expect(removeSpy.mock.calls.filter(([type]) => type === 'mousemove')).toHaveLength(1)
+    expect(removeSpy.mock.calls.filter(([type]) => type === 'mouseup')).toHaveLength(1)
+    expect(usePlayerStore.getState().seekTime).toBeNull()
+    removeSpy.mockRestore()
+  })
+
+  it('暂停空闲不应调度 RAF，播放与可见状态应控制停止和恢复', () => {
+    const requestRaf = vi.fn((_callback: FrameRequestCallback) => requestRaf.mock.calls.length)
+    const cancelRaf = vi.fn()
+    globalThis.requestAnimationFrame = requestRaf
+    globalThis.cancelAnimationFrame = cancelRaf
+    act(() => usePlayerStore.setState({ isPlaying: false }))
+    const view = render(<MiniPlayer />)
+
+    expect(requestRaf).not.toHaveBeenCalled()
+    act(() => usePlayerStore.getState().setPlaying(true))
+    expect(requestRaf).toHaveBeenCalledTimes(1)
+
+    act(() => useUIStore.getState().setMiniMode(false))
+    expect(cancelRaf).toHaveBeenCalledWith(1)
+    act(() => useUIStore.getState().setMiniMode(true))
+    expect(requestRaf).toHaveBeenCalledTimes(2)
+
+    view.unmount()
+  })
+
   it('置顶按钮应该切换窗口置顶状态', () => {
-    const sendMock = vi.fn()
-    window.electronAPI.send = sendMock
+    const setAlwaysOnTopMock = vi.fn()
+    window.electronAPI.setAlwaysOnTop = setAlwaysOnTopMock
 
     render(<MiniPlayer />)
 
@@ -335,36 +415,36 @@ describe('MiniPlayer', () => {
 
     // 点击置顶
     fireEvent.click(screen.getByTitle('置顶'))
-    expect(sendMock).toHaveBeenCalledWith('window:set-always-on-top', true)
+    expect(setAlwaysOnTopMock).toHaveBeenCalledWith(true)
     expect(screen.getByTitle('取消置顶')).toBeInTheDocument()
 
     // 再点取消置顶
     fireEvent.click(screen.getByTitle('取消置顶'))
-    expect(sendMock).toHaveBeenCalledWith('window:set-always-on-top', false)
+    expect(setAlwaysOnTopMock).toHaveBeenCalledWith(false)
     expect(screen.getByTitle('置顶')).toBeInTheDocument()
   })
 
   it('关闭迷你模式时应该自动取消置顶', () => {
-    const sendMock = vi.fn()
-    window.electronAPI.send = sendMock
+    const setAlwaysOnTopMock = vi.fn()
+    window.electronAPI.setAlwaysOnTop = setAlwaysOnTopMock
 
     render(<MiniPlayer />)
 
     // 先置顶
     fireEvent.click(screen.getByTitle('置顶'))
-    expect(sendMock).toHaveBeenCalledWith('window:set-always-on-top', true)
+    expect(setAlwaysOnTopMock).toHaveBeenCalledWith(true)
 
     // 关闭迷你模式
     fireEvent.click(screen.getByTitle('关闭'))
 
     // 应该自动取消置顶
-    expect(sendMock).toHaveBeenCalledWith('window:set-always-on-top', false)
+    expect(setAlwaysOnTopMock).toHaveBeenCalledWith(false)
     expect(useUIStore.getState().isMiniMode).toBe(false)
   })
 
   it('展开时应该自动取消置顶', () => {
-    const sendMock = vi.fn()
-    window.electronAPI.send = sendMock
+    const setAlwaysOnTopMock = vi.fn()
+    window.electronAPI.setAlwaysOnTop = setAlwaysOnTopMock
 
     render(<MiniPlayer />)
 
@@ -375,7 +455,7 @@ describe('MiniPlayer', () => {
     fireEvent.click(screen.getByTitle('展开'))
 
     // 应该自动取消置顶
-    expect(sendMock).toHaveBeenCalledWith('window:set-always-on-top', false)
+    expect(setAlwaysOnTopMock).toHaveBeenCalledWith(false)
     expect(useUIStore.getState().isMiniMode).toBe(false)
   })
 })

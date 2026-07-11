@@ -80,13 +80,14 @@ function ContextMenu({ items, x, y, onClose }: ContextMenuProps) {
     }
 
     // 用 setTimeout(0) 延迟到下一个事件循环，避免当前右键事件的 click 冒泡立即关闭菜单
-    setTimeout(() => {
+    const listenerTimer = setTimeout(() => {
       document.addEventListener('click', handleClickOutside)
       document.addEventListener('contextmenu', handleClickOutside)
     }, 0)
 
     // cleanup：组件卸载时移除全局事件监听，防止内存泄漏
     return () => {
+      clearTimeout(listenerTimer)
       document.removeEventListener('click', handleClickOutside)
       document.removeEventListener('contextmenu', handleClickOutside)
     }

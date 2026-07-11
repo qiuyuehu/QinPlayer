@@ -12,6 +12,8 @@ import { useUIStore } from '../stores/uiStore'  // UI 状态（导航切换、�
 import { currentTimeRef } from '../utils/currentTimeRef'  // 共享播放时间 ref
 import type { PlayMode } from '../types'  // 播放模式类型
 import PlaylistPanel from './PlaylistPanel'
+import { useDocumentMouseDrag } from '../hooks/useDocumentMouseDrag'
+import { useRafLoop } from '../hooks/useRafLoop'
 import {
   IconPlay, IconPause, IconPrev, IconNext,
   IconVolumeHigh, IconVolumeLow, IconVolumeMuted,
@@ -59,6 +61,8 @@ function PlayerBar() {
   const progressRef = useRef<HTMLDivElement>(null)
   const isDraggingRef = useRef(false)  // 是否正在拖拽（ref 避免闭包问题）
   const dragTimeRef = useRef<number | null>(null)  // 拖拽中的预览时间（RAF 直接读取）
+  const [isProgressDragging, setIsProgressDragging] = useState(false)
+  const { startDocumentMouseDrag, cancelDocumentMouseDrag } = useDocumentMouseDrag()
 
   // --- 进度条 DOM 元素 ref（RAF 直接操作，不触发 re-render） ---
   const progressFillRef = useRef<HTMLDivElement>(null)
@@ -111,6 +115,13 @@ function PlayerBar() {
   // ------------------------------------------------------------------
   // 进度条：拖拽交互（mousedown 注册事件，mousemove 更新预览，mouseup 发送 seek）
   // ------------------------------------------------------------------
+  const updateProgressDom = useCallback((time: number) => {
+    const pct = duration > 0 ? (time / duration) * 100 : 0
+    if (progressFillRef.current) progressFillRef.current.style.width = `${pct}%`
+    if (progressThumbRef.current) progressThumbRef.current.style.left = `${pct}%`
+    if (currentTimeTextRef.current) currentTimeTextRef.current.textContent = formatTime(time)
+  }, [duration])
+
   // 用 ref 存储最新拖拽时间，避免 mouseup 闭包捕获旧值
   const updateDragTime = useCallback((e: MouseEvent) => {
     if (!progressRef.current || duration <= 0) return
@@ -120,29 +131,34 @@ function PlayerBar() {
     dragTimeRef.current = time  // RAF 循环直接读取，不触发 re-render
   }, [duration])
 
+  const resetProgressDrag = useCallback(() => {
+    isDraggingRef.current = false
+    dragTimeRef.current = null
+    setIsProgressDragging(false)
+  }, [])
+
   const handleProgressMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    resetProgressDrag()
+    cancelDocumentMouseDrag()
     isDraggingRef.current = true
+    setIsProgressDragging(true)
     updateDragTime(e as unknown as MouseEvent)
 
-    const handleMouseMove = (ev: MouseEvent) => {
-      updateDragTime(ev)
-    }
-
-    const handleMouseUp = () => {
+    startDocumentMouseDrag({
+      onMove: updateDragTime,
+      onEnd: () => {
       isDraggingRef.current = false
+      setIsProgressDragging(false)
       // 从 ref 读取最新拖拽时间（闭包里的 dragTime 是旧值）
       const seekTo = dragTimeRef.current
       if (seekTo !== null) {
+        updateProgressDom(seekTo)
         setSeekTime(seekTo)
       }
       dragTimeRef.current = null
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-    }
-
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-  }, [updateDragTime, setSeekTime])
+      },
+    })
+  }, [cancelDocumentMouseDrag, resetProgressDrag, setSeekTime, startDocumentMouseDrag, updateDragTime, updateProgressDom])
 
   // ------------------------------------------------------------------
   // 音量：拖拽交互（与进度条同理，但不需要 ref，因为没有延迟回调）
@@ -155,20 +171,23 @@ function PlayerBar() {
   }, [setVolume])
 
   const handleVolumeMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    resetProgressDrag()
+    cancelDocumentMouseDrag()
     updateVolume(e as unknown as MouseEvent)
 
-    const handleMouseMove = (ev: MouseEvent) => {
-      updateVolume(ev)
-    }
+    startDocumentMouseDrag({
+      onMove: updateVolume,
+      onEnd: () => {},
+    })
+  }, [cancelDocumentMouseDrag, resetProgressDrag, startDocumentMouseDrag, updateVolume])
 
-    const handleMouseUp = () => {
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-    }
-
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-  }, [updateVolume])
+  useEffect(() => {
+    if (featureFlags.playback) return
+    resetProgressDrag()
+    cancelDocumentMouseDrag()
+    setShowVolume(false)
+    setVolumeHover(false)
+  }, [cancelDocumentMouseDrag, featureFlags.playback, resetProgressDrag])
 
   useEffect(() => {
     if (!showVolume) return
@@ -195,28 +214,22 @@ function PlayerBar() {
 
 
   // ---------------------------------------------------------------------------
-  // RAF 循环：直接操作进度条 DOM，不触发 React re-render
+  // RAF 只在播放或拖拽时运行；暂停空闲时仅按状态变化同步一次。
   // ---------------------------------------------------------------------------
-  // 播放时每帧更新进度条位置和时间文字，拖拽时显示拖拽预览时间
+  const renderProgressFrame = useCallback(() => {
+    const time = isDraggingRef.current
+      ? (dragTimeRef.current ?? 0)
+      : currentTimeRef.current
+    updateProgressDom(time)
+  }, [updateProgressDom])
+
+  const progressRafActive = featureFlags.playback && (isPlaying || isProgressDragging)
+  useRafLoop(progressRafActive, renderProgressFrame)
+
   useEffect(() => {
-    let rafId: number
-    const update = () => {
-      // 拖拽中用拖拽时间，否则用共享 ref 的播放时间
-      const time = isDraggingRef.current
-        ? (dragTimeRef.current ?? 0)
-        : currentTimeRef.current
-      const pct = duration > 0 ? (time / duration) * 100 : 0
-
-      // 直接操作 DOM，不触发 re-render
-      if (progressFillRef.current) progressFillRef.current.style.width = `${pct}%`
-      if (progressThumbRef.current) progressThumbRef.current.style.left = `${pct}%`
-      if (currentTimeTextRef.current) currentTimeTextRef.current.textContent = formatTime(time)
-
-      rafId = requestAnimationFrame(update)
-    }
-    rafId = requestAnimationFrame(update)
-    return () => cancelAnimationFrame(rafId)
-  }, [duration])
+    if (!featureFlags.playback || isPlaying || isProgressDragging) return
+    renderProgressFrame()
+  }, [currentTrack?.id, duration, featureFlags.playback, isPlaying, isProgressDragging, renderProgressFrame])
 
   // ---------------------------------------------------------------------------
   // 渲染（三栏布局：左侧歌曲信息 | 中间控制+进度 | 右侧模式+音量）
