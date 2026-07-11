@@ -109,8 +109,8 @@
 /* 关闭按钮固定在右上角，内容区为它预留了宽度。 */
 .mini-player__close-btn {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 2px;
+  right: 2px;
   z-index: 2;
   width: 26px;
   height: 26px;
@@ -244,15 +244,17 @@
 
 /* 队列视图保持固定列宽，400×150 下可完整显示至少两项。 */
 .mini-queue-view {
-  width: 100%;
-  height: calc(100% - 28px);
+  position: absolute;
+  top: 28px;
+  right: 0;
+  bottom: 46px;
+  left: 0;
   min-width: 0;
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar-thumb) transparent;
-  margin-top: 28px;
   animation: miniViewIn var(--motion-duration-standard) var(--motion-ease-standard) both;
 }
 
