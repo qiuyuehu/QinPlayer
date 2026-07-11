@@ -1,6 +1,6 @@
 # QinPlayer — 纯本地音乐播放器
 
-> 基于源码分析更新至：2026-07-10
+> 基于源码分析更新至：2026-07-11
 
 ---
 
@@ -49,6 +49,7 @@ QinPlayer/
 │   │   ├── MiniPlayer.tsx             # 迷你模式三视图壳层
 │   │   ├── MiniLyricsView.tsx         # 迷你歌词紧凑视图
 │   │   ├── MiniQueueView.tsx          # 迷你队列紧凑视图
+│   │   ├── AlbumSortMenu.tsx          # 专辑排序菜单
 │   │   ├── Equalizer.tsx              # 均衡器
 │   │   ├── Sidebar.tsx                # 侧边栏导航
 │   │   ├── TitleBar.tsx               # 标题栏
@@ -85,6 +86,7 @@ QinPlayer/
 │   │   ├── lrcParser.ts               # LRC 歌词解析 (196行)
 │   │   ├── colorExtract.ts            # 封面取色
 │   │   ├── featureFlags.ts            # 功能开关
+│   │   ├── albumSort.ts               # 专辑本地化排序
 │   │   ├── formatTime.ts              # 时间格式化
 │   │   ├── currentTimeRef.ts          # 播放时间 ref
 │   │   └── mediaSession.ts            # 系统媒体控制
@@ -115,7 +117,7 @@ QinPlayer/
 │       ├── index.ts                   # 通用类型
 │       └── electron.d.ts              # Electron API 类型
 │
-├── tests/                             # 测试 (19 个测试文件)
+├── tests/                             # 测试 (22 个测试文件)
 │   ├── playerStore.test.ts
 │   ├── uiStore.test.ts
 │   ├── useAudioSync.test.tsx
@@ -134,7 +136,10 @@ QinPlayer/
 │   ├── Playlists.test.tsx
 │   ├── PlaylistPanel.test.tsx
 │   ├── windowBounds.test.ts
-│   └── harnessChecks.test.ts
+│   ├── harnessChecks.test.ts
+│   ├── albumSort.test.ts
+│   ├── AlbumSortMenu.test.tsx
+│   └── Albums.test.tsx
 │
 ├── harness/                           # AI 工程约束
 │   ├── SPEC.md
@@ -185,6 +190,11 @@ QinPlayer/
 
 ### 专辑
 - 网格视图展示所有专辑（封面 + 专辑名 + 歌手）
+- 默认按专辑名的拼音/本地化字母序升序排列，可切换按代表歌手排序及升序/降序
+- 专辑名、歌手、升序、降序收在同一层排序菜单中，触发器持续显示当前字段和方向；专辑总数保持只读文本
+- 当前排序字段为空或为未知值时，该专辑在升序和降序中都位于末尾
+- 排序只改变网格卡片顺序，不改变专辑详情中的歌曲源顺序
+- 专辑仍只按名称分组；卡片代表歌手取该分组遇到的第一首歌曲
 - 点击专辑进入歌曲列表
 
 ### 最近播放
@@ -474,8 +484,8 @@ Main Process ✓ 负责 SQLite、文件系统、窗口、IPC
 ## 测试覆盖
 
 - 框架：Vitest + @testing-library/react
-- 用例数：207 个（19 个测试文件）
-- 覆盖范围：formatTime、lrcParser、playerStore、uiStore、PlayerBar、LyricsPanel、LyricsFullscreen、MiniPlayer、MiniLyricsView、MiniQueueView、SongList、PlaylistPanel、featureFlags、Sidebar、useAudioSync、useTrackLyrics、windowBounds、Harness checks
+- 用例数：241 个（22 个测试文件）
+- 覆盖范围：formatTime、lrcParser、albumSort、playerStore、uiStore、PlayerBar、LyricsPanel、LyricsFullscreen、MiniPlayer、MiniLyricsView、MiniQueueView、AlbumSortMenu、Albums、SongList、PlaylistPanel、featureFlags、Sidebar、useAudioSync、useTrackLyrics、windowBounds、Harness checks
 - Feature Flags 消融验证：16 个 flag 逐个关闭不影响其他 flag
 
 ---

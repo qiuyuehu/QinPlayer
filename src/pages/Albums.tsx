@@ -1,21 +1,16 @@
 // =============================================================================
 // QinPlayer — 专辑页面
 // =============================================================================
-// 职责：网格视图展示所有专辑，点击进入专辑歌曲列表
+// 职责：网格视图展示并排序所有专辑，点击进入专辑歌曲列表
 // 数据：从数据库按 album 字段分组，提取封面
 // =============================================================================
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import SongList from '../components/SongList'
-import type { Track, Playlist } from '../types'
-
-// 专辑数据结构：按专辑名聚合后的分组信息
-interface AlbumGroup {
-  name: string        // 专辑名称
-  artist: string      // 艺术家名
-  coverPath: string | null  // 封面图片路径，可能为 null
-  songs: Track[]      // 该专辑下的所有歌曲
-}
+import AlbumSortMenu from '../components/AlbumSortMenu'
+import { sortAlbums } from '../utils/albumSort'
+import type { AlbumSortBy } from '../utils/albumSort'
+import type { Album, SortOrder, Track } from '../types'
 
 /**
  * 专辑页面组件
@@ -23,10 +18,16 @@ interface AlbumGroup {
  * 组件挂载时一次性加载所有歌曲，在前端按 album 字段分组
  */
 function Albums() {
-  // 所有专辑分组数据，按歌曲数降序排列
-  const [albums, setAlbums] = useState<AlbumGroup[]>([])
+  // 所有专辑分组保留数据库源顺序；网格顺序由 useMemo 派生。
+  const [albums, setAlbums] = useState<Album[]>([])
   // 当前选中的专辑，为 null 时显示网格，有值时显示详情
-  const [selectedAlbum, setSelectedAlbum] = useState<AlbumGroup | null>(null)
+  const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null)
+  const [sortBy, setSortBy] = useState<AlbumSortBy>('name')
+  const [sortOrder, setSortOrder] = useState<SortOrder>('asc')
+  const sortedAlbums = useMemo(
+    () => sortAlbums(albums, sortBy, sortOrder),
+    [albums, sortBy, sortOrder],
+  )
 
   // 加载所有歌曲并按专辑分组，仅在组件挂载时执行一次
   useEffect(() => {
@@ -35,8 +36,8 @@ function Albums() {
         // 获取数据库中所有歌曲，需要前端做分组处理
         const songs = await window.electronAPI.invoke('songs:getAll') as Track[]
 
-        // 按专辑名分组：用 Map 存储，key 为专辑名，value 为 AlbumGroup
-        const albumMap = new Map<string, AlbumGroup>()
+        // 按专辑名分组：用 Map 存储，key 为专辑名，value 为 Album
+        const albumMap = new Map<string, Album>()
         for (const song of songs) {
           // 无专辑名的歌曲归入"未知专辑"
           const key = song.album || '未知专辑'
@@ -53,11 +54,7 @@ function Albums() {
           albumMap.get(key)!.songs.push(song)
         }
 
-        // 按歌曲数量降序排列，歌曲多的专辑排在前面
-        const sorted = Array.from(albumMap.values())
-          .sort((a, b) => b.songs.length - a.songs.length)
-
-        setAlbums(sorted)
+        setAlbums(Array.from(albumMap.values()))
       } catch (e) {
         console.error('加载专辑失败:', e)
       }
@@ -96,13 +93,21 @@ function Albums() {
     <div className="albums">
       <div className="albums__header">
         <h2 className="albums__title">专辑</h2>
-        <span className="albums__total">{albums.length} 个专辑</span>
+        <div className="albums__header-actions">
+          <AlbumSortMenu
+            sortBy={sortBy}
+            sortOrder={sortOrder}
+            onSortByChange={setSortBy}
+            onSortOrderChange={setSortOrder}
+          />
+          <span className="albums__total">{albums.length} 个专辑</span>
+        </div>
       </div>
 
       {/* 有专辑时渲染网格，否则显示空状态引导 */}
       {albums.length > 0 ? (
         <div className="albums__grid">
-          {albums.map((album) => (
+          {sortedAlbums.map((album) => (
             <div
               key={album.name}
               className="albums__card"
