@@ -46,7 +46,8 @@
 }
 
 .album-sort-menu__trigger {
-  width: 172px;
+  width: auto;
+  min-width: 120px;
   height: 32px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 14px;
@@ -59,7 +60,7 @@
   color: var(--text-secondary);
   cursor: pointer;
   font-size: 12px;
-  text-align: left;
+  text-align: center;
   transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 

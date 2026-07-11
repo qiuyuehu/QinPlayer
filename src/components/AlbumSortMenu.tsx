@@ -176,7 +176,7 @@ function AlbumSortMenu({
         onKeyDown={handleTriggerKeyDown}
       >
         <span className="album-sort-menu__summary">
-          排序：{fieldLabel} · {orderLabel}
+          {fieldLabel} · {orderLabel}
         </span>
         <IconChevronDown
           width={14}

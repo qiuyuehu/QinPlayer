@@ -52,7 +52,7 @@ function cardNames(): string[] {
 }
 
 function chooseSortOption(name: '专辑名' | '歌手' | '升序' | '降序'): void {
-  fireEvent.click(screen.getByRole('button', { name: /排序：/ }))
+  fireEvent.click(screen.getByRole('button', { name: /专辑名|歌手/ }))
   fireEvent.click(screen.getByRole('menuitemradio', { name }))
 }
 
@@ -73,7 +73,7 @@ describe('Albums', () => {
   it('加载后应该默认按专辑名升序展示卡片', async () => {
     render(<Albums />)
 
-    expect(await screen.findByRole('button', { name: '排序：专辑名 · 升序' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: '专辑名 · 升序' })).toBeInTheDocument()
     await waitFor(() => {
       expect(cardNames()).toEqual(['Alpha', 'Beta', 'Zulu', '未知专辑'])
     })
@@ -85,7 +85,7 @@ describe('Albums', () => {
 
     chooseSortOption('歌手')
 
-    expect(screen.getByRole('button', { name: '排序：歌手 · 升序' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '歌手 · 升序' })).toBeInTheDocument()
     expect(cardNames()).toEqual(['Beta', '未知专辑', 'Zulu', 'Alpha'])
   })
 
@@ -95,10 +95,10 @@ describe('Albums', () => {
 
     chooseSortOption('歌手')
     chooseSortOption('降序')
-    expect(screen.getByRole('button', { name: '排序：歌手 · 降序' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '歌手 · 降序' })).toBeInTheDocument()
 
     chooseSortOption('专辑名')
-    expect(screen.getByRole('button', { name: '排序：专辑名 · 降序' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '专辑名 · 降序' })).toBeInTheDocument()
     expect(cardNames()).toEqual(['Zulu', 'Beta', 'Alpha', '未知专辑'])
   })
 
@@ -120,7 +120,7 @@ describe('Albums', () => {
 
     fireEvent.click(zuluName!.closest('.albums__card')!)
 
-    expect(screen.queryByRole('button', { name: /排序：/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /专辑名|歌手/ })).not.toBeInTheDocument()
     expect(screen.getByTestId('song-list-mock')).toHaveTextContent('6,5')
   })
 
@@ -132,7 +132,7 @@ describe('Albums', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '← 返回' }))
 
-    expect(screen.getByRole('button', { name: '排序：专辑名 · 降序' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '专辑名 · 降序' })).toBeInTheDocument()
     expect(cardNames()).toEqual(['Zulu', 'Beta', 'Alpha', '未知专辑'])
   })
 

@@ -29,7 +29,7 @@ function renderMenu({ sortBy = 'name', sortOrder = 'asc' }: RenderMenuOptions = 
 }
 
 function trigger(): HTMLButtonElement {
-  return screen.getByRole('button', { name: /排序：/ })
+  return screen.getByRole('button', { name: /专辑名|歌手/ })
 }
 
 function menuItems(): HTMLElement[] {
@@ -49,7 +49,7 @@ describe('AlbumSortMenu', () => {
   it('默认应该关闭并显示当前排序摘要', () => {
     renderMenu()
 
-    expect(trigger()).toHaveTextContent('排序：专辑名 · 升序')
+    expect(trigger()).toHaveTextContent('专辑名 · 升序')
     expect(trigger()).toHaveAttribute('aria-haspopup', 'menu')
     expect(trigger()).toHaveAttribute('aria-expanded', 'false')
     expect(screen.queryByRole('menu', { name: '专辑排序' })).not.toBeInTheDocument()
@@ -120,7 +120,7 @@ describe('AlbumSortMenu', () => {
         onSortOrderChange={onSortOrderChange}
       />,
     )
-    expect(trigger()).toHaveTextContent('排序：歌手 · 降序')
+    expect(trigger()).toHaveTextContent('歌手 · 降序')
 
     fireEvent.click(trigger())
     expect(screen.getByRole('menuitemradio', { name: '歌手' })).toHaveAttribute('aria-checked', 'true')
