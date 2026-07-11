@@ -27,7 +27,6 @@
 .mini-player__content {
   min-width: 0;
   min-height: 0;
-  padding-right: 28px;
   overflow: hidden;
 }
 
@@ -39,6 +38,7 @@
   display: grid;
   grid-template-rows: minmax(0, 1fr) 18px;
   gap: 6px;
+  padding-right: 28px;
 }
 
 /* 默认视图：封面 + 歌曲信息 */
@@ -243,13 +243,14 @@
 /* 队列视图保持固定列宽，400×150 下可完整显示至少两项。 */
 .mini-queue-view {
   width: 100%;
-  height: 100%;
+  height: calc(100% - 28px);
   min-width: 0;
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar-thumb) transparent;
+  margin-top: 28px;
 }
 
 .mini-queue-view::-webkit-scrollbar {
