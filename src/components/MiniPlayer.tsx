@@ -325,6 +325,8 @@ function MiniPlayer() {
       </div>
 
       <div className="mini-player__toolbar mini-player__controls">
+        {/* 左侧：窗口控制 */}
+        <div className="mini-player__toolbar-group">
         <button
           type="button"
           className="mini-player__btn"
@@ -337,63 +339,6 @@ function MiniPlayer() {
             : <IconVolumeHigh width={14} height={14} />
           }
         </button>
-
-        <button type="button" className="mini-player__btn" onClick={prevTrack} title="上一首">
-          <IconPrev width={16} height={16} />
-        </button>
-
-        <button
-          type="button"
-          className="mini-player__btn mini-player__btn--play"
-          onClick={handlePlayPause}
-          title={isPlaying ? '暂停' : '播放'}
-        >
-          {isPlaying
-            ? <IconPause width={18} height={18} />
-            : <IconPlay width={18} height={18} />
-          }
-        </button>
-
-        <button type="button" className="mini-player__btn" onClick={nextTrack} title="下一首">
-          <IconNext width={16} height={16} />
-        </button>
-
-        <div className="mini-player__view-switcher" role="group" aria-label="迷你播放器视图">
-          <button
-            type="button"
-            className={`mini-player__view-btn ${miniView === 'default' ? 'mini-player__view-btn--active' : ''}`}
-            onClick={() => setMiniView('default')}
-            aria-label="歌曲视图"
-            aria-pressed={miniView === 'default'}
-            title="歌曲"
-          >
-            <IconMusic width={14} height={14} />
-          </button>
-          {featureFlags.lyrics && (
-            <button
-              type="button"
-              className={`mini-player__view-btn ${miniView === 'lyrics' ? 'mini-player__view-btn--active' : ''}`}
-              onClick={() => setMiniView('lyrics')}
-              aria-label="歌词视图"
-              aria-pressed={miniView === 'lyrics'}
-              title="歌词"
-            >
-              <IconLyrics width={14} height={14} />
-            </button>
-          )}
-          {featureFlags.queuePanel && (
-            <button
-              type="button"
-              className={`mini-player__view-btn ${miniView === 'queue' ? 'mini-player__view-btn--active' : ''}`}
-              onClick={() => setMiniView('queue')}
-              aria-label="队列视图"
-              aria-pressed={miniView === 'queue'}
-              title="队列"
-            >
-              <IconList width={14} height={14} />
-            </button>
-          )}
-        </div>
 
         <button
           type="button"
@@ -414,6 +359,69 @@ function MiniPlayer() {
         >
           <IconExpand width={14} height={14} />
         </button>
+        </div>
+
+        {/* 中间：播放控制 */}
+        <div className="mini-player__toolbar-group">
+          <button type="button" className="mini-player__btn" onClick={prevTrack} title="上一首">
+            <IconPrev width={16} height={16} />
+          </button>
+
+          <button
+            type="button"
+            className="mini-player__btn mini-player__btn--play"
+            onClick={handlePlayPause}
+            title={isPlaying ? '暂停' : '播放'}
+          >
+            {isPlaying
+              ? <IconPause width={18} height={18} />
+              : <IconPlay width={18} height={18} />
+            }
+          </button>
+
+          <button type="button" className="mini-player__btn" onClick={nextTrack} title="下一首">
+            <IconNext width={16} height={16} />
+          </button>
+        </div>
+
+        {/* 右侧：内容切换 + 播放行为 */}
+        <div className="mini-player__toolbar-group">
+          <div className="mini-player__view-switcher" role="group" aria-label="迷你播放器视图">
+            <button
+              type="button"
+              className={`mini-player__view-btn ${miniView === 'default' ? 'mini-player__view-btn--active' : ''}`}
+              onClick={() => setMiniView('default')}
+              aria-label="歌曲视图"
+              aria-pressed={miniView === 'default'}
+              title="歌曲"
+            >
+              <IconMusic width={14} height={14} />
+            </button>
+            {featureFlags.lyrics && (
+              <button
+                type="button"
+                className={`mini-player__view-btn ${miniView === 'lyrics' ? 'mini-player__view-btn--active' : ''}`}
+                onClick={() => setMiniView('lyrics')}
+                aria-label="歌词视图"
+                aria-pressed={miniView === 'lyrics'}
+                title="歌词"
+              >
+                <IconLyrics width={14} height={14} />
+              </button>
+            )}
+            {featureFlags.queuePanel && (
+              <button
+                type="button"
+                className={`mini-player__view-btn ${miniView === 'queue' ? 'mini-player__view-btn--active' : ''}`}
+                onClick={() => setMiniView('queue')}
+                aria-label="队列视图"
+                aria-pressed={miniView === 'queue'}
+                title="队列"
+              >
+                <IconList width={14} height={14} />
+              </button>
+            )}
+          </div>
 
         <button
           type="button"
@@ -424,6 +432,7 @@ function MiniPlayer() {
         >
           <ModeIcon width={14} height={14} />
         </button>
+        </div>
       </div>
     </div>
   )

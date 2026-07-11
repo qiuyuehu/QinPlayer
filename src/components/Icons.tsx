@@ -103,14 +103,15 @@ export function IconRepeat({ width = 20, height = 20, className }: IconProps) {
   )
 }
 
-/** 单曲循环（循环箭头 + 1） */
+/** 单曲循环（循环箭头 + 实心底圈 + 大号 1） */
 export function IconRepeatOne({ width = 20, height = 20, className }: IconProps) {
   return (
     <svg width={width} height={height} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <path d="M4 8h10l-2-2M14 12H4l2 2" />
-      <path d="M16 6v4a2 2 0 01-2 2H6" />
-      <path d="M4 14v-4a2 2 0 012-2h8" />
-      <text x="10" y="11.5" textAnchor="middle" fill="currentColor" stroke="none" fontSize="7" fontWeight="700">1</text>
+      <path d="M5 8h8l-2-2M13 12H5l2 2" />
+      <path d="M15 6v3a2 2 0 01-2 2H6" />
+      <path d="M5 14v-3a2 2 0 012-2h7" />
+      <circle cx="10" cy="10" r="4.5" fill="currentColor" stroke="currentColor" strokeWidth="0.5" />
+      <text x="10" y="13.5" textAnchor="middle" fill="var(--bg-primary, #1a1a1a)" stroke="none" fontSize="9" fontWeight="800">1</text>
     </svg>
   )
 }
