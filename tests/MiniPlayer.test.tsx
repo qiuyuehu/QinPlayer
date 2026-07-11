@@ -300,4 +300,25 @@ describe('MiniPlayer', () => {
     })
     view.unmount()
   })
+
+  it('应该显示播放方式按钮且 tooltip 反映当前模式', () => {
+    act(() => usePlayerStore.setState({ playMode: 'sequential' }))
+    render(<MiniPlayer />)
+
+    expect(screen.getByTitle('顺序播放')).toBeInTheDocument()
+  })
+
+  it('点击播放方式按钮应该循环切换模式', () => {
+    act(() => usePlayerStore.setState({ playMode: 'sequential' }))
+    render(<MiniPlayer />)
+
+    fireEvent.click(screen.getByTitle('顺序播放'))
+    expect(usePlayerStore.getState().playMode).toBe('loop')
+
+    fireEvent.click(screen.getByTitle('单曲循环'))
+    expect(usePlayerStore.getState().playMode).toBe('shuffle')
+
+    fireEvent.click(screen.getByTitle('随机播放'))
+    expect(usePlayerStore.getState().playMode).toBe('sequential')
+  })
 })

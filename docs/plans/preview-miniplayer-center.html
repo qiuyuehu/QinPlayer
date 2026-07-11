@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>迷你播放器 — 左对齐 vs 居中 对比</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif;
+    background: #121212;
+    color: #e8e8e8;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px;
+    gap: 32px;
+  }
+  h1 { font-size: 18px; font-weight: 600; color: #a0a0a0; }
+  .comparison { display: flex; gap: 32px; flex-wrap: wrap; justify-content: center; }
+  .card { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #a0a0a0;
+    letter-spacing: 0.5px;
+  }
+
+  /* 模拟 400×150 迷你播放器壳 */
+  .mini-player {
+    width: 400px;
+    height: 150px;
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
+    display: grid;
+    grid-template-rows: 1fr 34px;
+    gap: 4px;
+    padding: 8px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* 关闭按钮 */
+  .close-btn {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 2;
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: transparent;
+    color: #666;
+    font-size: 14px;
+    cursor: default;
+  }
+
+  /* 默认视图 */
+  .default-view {
+    display: grid;
+    grid-template-rows: 1fr 18px;
+    gap: 6px;
+    padding-right: 28px;
+  }
+
+  /* === 方案A：左对齐（当前） === */
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  /* === 方案B：居中 === */
+  .header-center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  /* 封面 */
+  .cover {
+    width: 56px;
+    height: 56px;
+    flex: 0 0 56px;
+    border-radius: 4px;
+    background: #2a2a2a;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #555;
+    font-size: 20px;
+  }
+
+  /* 歌曲信息 */
+  .info {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .info-center {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    align-items: center;
+    text-align: center;
+  }
+  .title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #e8e8e8;
+    line-height: 20px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .artist {
+    font-size: 11px;
+    color: #888;
+    line-height: 16px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* 进度条 */
+  .progress-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .time {
+    width: 30px;
+    flex: 0 0 30px;
+    font-size: 10px;
+    color: #666;
+    text-align: center;
+    line-height: 14px;
+  }
+  .progress-bar {
+    flex: 1;
+    height: 4px;
+    border-radius: 2px;
+    background: #333;
+    position: relative;
+  }
+  .progress-fill {
+    width: 35%;
+    height: 100%;
+    border-radius: 2px;
+    background: #a0a0a0;
+  }
+
+  /* 工具栏 */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    border-top: 1px solid #2a2a2a;
+    padding-top: 1px;
+  }
+  .tb-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #888;
+    font-size: 12px;
+    background: transparent;
+    border: none;
+  }
+  .tb-btn--play {
+    width: 32px;
+    height: 32px;
+    color: #e8e8e8;
+  }
+  .view-switcher {
+    height: 28px;
+    display: flex;
+    align-items: center;
+    padding: 1px;
+    border: 1px solid #2a2a2a;
+    border-radius: 4px;
+    background: #181818;
+  }
+  .vs-btn {
+    width: 24px;
+    height: 24px;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+    font-size: 11px;
+    background: transparent;
+    border: none;
+  }
+  .vs-btn--active {
+    color: #a0a0a0;
+    background: #2a2a2a;
+  }
+
+  /* 标注线 */
+  .note {
+    font-size: 11px;
+    color: #666;
+    max-width: 400px;
+    line-height: 16px;
+    text-align: center;
+  }
+  .note strong { color: #a0a0a0; }
+</style>
+</head>
+<body>
+
+<h1>迷你播放器 — 歌曲信息布局对比</h1>
+
+<div class="comparison">
+
+  <!-- 方案A：左对齐（当前） -->
+  <div class="card">
+    <div class="label">方案 A：左对齐（当前）</div>
+    <div class="mini-player">
+      <button class="close-btn">✕</button>
+      <div class="default-view">
+        <div class="header-left">
+          <div class="cover">♪</div>
+          <div class="info">
+            <div class="title">夜曲</div>
+            <div class="artist">周杰伦 — 十一月的萧邦</div>
+          </div>
+        </div>
+        <div class="progress-row">
+          <span class="time">1:23</span>
+          <div class="progress-bar"><div class="progress-fill"></div></div>
+          <span class="time">4:05</span>
+        </div>
+      </div>
+      <div class="toolbar">
+        <div class="tb-btn">♪</div>
+        <div class="tb-btn">⏮</div>
+        <div class="tb-btn tb-btn--play">▶</div>
+        <div class="tb-btn">⏭</div>
+        <div class="view-switcher">
+          <div class="vs-btn vs-btn--active">♫</div>
+          <div class="vs-btn">♬</div>
+          <div class="vs-btn">≡</div>
+        </div>
+        <div class="tb-btn">⤢</div>
+      </div>
+    </div>
+    <div class="note">
+      封面+信息整体<strong>靠左</strong>，右侧留白较多。<br>
+      信息文字<strong>左对齐</strong>。
+    </div>
+  </div>
+
+  <!-- 方案B：居中 -->
+  <div class="card">
+    <div class="label">方案 B：居中</div>
+    <div class="mini-player">
+      <button class="close-btn">✕</button>
+      <div class="default-view">
+        <div class="header-center">
+          <div class="cover">♪</div>
+          <div class="info-center">
+            <div class="title">夜曲</div>
+            <div class="artist">周杰伦 — 十一月的萧邦</div>
+          </div>
+        </div>
+        <div class="progress-row">
+          <span class="time">1:23</span>
+          <div class="progress-bar"><div class="progress-fill"></div></div>
+          <span class="time">4:05</span>
+        </div>
+      </div>
+      <div class="toolbar">
+        <div class="tb-btn">♪</div>
+        <div class="tb-btn">⏮</div>
+        <div class="tb-btn tb-btn--play">▶</div>
+        <div class="tb-btn">⏭</div>
+        <div class="view-switcher">
+          <div class="vs-btn vs-btn--active">♫</div>
+          <div class="vs-btn">♬</div>
+          <div class="vs-btn">≡</div>
+        </div>
+        <div class="tb-btn">⤢</div>
+      </div>
+    </div>
+    <div class="note">
+      封面+信息整体<strong>居中</strong>，视觉更平衡。<br>
+      信息文字<strong>居中对齐</strong>。
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

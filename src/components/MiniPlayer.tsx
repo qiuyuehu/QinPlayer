@@ -8,7 +8,7 @@ import { formatTime } from '../utils/formatTime'
 // =============================================================================
 
 import { useRef, useCallback, useState, useEffect } from 'react'
-import { usePlayerStore } from '../stores/playerStore'
+import { usePlayerStore, togglePlayMode } from '../stores/playerStore'
 import { useUIStore } from '../stores/uiStore'
 import { useTrackLyrics } from '../hooks/useTrackLyrics'
 import { currentTimeRef } from '../utils/currentTimeRef'
@@ -19,6 +19,7 @@ import {
   IconPlay, IconPause, IconPrev, IconNext,
   IconVolumeHigh, IconVolumeMuted,
   IconClose, IconExpand, IconMusic, IconLyrics, IconList,
+  IconRepeat, IconRepeatOne, IconShuffle,
 } from './Icons'
 import type { LyricLine } from '../types'
 
@@ -38,6 +39,8 @@ function MiniPlayer() {
   const playTrack = usePlayerStore((s) => s.playTrack)
   const nextTrack = usePlayerStore((s) => s.nextTrack)
   const prevTrack = usePlayerStore((s) => s.prevTrack)
+  const playMode = usePlayerStore((s) => s.playMode)
+  const setPlayMode = usePlayerStore((s) => s.setPlayMode)
 
   // --- UI 状态 ---
   const isMiniMode = useUIStore((s) => s.isMiniMode)
@@ -114,6 +117,23 @@ function MiniPlayer() {
   const handleExpand = useCallback(() => {
     setMiniMode(false)
   }, [setMiniMode])
+
+  // --- 播放方式（内联常量，与 PlayerBar 保持一致） ---
+  const PLAY_MODE_ICON = {
+    sequential: IconRepeat,
+    loop: IconRepeatOne,
+    shuffle: IconShuffle,
+  } as const
+
+  const PLAY_MODE_LABELS = {
+    sequential: '顺序播放',
+    loop: '单曲循环',
+    shuffle: '随机播放',
+  } as const
+
+  const handleToggleMode = useCallback(() => {
+    setPlayMode(togglePlayMode(playMode))
+  }, [playMode, setPlayMode])
 
   const handlePlayPause = useCallback(() => {
     setPlaying(!isPlaying)
@@ -196,6 +216,7 @@ function MiniPlayer() {
 
   if (!featureFlags.playback || !featureFlags.miniMode || !isMiniMode) return null
 
+  const ModeIcon = PLAY_MODE_ICON[playMode]
   const coverUrl = currentTrack?.coverPath
     ? window.electronAPI.getCoverUrl(currentTrack.coverPath)
     : null
@@ -345,6 +366,16 @@ function MiniPlayer() {
           title="展开"
         >
           <IconExpand width={14} height={14} />
+        </button>
+
+        <button
+          type="button"
+          className="mini-player__btn mini-player__btn--mode"
+          onClick={handleToggleMode}
+          aria-label={PLAY_MODE_LABELS[playMode]}
+          title={PLAY_MODE_LABELS[playMode]}
+        >
+          <ModeIcon width={14} height={14} />
         </button>
       </div>
     </div>

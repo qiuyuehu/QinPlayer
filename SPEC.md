@@ -206,7 +206,7 @@ QinPlayer/
 ### 迷你模式
 - 固定 `400×150` 壳层，歌曲、歌词、队列三种视图切换时不改变窗口尺寸或位置
 - 歌曲视图显示封面、歌名、歌手/专辑、进度与时长；歌词视图显示当前句和下一句；队列视图支持滚动、当前项定位与点击播放
-- 音量、上一首、播放/暂停、下一首、视图选择、展开和关闭位于三视图共用工具栏
+- 音量、上一首、播放/暂停、下一首、视图选择、展开、播放方式（顺序/单曲循环/随机）和关闭位于三视图共用工具栏
 - `playback` 或 `miniMode` 关闭时不渲染；`lyrics` / `queuePanel` 关闭时隐藏对应入口，并从失效视图安全回退到歌曲视图
 - 主窗口按钮触发；进入前保存正常 bounds，退出时恢复，视图切换不发送窗口 IPC
 
@@ -484,7 +484,7 @@ Main Process ✓ 负责 SQLite、文件系统、窗口、IPC
 ## 测试覆盖
 
 - 框架：Vitest + @testing-library/react
-- 用例数：241 个（22 个测试文件）
+- 用例数：243 个（22 个测试文件）
 - 覆盖范围：formatTime、lrcParser、albumSort、playerStore、uiStore、PlayerBar、LyricsPanel、LyricsFullscreen、MiniPlayer、MiniLyricsView、MiniQueueView、AlbumSortMenu、Albums、SongList、PlaylistPanel、featureFlags、Sidebar、useAudioSync、useTrackLyrics、windowBounds、Harness checks
 - Feature Flags 消融验证：16 个 flag 逐个关闭不影响其他 flag
 
