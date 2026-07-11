@@ -17,6 +17,7 @@ import Liked from '../pages/Liked'
 import Lyrics from '../pages/Lyrics'
 import Settings from '../pages/Settings'
 import { isNavAllowed } from '../utils/featureFlags'
+import { isReducedMotionActive } from '../utils/motionPreference'
 
 // ---------------------------------------------------------------------------
 // 内容区路由
@@ -25,7 +26,6 @@ import { isNavAllowed } from '../utils/featureFlags'
 function Content() {
   const activeNav = useUIStore((state) => state.activeNav)
   const featureFlags = useUIStore((state) => state.featureFlags)
-  const [fadeKey, setFadeKey] = useState(0)   // 每次导航切换递增，触发淡入
   const [lyricsVisible, setLyricsVisible] = useState(activeNav === 'lyrics' && featureFlags.lyrics)
   const [lyricsPhase, setLyricsPhase] = useState<'enter' | 'active' | 'exit' | 'done'>(
     activeNav === 'lyrics' && featureFlags.lyrics ? 'active' : 'done'
@@ -33,11 +33,6 @@ function Content() {
   const [showMainContent, setShowMainContent] = useState(activeNav !== 'lyrics' || !featureFlags.lyrics)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const rafRef = useRef<number | null>(null)
-
-  // 导航切换时触发淡入动画
-  useEffect(() => {
-    setFadeKey(prev => prev + 1)
-  }, [activeNav])
 
   useEffect(() => {
     if (timerRef.current) {
@@ -64,6 +59,12 @@ function Content() {
 
     if (lyricsVisible) {
       setLyricsPhase('exit')
+      if (isReducedMotionActive()) {
+        setLyricsVisible(false)
+        setLyricsPhase('done')
+        setShowMainContent(true)
+        return
+      }
       timerRef.current = setTimeout(() => {
         setLyricsVisible(false)
         setLyricsPhase('done')
@@ -84,13 +85,11 @@ function Content() {
     }
   }, [])
 
-  // 根据导航项渲染对应页面
-  const renderPage = () => {
-    if (!isNavAllowed(activeNav, featureFlags)) {
-      return <LocalMusic />
-    }
+  const resolvedNav = isNavAllowed(activeNav, featureFlags) ? activeNav : 'local'
 
-    switch (activeNav) {
+  // 根据已解析的导航项渲染页面，wrapper key 与实际页面保持一致。
+  const renderPage = () => {
+    switch (resolvedNav) {
       case 'search':
         return <Search />
       case 'recent':
@@ -118,7 +117,7 @@ function Content() {
         </div>
       )}
       {showMainContent && (
-        <div key={fadeKey} className="content__fade-wrapper">
+        <div key={resolvedNav} className="content__fade-wrapper">
           {renderPage()}
         </div>
       )}

@@ -3,6 +3,15 @@
  */
 import '@testing-library/jest-dom'
 
+// JSDOM 未实现 AnimationEvent；补齐后 React 会监听浏览器标准 animationend。
+if (!('AnimationEvent' in window)) {
+  class TestAnimationEvent extends Event {}
+  Object.defineProperty(window, 'AnimationEvent', {
+    configurable: true,
+    value: TestAnimationEvent,
+  })
+}
+
 // 模拟 window.electronAPI（渲染进程的 Electron 桥接）
 window.electronAPI = {
   getAudioUrl: (filePath: string) => `qinplayer://audio?path=${encodeURIComponent(filePath)}`,

@@ -9,6 +9,7 @@ import { usePlayerStore } from '../stores/playerStore'
 import { formatTime } from '../utils/formatTime'
 import { IconMusic } from './Icons'
 import type { Track } from '../types'
+import { useExitTransition } from '../hooks/useExitTransition'
 
 interface PlaylistPanelProps {
   onClose: () => void
@@ -21,14 +22,15 @@ function PlaylistPanel({ onClose }: PlaylistPanelProps) {
   const playTrack = usePlayerStore((s) => s.playTrack)
   const itemRefs = useRef<Map<number, HTMLButtonElement>>(new Map())
   const [brokenCoverIds, setBrokenCoverIds] = useState<Set<number>>(new Set())
+  const { isExiting, requestExit, handleAnimationEnd } = useExitTransition(onClose, 300)
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') requestExit()
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [onClose])
+  }, [requestExit])
 
   useEffect(() => {
     if (!currentTrack) return
@@ -39,6 +41,7 @@ function PlaylistPanel({ onClose }: PlaylistPanelProps) {
   }, [currentTrack, playlist])
 
   const handleClearQueue = useCallback(() => {
+    if (isExiting) return
     if (!currentTrack) {
       setPlaylist([])
       return
@@ -47,7 +50,7 @@ function PlaylistPanel({ onClose }: PlaylistPanelProps) {
     const currentIndex = playlist.findIndex((track) => track.id === currentTrack.id)
     // ★ 清空队列只删除当前歌曲之后的条目，保留已听过的队列上下文。
     setPlaylist(currentIndex === -1 ? [] : playlist.slice(0, currentIndex + 1))
-  }, [currentTrack, playlist, setPlaylist])
+  }, [currentTrack, isExiting, playlist, setPlaylist])
 
   const handleCoverError = useCallback((trackId: number) => {
     setBrokenCoverIds((prev) => {
@@ -58,8 +61,9 @@ function PlaylistPanel({ onClose }: PlaylistPanelProps) {
   }, [])
 
   const handlePlayTrack = useCallback((track: Track) => {
+    if (isExiting) return
     playTrack(track)
-  }, [playTrack])
+  }, [isExiting, playTrack])
 
   const setItemRef = useCallback((trackId: number, element: HTMLButtonElement | null) => {
     if (element) {
@@ -70,13 +74,18 @@ function PlaylistPanel({ onClose }: PlaylistPanelProps) {
   }, [])
 
   return (
-    <aside className="queue-panel" role="dialog" aria-label="播放队列">
+    <aside
+      className={`queue-panel ${isExiting ? 'queue-panel--exit' : ''}`}
+      role="dialog"
+      aria-label="播放队列"
+      onAnimationEnd={handleAnimationEnd}
+    >
       <header className="queue-panel__header">
         <div className="queue-panel__heading">
           <h2 className="queue-panel__title">播放队列</h2>
           <span className="queue-panel__count">{playlist.length} 首</span>
         </div>
-        <button className="queue-panel__close" onClick={onClose} title="关闭播放队列">
+        <button className="queue-panel__close" onClick={requestExit} disabled={isExiting} title="关闭播放队列">
           ×
         </button>
       </header>
@@ -93,6 +102,7 @@ function PlaylistPanel({ onClose }: PlaylistPanelProps) {
                   ref={(element) => setItemRef(track.id, element)}
                   className={`queue-panel__item ${currentTrack?.id === track.id ? 'queue-panel__item--active' : ''}`}
                   onClick={() => handlePlayTrack(track)}
+                  disabled={isExiting}
                   title={`${track.title} - ${track.artist}`}
                 >
                   {hasCover ? (
@@ -123,10 +133,10 @@ function PlaylistPanel({ onClose }: PlaylistPanelProps) {
 
       {playlist.length > 0 && (
         <footer className="queue-panel__footer">
-          <button className="queue-panel__clear" onClick={handleClearQueue}>
+          <button className="queue-panel__clear" onClick={handleClearQueue} disabled={isExiting}>
             清空后续队列
           </button>
-          <button className="queue-panel__back" onClick={onClose} title="返回">
+          <button className="queue-panel__back" onClick={requestExit} disabled={isExiting} title="返回">
             返回
           </button>
         </footer>

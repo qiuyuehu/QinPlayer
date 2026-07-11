@@ -18,6 +18,7 @@ interface UIState {
   activeNav: string              // 当前选中的导航项 ID
   isMiniMode: boolean            // 是否处于迷你模式
   theme: Theme                   // 当前主题
+  reducedMotion: boolean         // 是否手动减少界面动画
   sidebarCollapsed: boolean      // 侧边栏是否折叠
   searchQuery: string            // 搜索关键词
   featureFlags: FeatureFlags     // 启动时读取的功能开关快照
@@ -26,6 +27,7 @@ interface UIState {
   setActiveNav: (nav: string) => void
   setMiniMode: (v: boolean) => void
   setTheme: (t: Theme) => void
+  setReducedMotion: (enabled: boolean) => void
   toggleSidebar: () => void
   setSearchQuery: (q: string) => void
   setFeatureFlags: (flags: FeatureFlags) => void
@@ -40,6 +42,7 @@ export const useUIStore = create<UIState>((set) => ({
   activeNav: 'local',            // 默认显示本地音乐页面
   isMiniMode: false,
   theme: 'dark',                 // 默认暗色主题
+  reducedMotion: false,
   sidebarCollapsed: false,
   searchQuery: '',               // 搜索关键词（空 = 不搜索）
   featureFlags: { ...DEFAULT_FEATURE_FLAGS },
@@ -48,6 +51,7 @@ export const useUIStore = create<UIState>((set) => ({
   setActiveNav: (nav) => set({ activeNav: nav }),
   setMiniMode: (v) => set({ isMiniMode: v }),
   setTheme: (t) => set({ theme: t }),
+  setReducedMotion: (enabled) => set({ reducedMotion: enabled }),
   toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
   setSearchQuery: (q) => set({ searchQuery: q }),
   setFeatureFlags: (flags) => set({ featureFlags: flags }),

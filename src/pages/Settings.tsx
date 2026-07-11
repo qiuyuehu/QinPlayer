@@ -24,6 +24,8 @@ function Settings() {
   // --- 主题状态（从 Zustand 读取） ---
   const theme = useUIStore((state) => state.theme)
   const setTheme = useUIStore((state) => state.setTheme)
+  const reducedMotion = useUIStore((state) => state.reducedMotion)
+  const setReducedMotion = useUIStore((state) => state.setReducedMotion)
   const featureFlags = useUIStore((state) => state.featureFlags)
 
   // --- 音频设备状态 ---
@@ -59,6 +61,14 @@ function Settings() {
     // 持久化到数据库
     await window.electronAPI.invoke('settings:set', { key: 'theme', value: newTheme })
   }, [setTheme])
+
+  const handleReducedMotionChange = useCallback((enabled: boolean) => {
+    setReducedMotion(enabled)
+    window.electronAPI.invoke('settings:set', {
+      key: 'reducedMotion',
+      value: String(enabled),
+    })
+  }, [setReducedMotion])
 
   // ---------------------------------------------------------------------------
   // 音频设备
@@ -266,6 +276,27 @@ function Settings() {
                 </button>
               ))}
             </div>
+          </div>
+        </div>
+
+        {/* 减少动画 */}
+        <div className="settings-item">
+          <div className="settings-item__info">
+            <span className="settings-item__label">减少动画</span>
+            <span className="settings-item__desc">
+              减少界面位移和过渡；系统已开启减少动画时始终生效
+            </span>
+          </div>
+          <div className="settings-item__control">
+            <label className="settings-switch">
+              <input
+                type="checkbox"
+                aria-label="减少动画"
+                checked={reducedMotion}
+                onChange={(event) => handleReducedMotionChange(event.target.checked)}
+              />
+              <span className="settings-switch__slider" />
+            </label>
           </div>
         </div>
 

@@ -484,9 +484,21 @@ Main Process ✓ 负责 SQLite、文件系统、窗口、IPC
 ## 测试覆盖
 
 - 框架：Vitest + @testing-library/react
-- 用例数：243 个（22 个测试文件）
+- 用例数：271 个（29 个测试文件）
 - 覆盖范围：formatTime、lrcParser、albumSort、playerStore、uiStore、PlayerBar、LyricsPanel、LyricsFullscreen、MiniPlayer、MiniLyricsView、MiniQueueView、AlbumSortMenu、Albums、SongList、PlaylistPanel、featureFlags、Sidebar、useAudioSync、useTrackLyrics、windowBounds、Harness checks
 - Feature Flags 消融验证：16 个 flag 逐个关闭不影响其他 flag
+
+---
+
+## 界面动态效果
+
+- 全局 motion token 定义在 `:root`，覆盖 fast、standard、slow、page 四档时长、两种 easing、两档位移和统一按压比例。
+- 所有原生按钮通过独立 `scale` 属性获得按压反馈；播放 pulse、range thumb 和虚拟列表定位继续使用各自的 `transform`，互不覆盖。
+- 普通页面、歌曲首批可见行、专辑/歌单卡片、菜单、迷你播放器三视图只提供入场；歌词层、Dialog 和 QueuePanel 同时支持可靠退场。
+- SongList 的 inline `transform: translateY()` 只负责虚拟定位，行入场仅动画 opacity 和独立 `translate`。
+- 设置页“减少动画”是手动偏好，保存在 SQLite 并由 `uiStore` 水合；手动偏好与系统 `prefers-reduced-motion` 使用 OR 规则，任一开启即降级动态效果。
+- CSS 通过 `motion.css` 统一降级；歌词滚动、歌词层退出和 overlay/panel 退出通过同一 reduced-motion helper 同步降级，不保留可见等待。
+- Dialog 和 QueuePanel 在根动画结束后卸载，并以幂等 fallback 防止 `animationend` 丢失；创建歌单提交期间禁止重复确认或提前关闭。
 
 ---
 

@@ -5,16 +5,20 @@
 // =============================================================================
 
 import { useState, useRef, useEffect } from 'react'
+import { useExitTransition } from '../hooks/useExitTransition'
 
 interface CreatePlaylistDialogProps {
-  onConfirm: (name: string) => void
+  onConfirm: (name: string) => Promise<void>
   onCancel: () => void
 }
 
 // CreatePlaylistDialog — 新建歌单弹窗，输入名称 + 确认/取消
 function CreatePlaylistDialog({ onConfirm, onCancel }: CreatePlaylistDialogProps) {
   const [name, setName] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const submittingRef = useRef(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const { isExiting, requestExit, handleAnimationEnd } = useExitTransition(onCancel, 220)
 
   // 自动聚焦输入框
   useEffect(() => {
@@ -22,10 +26,18 @@ function CreatePlaylistDialog({ onConfirm, onCancel }: CreatePlaylistDialogProps
   }, [])
 
   // 确认创建
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     const trimmed = name.trim()
-    if (trimmed) {
-      onConfirm(trimmed)
+    if (!trimmed || submittingRef.current || isExiting) return
+
+    submittingRef.current = true
+    setSubmitting(true)
+    try {
+      await onConfirm(trimmed)
+      requestExit()
+    } catch {
+      submittingRef.current = false
+      setSubmitting(false)
     }
   }
 
@@ -33,14 +45,24 @@ function CreatePlaylistDialog({ onConfirm, onCancel }: CreatePlaylistDialogProps
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       handleConfirm()
-    } else if (e.key === 'Escape') {
-      onCancel()
     }
   }
 
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !submittingRef.current) requestExit()
+    }
+    document.addEventListener('keydown', handleEscape)
+    return () => document.removeEventListener('keydown', handleEscape)
+  }, [requestExit])
+
   return (
-    <div className="dialog-overlay" onClick={onCancel}>
-      <div className="dialog" onClick={(e) => e.stopPropagation()}>
+    <div
+      className={`dialog-overlay ${isExiting ? 'dialog-overlay--exit' : 'dialog-overlay--enter'}`}
+      onClick={() => { if (!submitting) requestExit() }}
+      onAnimationEnd={handleAnimationEnd}
+    >
+      <div className={`dialog ${isExiting ? 'dialog--exit' : 'dialog--enter'}`} onClick={(e) => e.stopPropagation()}>
         <h3 className="dialog__title">新建歌单</h3>
         <input
           ref={inputRef}
@@ -48,17 +70,18 @@ function CreatePlaylistDialog({ onConfirm, onCancel }: CreatePlaylistDialogProps
           type="text"
           placeholder="输入歌单名称"
           value={name}
+          disabled={submitting}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={handleKeyDown}
         />
         <div className="dialog__actions">
-          <button className="dialog__btn dialog__btn--cancel" onClick={onCancel}>
+          <button className="dialog__btn dialog__btn--cancel" onClick={requestExit} disabled={submitting}>
             取消
           </button>
           <button
             className="dialog__btn dialog__btn--confirm"
             onClick={handleConfirm}
-            disabled={!name.trim()}
+            disabled={!name.trim() || submitting}
           >
             创建
           </button>

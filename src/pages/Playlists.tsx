@@ -85,9 +85,7 @@ function Playlists() {
   // 接收新歌单名称，调用 IPC 创建后刷新列表
   const handleCreate = useCallback(async (name: string) => {
     await window.electronAPI.invoke('playlists:create', { name })
-    // 创建成功后关闭弹窗并刷新歌单列表
-    setShowCreateDialog(false)
-    loadPlaylists()
+    await loadPlaylists()
   }, [loadPlaylists])
 
   // --- 删除歌单 ---

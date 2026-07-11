@@ -13,6 +13,7 @@ import Content from './components/Content'
 import PlayerBar from './components/PlayerBar'
 import MiniPlayer from './components/MiniPlayer'
 import { useTheme } from './hooks/useTheme'
+import { useReducedMotion } from './hooks/useReducedMotion'
 import { useAudioSync } from './hooks/useAudioSync'
 import { restorePlayerState, usePlayerStore } from './stores/playerStore'
 import { useUIStore } from './stores/uiStore'
@@ -34,6 +35,7 @@ function App() {
 
   // 初始化主题系统
   useTheme()
+  useReducedMotion()
 
   // 初始化音频同步
   useAudioSync()
@@ -62,11 +64,12 @@ function App() {
         }
 
         // 并行恢复：播放状态 + 主题设置 + 歌词偏移量 + 淡入淡出
-        const [, savedTheme, savedLyricOffset, savedFadeEnabled] = await Promise.all([
+        const [, savedTheme, savedLyricOffset, savedFadeEnabled, savedReducedMotion] = await Promise.all([
           flags.playback ? restorePlayerState() : Promise.resolve(),
           window.electronAPI.invoke('settings:get', { key: 'theme' }) as Promise<string | null>,
           window.electronAPI.invoke('settings:get', { key: 'lyricOffset' }) as Promise<string | null>,
           window.electronAPI.invoke('settings:get', { key: 'fadeEnabled' }) as Promise<string | null>,
+          window.electronAPI.invoke('settings:get', { key: 'reducedMotion' }) as Promise<string | null>,
         ])
 
         // 恢复均衡器设置（独立加载，不阻塞其他恢复）
@@ -78,6 +81,9 @@ function App() {
         if (savedTheme && ['dark', 'light', 'system'].includes(savedTheme)) {
           useUIStore.getState().setTheme(savedTheme as Theme)
         }
+
+        // 仅显式的 true 开启手动减少动画，其余值统一按关闭处理。
+        useUIStore.getState().setReducedMotion(savedReducedMotion === 'true')
 
         // 恢复歌词偏移量
         if (savedLyricOffset) {

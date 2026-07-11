@@ -61,12 +61,18 @@
 
 .song-list__row--enter {
   opacity: 0;
-  animation: songRowFadeIn 180ms cubic-bezier(0.2, 0, 0, 1) forwards;
+  animation: songRowFadeIn var(--motion-duration-standard) var(--motion-ease-standard) forwards;
 }
 
 @keyframes songRowFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+    translate: 0 var(--motion-distance-sm);
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
 }
 
 .song-list__row:last-child {
@@ -152,6 +158,7 @@
 
 /* 收藏心形按钮 */
 .song-list__like {
+  --button-press-scale: 0.9;
   width: 32px;
   flex-shrink: 0;
   display: flex;
@@ -162,12 +169,12 @@
   border: none;
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.15s, transform 0.1s ease;
+  transition: opacity 0.15s, scale var(--motion-duration-fast) var(--motion-ease-standard);
   padding: 0;
 }
 
 .song-list__like:active {
-  transform: scale(0.9);
+  scale: var(--button-press-scale);
 }
 
 .song-list__row:hover .song-list__like,
@@ -182,10 +189,11 @@
   }
 
   .song-list__like {
+    --button-press-scale: 1;
     transition: opacity 0.15s;
   }
 
   .song-list__like:active {
-    transform: none;
+    scale: 1;
   }
 }

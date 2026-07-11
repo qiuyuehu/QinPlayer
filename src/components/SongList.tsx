@@ -33,6 +33,7 @@ interface SongListProps {
 
 // 每行高度（px），与 CSS 中 .song-list__row 的 height 一致
 const ROW_HEIGHT = 44
+const ROW_ENTER_STAGGER_MS = 28
 
 const SongList = forwardRef<SongListHandle, SongListProps>(function SongList(
   { tracks, showIndex = true, showAlbum = false, playlistId, onRemoveFromPlaylist, containerHeight },
@@ -301,7 +302,9 @@ const SongList = forwardRef<SongListHandle, SongListProps>(function SongList(
                   height: `${ROW_HEIGHT}px`,
                   // transform 定位：绝对定位 + translateY 模拟固定行高排列
                   transform: `translateY(${virtualRow.start}px)`,
-                  animationDelay: animateInitialRows ? `${Math.min(visibleIndex, 8) * 28}ms` : undefined,
+                  animationDelay: animateInitialRows
+                    ? `${Math.min(visibleIndex, 8) * ROW_ENTER_STAGGER_MS}ms`
+                    : undefined,
                 }}
               >
                 {showIndex && (

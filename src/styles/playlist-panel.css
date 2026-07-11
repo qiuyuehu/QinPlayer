@@ -14,7 +14,12 @@
   box-shadow: -4px 0 18px rgba(0, 0, 0, 0.28);
   display: flex;
   flex-direction: column;
-  animation: queuePanelSlideIn 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  animation: queuePanelSlideIn var(--motion-duration-slow) var(--motion-ease-emphasized);
+}
+
+.queue-panel--exit {
+  pointer-events: none;
+  animation: queuePanelSlideOut var(--motion-duration-slow) var(--motion-ease-standard) forwards;
 }
 
 .queue-panel__header {
@@ -49,6 +54,7 @@
 }
 
 .queue-panel__close {
+  --button-press-scale: 0.92;
   width: 28px;
   height: 28px;
   border: none;
@@ -58,7 +64,7 @@
   cursor: pointer;
   font-size: 18px;
   line-height: 1;
-  transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+  transition: background-color 0.15s ease, color 0.15s ease, scale var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
 .queue-panel__close:hover {
@@ -67,7 +73,7 @@
 }
 
 .queue-panel__close:active {
-  transform: scale(0.92);
+  scale: var(--button-press-scale);
 }
 
 .queue-panel__content {
@@ -96,7 +102,19 @@
   gap: 10px;
   cursor: pointer;
   text-align: left;
-  transition: background-color 0.15s ease;
+  transition: background-color 0.15s ease, scale var(--motion-duration-fast) var(--motion-ease-standard);
+  animation: collectionItemIn var(--motion-duration-standard) var(--motion-ease-standard) both;
+}
+
+@keyframes collectionItemIn {
+  from {
+    opacity: 0;
+    translate: var(--motion-distance-sm) 0;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
 }
 
 .queue-panel__item:hover {
@@ -186,7 +204,7 @@
   cursor: pointer;
   font-size: 12px;
   padding: 5px 10px;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, scale var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
 .queue-panel__clear:hover {
@@ -203,7 +221,7 @@
   cursor: pointer;
   font-size: 12px;
   padding: 5px 10px;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, scale var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
 .queue-panel__back:hover {
@@ -213,11 +231,16 @@
 }
 @keyframes queuePanelSlideIn {
   from {
-    transform: translateX(100%);
+    translate: 100% 0;
   }
   to {
-    transform: translateX(0);
+    translate: 0 0;
   }
+}
+
+@keyframes queuePanelSlideOut {
+  from { opacity: 1; translate: 0 0; }
+  to { opacity: 0; translate: 100% 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -232,6 +255,6 @@
   }
 
   .queue-panel__close:active {
-    transform: none;
+    scale: 1;
   }
 }

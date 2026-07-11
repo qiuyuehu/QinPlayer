@@ -11,6 +11,7 @@
 import { useLayoutEffect, useRef, useCallback } from 'react'
 import type { LyricLine } from '../types'
 import type { FeatureFlags } from '../types/ipc'
+import { isReducedMotionActive } from '../utils/motionPreference'
 
 interface LyricsPanelProps {
   lyrics: LyricLine[]          // 已排序的歌词数组
@@ -55,7 +56,7 @@ function LyricsPanel({
       || isLayoutChange
       || Math.abs(currentIndex - prevIndexRef.current) > 3
       || currentIndex === 0
-    const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+    const prefersReducedMotion = isReducedMotionActive()
 
     container.scrollTo({
       top: targetScroll,

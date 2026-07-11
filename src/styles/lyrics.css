@@ -96,7 +96,7 @@
   color: var(--text-secondary);
   font-size: 1.1vw;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: color 0.2s ease, background-color 0.2s ease, scale var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
 .lyrics-page__offset-btn:hover {
@@ -261,17 +261,19 @@
 }
 
 .lyrics-page__mode-btn {
+  --button-press-scale: 0.94;
   position: absolute;
   top: 0;
   right: calc(50% + 104px);
 }
 
 .lyrics-page__mode-btn:active {
-  transform: scale(0.94);
+  scale: var(--button-press-scale);
 }
 
 /* 传输控制按钮：白色图标，弱化按钮底 */
 .lyrics-page__btn {
+  --button-press-scale: 0.94;
   width: 48px;
   height: 48px;
   border: none;
@@ -282,7 +284,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+  transition: background 0.15s ease, color 0.15s ease, scale var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
 .lyrics-page__btn:hover {
@@ -291,7 +293,7 @@
 }
 
 .lyrics-page__btn:active {
-  transform: scale(0.94);
+  scale: var(--button-press-scale);
 }
 
 
@@ -516,7 +518,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: color 0.2s ease, background 0.2s ease, text-shadow 0.2s ease;
+  transition: color 0.2s ease, background 0.2s ease, text-shadow 0.2s ease, scale var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
 .lyrics-page__action-btn:hover {
@@ -547,7 +549,7 @@
   align-items: center;
   justify-content: center;
   -webkit-app-region: no-drag;
-  transition: background 0.2s ease;
+  transition: background 0.2s ease, scale var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
 .lyrics-page__back-btn:hover {

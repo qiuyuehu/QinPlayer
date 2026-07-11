@@ -31,7 +31,7 @@
   color: var(--text-on-accent);
   font-size: 13px;
   cursor: pointer;
-  transition: background-color 0.15s;
+  transition: background-color 0.15s, scale var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
 .local-music__add-btn:hover {

@@ -12,6 +12,7 @@ describe('uiStore', () => {
       activeNav: 'local',
       isMiniMode: false,
       theme: 'dark',
+      reducedMotion: false,
       sidebarCollapsed: false,
       searchQuery: '',
       featureFlags: { ...DEFAULT_FEATURE_FLAGS },
@@ -26,7 +27,16 @@ describe('uiStore', () => {
     expect(state.sidebarCollapsed).toBe(false)
     expect(state.isMiniMode).toBe(false)
     expect(state.searchQuery).toBe('')
+    expect(state.reducedMotion).toBe(false)
     expect(state.featureFlags.playback).toBe(true)
+  })
+
+  it('setReducedMotion 只更新减少动画偏好', () => {
+    useUIStore.getState().setReducedMotion(true)
+    expect(useUIStore.getState().reducedMotion).toBe(true)
+
+    useUIStore.getState().setReducedMotion(false)
+    expect(useUIStore.getState().reducedMotion).toBe(false)
   })
 
   // --- setActiveNav ---

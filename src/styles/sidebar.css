@@ -46,6 +46,7 @@
 }
 
 .sidebar__item {
+  --button-press-scale: 0.98;
   position: relative;
   display: flex;
   align-items: center;
@@ -57,7 +58,7 @@
   color: var(--text-secondary);
   font-size: 13px;
   cursor: pointer;
-  transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+  transition: background-color 0.15s ease, color 0.15s ease, scale var(--motion-duration-fast) var(--motion-ease-standard);
   text-align: left;
 }
 
@@ -83,7 +84,7 @@
 }
 
 .sidebar__item:active {
-  transform: scale(0.98);
+  scale: var(--button-press-scale);
 }
 
 .sidebar__icon {
@@ -105,10 +106,11 @@
 
 @media (prefers-reduced-motion: reduce) {
   .sidebar__item {
+    --button-press-scale: 1;
     transition: background-color 0.15s ease, color 0.15s ease;
   }
 
   .sidebar__item:active {
-    transform: none;
+    scale: 1;
   }
 }

@@ -38,7 +38,7 @@
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   cursor: pointer;
-  transition: background-color 0.15s;
+  transition: background-color 0.15s, scale var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
 .playlists__back-btn:hover,
@@ -68,6 +68,7 @@
   border-radius: 10px;
   cursor: pointer;
   transition: background-color 0.15s, border-color 0.15s;
+  animation: collectionCardIn var(--motion-duration-slow) var(--motion-ease-emphasized) both;
 }
 
 .playlists__card:hover {
@@ -147,7 +148,7 @@
   border-radius: 50%;
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.15s, background-color 0.15s;
+  transition: opacity 0.15s, background-color 0.15s, scale var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
 .playlists__card:hover .playlists__card-delete {
@@ -174,7 +175,7 @@
   border: 1px solid var(--border-subtle);
   border-radius: 4px;
   cursor: pointer;
-  transition: background-color 0.15s;
+  transition: background-color 0.15s, scale var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
 .playlists__sort-btn:hover,

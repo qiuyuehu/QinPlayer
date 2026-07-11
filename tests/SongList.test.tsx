@@ -3,7 +3,7 @@
  * 覆盖：空状态、列表渲染、当前歌曲高亮、列显示控制
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { createRef } from 'react'
 import { readFileSync } from 'node:fs'
 import SongList, { type SongListHandle } from '../src/components/SongList'
@@ -179,6 +179,24 @@ describe('SongList', () => {
     expect(header).toBeInTheDocument()
     expect(scroll).toBeInTheDocument()
     expect(scroll).not.toContainElement(header)
+  })
+
+  it('首批虚拟行保留定位 transform，并在入场结束后移除动画 class', () => {
+    vi.useFakeTimers()
+    render(<SongList tracks={tracks} />)
+
+    const rows = Array.from(document.querySelectorAll<HTMLElement>('.song-list__row'))
+    expect(rows).toHaveLength(3)
+    expect(rows[0]).toHaveStyle({ transform: 'translateY(0px)', animationDelay: '0ms' })
+    expect(rows[1]).toHaveStyle({ transform: 'translateY(44px)', animationDelay: '28ms' })
+    expect(rows[2]).toHaveStyle({ transform: 'translateY(88px)', animationDelay: '56ms' })
+    expect(rows.every((row) => row.classList.contains('song-list__row--enter'))).toBe(true)
+
+    act(() => vi.advanceTimersByTime(500))
+    expect(Array.from(document.querySelectorAll('.song-list__row')).every(
+      (row) => !row.classList.contains('song-list__row--enter'),
+    )).toBe(true)
+    vi.useRealTimers()
   })
 
   it('页面内歌曲列表应填满剩余高度并保留自身滚动区', () => {

@@ -18,7 +18,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  animation: contentFadeIn 180ms cubic-bezier(0.2, 0, 0, 1);
+  animation: contentFadeIn var(--motion-duration-standard) var(--motion-ease-standard);
 }
 
 .content__lyrics-layer {
@@ -26,7 +26,6 @@
   inset: 0;
   z-index: 2;
   background-color: var(--bg-primary);
-  will-change: transform, opacity;
 }
 
 .content__lyrics-layer--enter {
@@ -47,8 +46,14 @@
 }
 
 @keyframes contentFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+    translate: 0 var(--motion-distance-sm);
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
 }
 
 @keyframes lyricsSlideIn {

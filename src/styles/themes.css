@@ -5,6 +5,19 @@
    切换主题只需修改 <html> 的 data-theme 属性
    ============================================================================= */
 
+:root {
+  --motion-duration-fast: 100ms;
+  --motion-duration-standard: 180ms;
+  --motion-duration-slow: 250ms;
+  --motion-duration-page: 300ms;
+  --motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --motion-ease-emphasized: cubic-bezier(0.22, 1, 0.36, 1);
+  --motion-distance-sm: 4px;
+  --motion-distance-md: 8px;
+  --motion-press-scale: 0.96;
+  --motion-reduced-duration: 1ms;
+}
+
 /* 暗色主题（默认） */
 [data-theme="dark"] {
   /* 背景层级：主 → 次 → 三级 */

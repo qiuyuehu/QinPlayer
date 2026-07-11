@@ -4,7 +4,9 @@
 // 职责：显示歌曲的详细元数据信息
 // =============================================================================
 
+import { useEffect } from 'react'
 import type { Track } from '../types'
+import { useExitTransition } from '../hooks/useExitTransition'
 
 interface SongInfoDialogProps {
   track: Track
@@ -13,6 +15,15 @@ interface SongInfoDialogProps {
 
 // SongInfoDialog — 歌曲信息弹窗，显示元数据（标题/歌手/专辑/时长/路径）
 function SongInfoDialog({ track, onClose }: SongInfoDialogProps) {
+  const { isExiting, requestExit, handleAnimationEnd } = useExitTransition(onClose, 220)
+
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') requestExit()
+    }
+    document.addEventListener('keydown', handleEscape)
+    return () => document.removeEventListener('keydown', handleEscape)
+  }, [requestExit])
   // 格式化时长
   const formatDuration = (seconds: number): string => {
     if (!isFinite(seconds) || seconds <= 0) return '--:--'
@@ -27,8 +38,12 @@ function SongInfoDialog({ track, onClose }: SongInfoDialogProps) {
   }
 
   return (
-    <div className="dialog-overlay" onClick={onClose}>
-      <div className="dialog" onClick={(e) => e.stopPropagation()} style={{ minWidth: 380 }}>
+    <div
+      className={`dialog-overlay ${isExiting ? 'dialog-overlay--exit' : 'dialog-overlay--enter'}`}
+      onClick={requestExit}
+      onAnimationEnd={handleAnimationEnd}
+    >
+      <div className={`dialog ${isExiting ? 'dialog--exit' : 'dialog--enter'}`} onClick={(e) => e.stopPropagation()} style={{ minWidth: 380 }}>
         <h3 className="dialog__title">歌曲信息</h3>
 
         <div className="song-info">
@@ -69,7 +84,7 @@ function SongInfoDialog({ track, onClose }: SongInfoDialogProps) {
         </div>
 
         <div className="dialog__actions">
-          <button className="dialog__btn dialog__btn--confirm" onClick={onClose}>
+          <button className="dialog__btn dialog__btn--confirm" onClick={requestExit}>
             关闭
           </button>
         </div>

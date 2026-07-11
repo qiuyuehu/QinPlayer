@@ -4,6 +4,16 @@
 
 ---
 
+## 2026-07-11 动态效果使用全局 token 与独立组合属性
+
+- **背景**：各页面动画时长、按压强度和 reduced-motion 处理分散，按钮 `transform` 还可能覆盖播放 pulse 或虚拟列表定位
+- **决策**：motion token 只在 `:root` 定义；按钮按压使用独立 `scale`，装饰位移使用独立 `translate`，定位与既有 pulse/range 允许继续使用 `transform`
+- **状态归属**：手动 `reducedMotion` 只放 `uiStore` 并显式持久化，不进入 `playerStore`、AudioEngine 或 feature flags
+- **一致性**：CSS 使用 `data-reduced-motion`/系统 media query，JS 使用统一 helper；两种偏好采用 OR 规则
+- **退出协议**：Dialog 与 QueuePanel 使用幂等 Hook，在根 `animationend` 后卸载，并以 fallback、微任务降级和 StrictMode 生命周期测试兜底
+- **权衡**：普通页面和集合只做入场，只有歌词层、overlay 和 panel 承担退场状态，避免为所有内容引入常驻生命周期复杂度
+- **状态**：自动化实现完成，最终 Electron 视觉体感待主人验证
+
 ## 2026-07-10 迷你播放器三视图共用固定壳层
 
 - **背景**：歌曲、歌词和队列视图的内容高度不同，动态调整 BrowserWindow 会造成切换抖动和位置漂移

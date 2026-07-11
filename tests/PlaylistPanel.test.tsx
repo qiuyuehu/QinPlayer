@@ -2,8 +2,8 @@
  * PlaylistPanel 组件测试
  * 覆盖：空队列、ESC 关闭、封面缩略图、清空后续队列
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import PlaylistPanel from '../src/components/PlaylistPanel'
 import { usePlayerStore } from '../src/stores/playerStore'
 import { useUIStore } from '../src/stores/uiStore'
@@ -70,12 +70,26 @@ describe('PlaylistPanel', () => {
     expect(screen.getByText('当前播放队列为空')).toBeInTheDocument()
   })
 
-  it('按 Esc 应该关闭面板', () => {
+  it('按 Esc 应先进入退场，根动画结束后只关闭一次', () => {
+    const onClose = vi.fn()
+    const { container } = render(<PlaylistPanel onClose={onClose} />)
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(container.querySelector('.queue-panel')).toHaveClass('queue-panel--exit')
+    expect(onClose).not.toHaveBeenCalled()
+    fireEvent.animationEnd(container.querySelector('.queue-panel')!)
+    fireEvent.animationEnd(container.querySelector('.queue-panel')!)
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('reduced motion 下按 Esc 在微任务内关闭', async () => {
+    document.documentElement.setAttribute('data-reduced-motion', 'true')
     const onClose = vi.fn()
     render(<PlaylistPanel onClose={onClose} />)
 
     fireEvent.keyDown(document, { key: 'Escape' })
-
+    expect(onClose).not.toHaveBeenCalled()
+    await act(async () => Promise.resolve())
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
@@ -129,5 +143,9 @@ describe('PlaylistPanel', () => {
     expect(vi.mocked(window.electronAPI.invoke).mock.calls.filter(
       ([channel]) => channel === 'songs:recordPlay' || channel === 'songs:updatePlayCount',
     )).toHaveLength(2)
+  })
+
+  afterEach(() => {
+    document.documentElement.removeAttribute('data-reduced-motion')
   })
 })

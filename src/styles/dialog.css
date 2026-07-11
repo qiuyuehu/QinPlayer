@@ -15,6 +15,34 @@
   z-index: 1000;
 }
 
+.dialog-overlay--enter {
+  animation: dialogOverlayIn var(--motion-duration-standard) var(--motion-ease-standard) both;
+}
+
+.dialog--enter {
+  animation: dialogIn var(--motion-duration-standard) var(--motion-ease-emphasized) both;
+}
+
+.dialog-overlay--exit {
+  pointer-events: none;
+  animation: dialogOverlayOut var(--motion-duration-standard) var(--motion-ease-standard) both;
+}
+
+.dialog--exit {
+  animation: dialogOut var(--motion-duration-standard) var(--motion-ease-standard) both;
+}
+
+@keyframes dialogOverlayIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes dialogOverlayOut { from { opacity: 1; } to { opacity: 0; } }
+@keyframes dialogIn {
+  from { opacity: 0; translate: 0 var(--motion-distance-md); }
+  to { opacity: 1; translate: 0 0; }
+}
+@keyframes dialogOut {
+  from { opacity: 1; translate: 0 0; }
+  to { opacity: 0; translate: 0 var(--motion-distance-md); }
+}
+
 .dialog {
   background-color: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -60,7 +88,7 @@
   font-size: 13px;
   border-radius: 6px;
   cursor: pointer;
-  transition: background-color 0.15s;
+  transition: background-color 0.15s, scale var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
 .dialog__btn--cancel {
