@@ -29,6 +29,8 @@ function MyProfile() {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const [userName, setUserName] = useState('秋月')
+  const [avatarPath, setAvatarPath] = useState<string | null>(null)
   const mountedRef = useRef(false)
   const generationRef = useRef(0)
   const hasDataRef = useRef(false)
@@ -69,6 +71,16 @@ function MyProfile() {
       clearInterval(refreshTimer)
     }
   }, [refreshDashboard])
+
+  // 加载个人信息（独立于 dashboard，避免影响测试 mock 行为）
+  useEffect(() => {
+    void window.electronAPI.invoke('settings:get', { key: 'userName' }).then((val) => {
+      if (typeof val === 'string' && val) setUserName(val)
+    })
+    void window.electronAPI.invoke('settings:get', { key: 'avatarPath' }).then((val) => {
+      if (typeof val === 'string' && val) setAvatarPath(val)
+    })
+  }, [])
 
   const summary = useMemo(
     () => buildListeningSummary(dashboard?.days ?? []),
@@ -116,10 +128,14 @@ function MyProfile() {
       <div className="profile-hero">
         <div className="profile-identity">
           <div className="profile-identity__avatar" aria-hidden="true">
-            <IconUser width={30} height={30} />
+            {avatarPath ? (
+              <img src={`qinplayer://avatar?path=${encodeURIComponent(avatarPath)}`} alt="头像" className="profile-identity__avatar-img" />
+            ) : (
+              <IconUser width={30} height={30} />
+            )}
           </div>
           <div className="profile-identity__copy">
-            <strong className="profile-identity__name">秋月</strong>
+            <strong className="profile-identity__name">{userName}</strong>
             <span className="profile-identity__subtitle">QinPlayer 本地听歌档案</span>
             <span className="profile-identity__date">
               {summary.firstDate ? `自 ${formatRecordDate(summary.firstDate)} 开始记录` : '尚无记录'}

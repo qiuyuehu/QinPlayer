@@ -66,7 +66,18 @@ describe('MyProfile', () => {
 
   it('应该区分 loading、错误重试和成功状态', async () => {
     let rejectFirst!: (error: Error) => void
-    invokeMock.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectFirst = reject }))
+    let rejected = false
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'listening:getDays') {
+        if (!rejected) {
+          rejected = true
+          return new Promise((_resolve, reject) => { rejectFirst = reject })
+        }
+        return days
+      }
+      if (channel === 'listening:getRanking') return ranking
+      return null
+    })
     render(<MyProfile />)
     expect(screen.getByText('正在加载听歌统计...')).toBeInTheDocument()
 

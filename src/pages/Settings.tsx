@@ -10,6 +10,7 @@ import { getAudioEngine } from '../utils/AudioEngine'
 import { useUIStore } from '../stores/uiStore'
 import { usePlayerStore } from '../stores/playerStore'
 import Equalizer from '../components/Equalizer'
+import { IconUser } from '../components/Icons'
 import type { Theme } from '../types'
 
 // 主题选项配置
@@ -51,6 +52,41 @@ function Settings() {
   const [exporting, setExporting] = useState(false)   // 导出中
   const [importing, setImporting] = useState(false)    // 导入中
   const [clearing, setClearing] = useState(false)      // 清空中
+
+  // --- 个人信息状态 ---
+  const [userName, setUserName] = useState('秋月')
+  const [avatarPath, setAvatarPath] = useState<string | null>(null)
+  const [nameInput, setNameInput] = useState('秋月')
+  const [savingName, setSavingName] = useState(false)
+
+  // 加载个人信息
+  useEffect(() => {
+    void window.electronAPI.invoke('settings:get', { key: 'userName' }).then((val) => {
+      if (typeof val === 'string' && val) {
+        setUserName(val)
+        setNameInput(val)
+      }
+    })
+    void window.electronAPI.invoke('settings:get', { key: 'avatarPath' }).then((val) => {
+      if (typeof val === 'string' && val) setAvatarPath(val)
+    })
+  }, [])
+
+  // 保存名字
+  const handleSaveName = useCallback(async () => {
+    const trimmed = nameInput.trim().slice(0, 20)
+    if (!trimmed) return
+    setSavingName(true)
+    await window.electronAPI.invoke('settings:set', { key: 'userName', value: trimmed })
+    setUserName(trimmed)
+    setSavingName(false)
+  }, [nameInput])
+
+  // 选择头像
+  const handlePickAvatar = useCallback(async () => {
+    const path = await window.electronAPI.invoke('settings:pickAvatar') as string | null
+    if (path) setAvatarPath(path)
+  }, [])
 
   // ---------------------------------------------------------------------------
   // 主题切换
@@ -251,6 +287,47 @@ function Settings() {
   return (
     <div className="settings-page">
       <h2 className="settings-page__title">设置</h2>
+
+      {/* ===== 个人信息区域 ===== */}
+      <section className="settings-section">
+        <h3 className="settings-section__title">个人信息</h3>
+        <div className="settings-item settings-item--profile">
+          <div className="settings-profile">
+            <button
+              type="button"
+              className="settings-profile__avatar"
+              onClick={handlePickAvatar}
+              title="更换头像"
+            >
+              {avatarPath ? (
+                <img src={`qinplayer://avatar?path=${encodeURIComponent(avatarPath)}`} alt="头像" />
+              ) : (
+                <IconUser width={28} height={28} />
+              )}
+            </button>
+            <div className="settings-profile__fields">
+              <label className="settings-profile__label">
+                <span>昵称</span>
+                <input
+                  type="text"
+                  className="settings-profile__input"
+                  value={nameInput}
+                  maxLength={20}
+                  onChange={(e) => setNameInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') void handleSaveName() }}
+                />
+              </label>
+              <button
+                className="settings-btn"
+                onClick={handleSaveName}
+                disabled={savingName || nameInput.trim() === userName}
+              >
+                {savingName ? '保存中...' : '保存'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* ===== 通用设置区域 ===== */}
       <section className="settings-section">

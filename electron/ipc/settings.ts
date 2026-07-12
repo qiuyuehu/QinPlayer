@@ -5,9 +5,9 @@
 // =============================================================================
 
 import { app, ipcMain, dialog, BrowserWindow } from 'electron'
-import { readFile } from 'fs/promises'
+import { readFile, copyFile, mkdir } from 'fs/promises'
 import { getDatabase } from '../db/database'
-import { join, sep } from 'path'
+import { join, sep, extname } from 'path'
 import type { FeatureFlags } from '../../src/types/ipc'
 import { DEFAULT_FEATURE_FLAGS, parseFeatureFlagsText } from '../../src/utils/featureFlags'
 
@@ -97,6 +97,38 @@ export function registerSettingsIPC(getMainWindow: () => BrowserWindow | null): 
     console.log('[IPC] 音乐文件夹已移除:', path)
 
     return { deletedSongs: result.changes }
+  })
+
+  // --- settings:pickAvatar — 选择头像图片并复制到 userData ---
+  ipcMain.handle('settings:pickAvatar', async () => {
+    const win = getMainWindow()
+    if (!win) return null
+
+    const result = await dialog.showOpenDialog(win, {
+      properties: ['openFile'],
+      filters: [
+        { name: '图片', extensions: ['jpg', 'jpeg', 'png'] },
+      ],
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+
+    const srcPath = result.filePaths[0]
+    const ext = extname(srcPath).toLowerCase() // .jpg / .png
+    const avatarDir = join(app.getPath('userData'), 'avatar')
+
+    // 确保 avatar 目录存在
+    await mkdir(avatarDir, { recursive: true })
+
+    // 复制文件到 userData/avatar/avatar.{ext}（覆盖旧文件）
+    const destPath = join(avatarDir, `avatar_${Date.now()}${ext}`)
+    await copyFile(srcPath, destPath)
+
+    // 路径写入 settings 表
+    const db = getDatabase()
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('avatarPath', destPath)
+
+    console.log('[IPC] 头像已更新:', destPath)
+    return destPath
   })
 
   console.log('[IPC] 设置相关通道已注册')

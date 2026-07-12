@@ -46,7 +46,7 @@ export function registerProtocol(): void {
 
       // 根据类型确定 Content-Type
       let contentType: string
-      if (host === 'cover') {
+      if (host === 'cover' || host === 'avatar') {
         // 封面图片
         const ext = filePath.toLowerCase()
         if (ext.endsWith('.png')) contentType = 'image/png'

@@ -21,6 +21,7 @@ const INVOKE_CHANNELS = new Set([
   // 设置
   'settings:get', 'settings:set',
   'settings:getFolders', 'settings:addFolder', 'settings:removeFolder',
+  'settings:pickAvatar',
   // 歌曲
   'songs:getAll', 'songs:getLiked', 'songs:getRecent', 'songs:search',
   'songs:recordPlay', 'songs:updatePlayCount', 'songs:like', 'songs:unlike',
