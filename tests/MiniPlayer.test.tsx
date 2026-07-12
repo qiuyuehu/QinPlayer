@@ -426,7 +426,9 @@ describe('MiniPlayer', () => {
 
   it('关闭迷你模式时应该自动取消置顶', () => {
     const setAlwaysOnTopMock = vi.fn()
+    const sendMock = vi.fn()
     window.electronAPI.setAlwaysOnTop = setAlwaysOnTopMock
+    window.electronAPI.send = sendMock
 
     render(<MiniPlayer />)
 
@@ -440,6 +442,7 @@ describe('MiniPlayer', () => {
     // 应该自动取消置顶
     expect(setAlwaysOnTopMock).toHaveBeenCalledWith(false)
     expect(useUIStore.getState().isMiniMode).toBe(false)
+    expect(sendMock).not.toHaveBeenCalledWith('close:respond', expect.anything())
   })
 
   it('展开时应该自动取消置顶', () => {

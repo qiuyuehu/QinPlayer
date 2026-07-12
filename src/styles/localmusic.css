@@ -53,6 +53,13 @@
   border-radius: 6px;
 }
 
+.local-music__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
 .local-music__count {
   color: var(--accent);
   margin-left: 4px;

@@ -17,7 +17,7 @@
 
 import { app, BrowserWindow, ipcMain, protocol, nativeTheme, nativeImage } from 'electron'
 import { join } from 'path'
-import { initDatabase, closeDatabase } from './db/database'
+import { initDatabase, closeDatabase, getDatabase } from './db/database'
 import { registerSongsIPC } from './ipc/songs'
 import { registerPlaylistsIPC } from './ipc/playlists'
 import { getFeatureFlags, loadFeatureFlags, registerSettingsIPC } from './ipc/settings'
@@ -28,6 +28,7 @@ import { registerEqIPC } from './ipc/eq'
 import { registerListeningIPC } from './ipc/listening'
 import { createTray, updateMenu, destroyTray } from './tray'
 import { loadWindowBounds, loadWindowState, normalizeWindowBounds, saveWindowBounds, saveWindowState } from './windowBounds'
+import { createCloseCoordinator } from './closeBehavior'
 import { DEFAULT_FEATURE_FLAGS } from '../src/utils/featureFlags'
 import type { FeatureFlags } from '../src/types/ipc'
 
@@ -37,7 +38,6 @@ import type { FeatureFlags } from '../src/types/ipc'
 
 let mainWindow: BrowserWindow | null = null
 let isPlaying = false  // 播放状态（托盘菜单需要）
-let isQuitting = false  // 是否正在退出（关闭窗口时判断：退出 vs 最小化到托盘）
 let currentFeatureFlags: FeatureFlags = { ...DEFAULT_FEATURE_FLAGS }
 let isMiniMode = false  // 迷你模式期间暂停正常窗口 bounds 持久化
 let boundsTimer: ReturnType<typeof setTimeout> | null = null
@@ -52,10 +52,21 @@ function getIsPlaying(): boolean {
   return isPlaying
 }
 
-/** 设置退出标记（托盘"退出"菜单调用） */
-function setIsQuitting(): void {
-  isQuitting = true
-}
+const closeCoordinator = createCloseCoordinator({
+  readSetting: () => {
+    const row = getDatabase().prepare('SELECT value FROM settings WHERE key = ?').get('closeBehavior') as { value: string } | undefined
+    return row?.value ?? null
+  },
+  saveSetting: (value) => {
+    getDatabase().prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('closeBehavior', value)
+  },
+  hasTray: () => currentFeatureFlags.tray,
+  hide: () => mainWindow?.hide(),
+  quit: () => app.quit(),
+  canSendRequest: () => Boolean(mainWindow && !mainWindow.webContents.isDestroyed()),
+  sendRequest: (payload) => mainWindow?.webContents.send('close:request', payload),
+  isCurrentSender: (sender) => mainWindow?.webContents === sender,
+})
 
 function canSaveWindowBounds(win: BrowserWindow): boolean {
   return currentFeatureFlags.windowSizePersist
@@ -217,15 +228,15 @@ function createWindow(flags: FeatureFlags): void {
     mainWindow.minimize()
   }
 
-  // 关闭窗口时保存 bounds，并按托盘规则隐藏或退出
+  // 关闭窗口时先保存 bounds，再交给关闭行为状态机处理。
   mainWindow.on('close', (e) => {
     saveCurrentWindowBoundsNow()
-
-    if (flags.tray && !isQuitting) {
-      e.preventDefault()
-      mainWindow?.hide()
-    }
+    closeCoordinator.handleClose(e)
   })
+
+  mainWindow.webContents.on('did-start-loading', closeCoordinator.resetRenderer)
+  mainWindow.webContents.on('render-process-gone', closeCoordinator.resetRenderer)
+  mainWindow.webContents.on('destroyed', closeCoordinator.resetRenderer)
 
   // 开发模式加载 Vite 开发服务器，打包后加载本地文件
   if (!app.isPackaged) {
@@ -237,6 +248,7 @@ function createWindow(flags: FeatureFlags): void {
 
   // 窗口关闭时的处理
   mainWindow.on('closed', () => {
+    closeCoordinator.resetRenderer()
     mainWindow = null
   })
 }
@@ -270,6 +282,13 @@ app.whenReady().then(async () => {
   registerEqIPC()
   registerListeningIPC(() => currentFeatureFlags)
 
+  ipcMain.on('close:ready', (event) => {
+    closeCoordinator.markRendererReady(event.sender)
+  })
+  ipcMain.on('close:respond', (event, response) => {
+    closeCoordinator.handleResponse(event.sender, response)
+  })
+
   // 4. 创建主窗口
   createWindow(featureFlags)
 
@@ -287,7 +306,7 @@ app.whenReady().then(async () => {
     createTray(
       getMainWindow,
       getIsPlaying,
-      setIsQuitting,
+      closeCoordinator.quit,
       () => {
         if (!getFeatureFlags().playback) return
         // 播放/暂停：切换状态并通知渲染进程
@@ -330,6 +349,10 @@ app.whenReady().then(async () => {
       createWindow(currentFeatureFlags)
     }
   })
+})
+
+app.on('before-quit', () => {
+  closeCoordinator.beforeQuit()
 })
 
 // 所有窗口关闭时退出（macOS 除外）

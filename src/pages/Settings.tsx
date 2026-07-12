@@ -12,12 +12,20 @@ import { usePlayerStore } from '../stores/playerStore'
 import Equalizer from '../components/Equalizer'
 import { IconUser } from '../components/Icons'
 import type { Theme } from '../types'
+import { normalizeCloseBehavior } from '../types/ipc'
+import type { CloseBehavior } from '../types/ipc'
 
 // 主题选项配置
 const THEME_OPTIONS: { value: Theme; label: string; desc: string }[] = [
   { value: 'light', label: '亮色', desc: '始终使用亮色主题' },
   { value: 'dark', label: '暗色', desc: '始终使用暗色主题' },
   { value: 'system', label: '跟随系统', desc: '自动匹配系统主题' },
+]
+
+const CLOSE_BEHAVIOR_OPTIONS: { value: CloseBehavior; label: string }[] = [
+  { value: 'minimize', label: '最小化到托盘' },
+  { value: 'exit', label: '直接退出' },
+  { value: 'ask', label: '每次询问' },
 ]
 
 // Settings — 设置页面，主题/音频输出/文件夹管理/数据导入导出
@@ -36,6 +44,9 @@ function Settings() {
 
   // --- 开机自启动状态 ---
   const [autoLaunch, setAutoLaunch] = useState(false)
+  const [closeBehavior, setCloseBehavior] = useState<CloseBehavior>('minimize')
+  const [savingCloseBehavior, setSavingCloseBehavior] = useState(false)
+  const [closeBehaviorError, setCloseBehaviorError] = useState(false)
 
   // --- 淡入淡出状态（从 Zustand 读取） ---
   const fadeEnabled = usePlayerStore((s) => s.fadeEnabled)
@@ -71,6 +82,27 @@ function Settings() {
       if (typeof val === 'string' && val) setAvatarPath(val)
     })
   }, [])
+
+  useEffect(() => {
+    void window.electronAPI.invoke('settings:get', { key: 'closeBehavior' })
+      .then((value) => setCloseBehavior(normalizeCloseBehavior(value)))
+      .catch((error) => console.error('[Settings] 读取关闭行为失败:', error))
+  }, [])
+
+  const handleCloseBehaviorChange = useCallback(async (value: CloseBehavior) => {
+    if (savingCloseBehavior || (!featureFlags.tray && value !== 'exit')) return
+    setSavingCloseBehavior(true)
+    setCloseBehaviorError(false)
+    try {
+      await window.electronAPI.invoke('settings:set', { key: 'closeBehavior', value })
+      setCloseBehavior(value)
+    } catch (error) {
+      console.error('[Settings] 保存关闭行为失败:', error)
+      setCloseBehaviorError(true)
+    } finally {
+      setSavingCloseBehavior(false)
+    }
+  }, [featureFlags.tray, savingCloseBehavior])
 
   // 保存名字
   const handleSaveName = useCallback(async () => {
@@ -352,6 +384,38 @@ function Settings() {
                   {option.label}
                 </button>
               ))}
+            </div>
+          </div>
+        </div>
+
+        {/* 关闭窗口行为 */}
+        <div className="settings-item">
+          <div className="settings-item__info">
+            <span className="settings-item__label">关闭窗口时</span>
+            <span className="settings-item__desc">
+              {featureFlags.tray ? '选择关闭按钮的行为' : '托盘已关闭，窗口将直接退出'}
+            </span>
+            {closeBehaviorError && <span className="settings-item__error">保存失败，请重试</span>}
+          </div>
+          <div className="settings-item__control">
+            <div className="close-behavior-options" role="radiogroup" aria-label="关闭窗口时">
+              {CLOSE_BEHAVIOR_OPTIONS.map((option) => {
+                const effectiveValue = featureFlags.tray ? closeBehavior : 'exit'
+                const disabled = savingCloseBehavior || (!featureFlags.tray && option.value !== 'exit')
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={effectiveValue === option.value}
+                    disabled={disabled}
+                    className={`close-behavior-option ${effectiveValue === option.value ? 'close-behavior-option--active' : ''}`}
+                    onClick={() => void handleCloseBehaviorChange(option.value)}
+                  >
+                    {option.label}
+                  </button>
+                )
+              })}
             </div>
           </div>
         </div>

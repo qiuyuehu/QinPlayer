@@ -5,9 +5,18 @@
 // 数据来源：songs:getLiked IPC
 // =============================================================================
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import SongList from '../components/SongList'
-import type { Track } from '../types'
+import SortMenu from '../components/SortMenu'
+import { sortTracks } from '../utils/trackSort'
+import type { TrackSortBy } from '../utils/trackSort'
+import type { SortOrder, Track } from '../types'
+
+const TRACK_SORT_FIELDS = [
+  { value: 'title', label: '歌名' },
+  { value: 'artist', label: '歌手' },
+  { value: 'playCount', label: '播放次数' },
+] as const
 
 /**
  * 我喜欢的页面组件
@@ -19,6 +28,12 @@ function Liked() {
   const [tracks, setTracks] = useState<Track[]>([])
   // 加载状态，初始为 true 以在数据到达前显示 loading
   const [loading, setLoading] = useState(true)
+  const [sortBy, setSortBy] = useState<TrackSortBy>('title')
+  const [sortOrder, setSortOrder] = useState<SortOrder>('asc')
+  const sortedTracks = useMemo(
+    () => sortTracks(tracks, sortBy, sortOrder),
+    [sortBy, sortOrder, tracks],
+  )
 
   // 加载收藏列表：调用后端 IPC 获取所有已收藏歌曲
   const loadLiked = async () => {
@@ -51,11 +66,23 @@ function Liked() {
 
   return (
     <div className="liked-page">
-      <h2 className="liked-page__title">我喜欢的</h2>
+      <div className="liked-page__header">
+        <h2 className="liked-page__title">我喜欢的</h2>
+        {tracks.length > 0 && (
+          <SortMenu
+            fields={TRACK_SORT_FIELDS}
+            sortBy={sortBy}
+            sortOrder={sortOrder}
+            ariaLabel="喜欢的歌曲排序"
+            onSortByChange={setSortBy}
+            onSortOrderChange={setSortOrder}
+          />
+        )}
+      </div>
 
       {/* 有收藏歌曲时显示列表，showAlbum=false 因为空间有限且收藏列表不需要专辑列 */}
       {tracks.length > 0 ? (
-        <SongList tracks={tracks} showIndex showAlbum={false} />
+        <SongList tracks={sortedTracks} showIndex showAlbum={false} />
       ) : (
         // 无收藏时的空状态引导，提示用户操作方式
         <div className="liked-page__empty">

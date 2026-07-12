@@ -50,6 +50,19 @@ export interface FeatureFlags {
   windowSizePersist: boolean
 }
 
+export type CloseBehavior = 'minimize' | 'exit' | 'ask'
+export type CloseDecision = 'minimize' | 'exit' | 'cancel'
+
+export interface CloseResponse {
+  requestId: string
+  decision: CloseDecision
+  remember: boolean
+}
+
+export function normalizeCloseBehavior(value: unknown): CloseBehavior {
+  return value === 'exit' || value === 'ask' ? value : 'minimize'
+}
+
 // ---------------------------------------------------------------------------
 // IPC 通道定义
 // ---------------------------------------------------------------------------
@@ -231,6 +244,7 @@ export type IpcReturn<T extends IpcChannel> = IpcChannels[T]['return']
 // ---------------------------------------------------------------------------
 
 export interface IpcPushChannels {
+  'close:request': { requestId: string }
   'scan:progress': { percent: number; currentFile: string }
   'scan:song-found': Track
   'scan:done': { total: number }

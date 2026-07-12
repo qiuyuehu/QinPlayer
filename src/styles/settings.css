@@ -360,3 +360,43 @@
 .settings-profile__input:focus {
   border-color: var(--accent);
 }
+
+.close-behavior-options {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 7px;
+  background: var(--bg-tertiary);
+}
+
+.close-behavior-option {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.close-behavior-option--active {
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+
+.close-behavior-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.close-behavior-option--active:disabled {
+  opacity: 1;
+}
+
+.settings-item__error {
+  color: var(--accent);
+  font-size: 11px;
+}

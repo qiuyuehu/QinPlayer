@@ -6,12 +6,13 @@
 // 水合：启动时从数据库恢复播放状态，加载完成前显示骨架屏
 // =============================================================================
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import TitleBar from './components/TitleBar'
 import Sidebar from './components/Sidebar'
 import Content from './components/Content'
 import PlayerBar from './components/PlayerBar'
 import MiniPlayer from './components/MiniPlayer'
+import CloseConfirmDialog from './components/CloseConfirmDialog'
 import { useTheme } from './hooks/useTheme'
 import { useReducedMotion } from './hooks/useReducedMotion'
 import { useAudioSync } from './hooks/useAudioSync'
@@ -19,6 +20,7 @@ import { restorePlayerState, usePlayerStore } from './stores/playerStore'
 import { useUIStore } from './stores/uiStore'
 import { useEqStore } from './stores/eqStore'
 import type { Theme } from './types'
+import type { CloseResponse, IpcPushChannels } from './types/ipc'
 import { isNavAllowed } from './utils/featureFlags'
 import { setAudioEngineEqualizerEnabled } from './utils/AudioEngine'
 
@@ -26,6 +28,8 @@ import { setAudioEngineEqualizerEnabled } from './utils/AudioEngine'
 function App() {
   // 水合状态（数据库加载完成前显示骨架屏）
   const [isHydrated, setIsHydrated] = useState(false)
+  const [closeRequest, setCloseRequest] = useState<IpcPushChannels['close:request'] | null>(null)
+  const closeRequestRef = useRef<IpcPushChannels['close:request'] | null>(null)
 
   // 当前导航项（歌词界面时隐藏导航栏和播放栏）
   const activeNav = useUIStore((state) => state.activeNav)
@@ -39,6 +43,33 @@ function App() {
 
   // 初始化音频同步
   useAudioSync()
+
+  // 根级监听独立于水合和三种应用壳层，确保任何可见状态都能响应关闭询问。
+  useEffect(() => {
+    const unsubscribe = window.electronAPI.on('close:request', (payload: IpcPushChannels['close:request']) => {
+      if (!payload || typeof payload.requestId !== 'string' || payload.requestId.length === 0) return
+      if (closeRequestRef.current) return
+      closeRequestRef.current = payload
+      setCloseRequest(payload)
+    })
+    window.electronAPI.send('close:ready')
+    return unsubscribe
+  }, [])
+
+  const handleCloseResponse = (response: CloseResponse): void => {
+    if (closeRequestRef.current?.requestId !== response.requestId) return
+    closeRequestRef.current = null
+    window.electronAPI.send('close:respond', response)
+    setCloseRequest(null)
+  }
+
+  const closeDialog = closeRequest ? (
+    <CloseConfirmDialog
+      key={closeRequest.requestId}
+      requestId={closeRequest.requestId}
+      onRespond={handleCloseResponse}
+    />
+  ) : null
 
   // 迷你模式切换时通知主进程调整窗口尺寸
   useEffect(() => {
@@ -111,6 +142,7 @@ function App() {
   // 加载中显示骨架屏
   if (!isHydrated) {
     return (
+      <>
       <div className="app">
         <TitleBar />
         <div className="app__main">
@@ -130,10 +162,13 @@ function App() {
           <div className="app__skeleton-bar" style={{ width: '20%', height: '12px' }} />
         </div>
       </div>
+      {closeDialog}
+      </>
     )
   }
 
   return (
+    <>
     <div className="app">
       {/* 迷你模式：只显示 MiniPlayer */}
       {isMiniMode ? (
@@ -155,6 +190,8 @@ function App() {
         </>
       )}
     </div>
+    {closeDialog}
+    </>
   )
 }
 

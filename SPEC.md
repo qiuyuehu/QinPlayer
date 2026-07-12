@@ -35,6 +35,7 @@ QinPlayer/
 │   │   ├── window.ts                  # 窗口控制
 │   │   └── protocol.ts               # 协议处理
 │   ├── windowBounds.ts                # 窗口 bounds 持久化 (152行)
+│   ├── closeBehavior.ts               # 关闭窗口行为协调器
 │   └── workers/
 │       └── scanner.ts                 # 扫描 Worker (393行)
 │
@@ -49,7 +50,8 @@ QinPlayer/
 │   │   ├── MiniPlayer.tsx             # 迷你模式三视图壳层
 │   │   ├── MiniLyricsView.tsx         # 迷你歌词紧凑视图
 │   │   ├── MiniQueueView.tsx          # 迷你队列紧凑视图
-│   │   ├── AlbumSortMenu.tsx          # 专辑排序菜单
+│   │   ├── SortMenu.tsx               # 通用排序菜单
+│   │   ├── CloseConfirmDialog.tsx      # 关闭窗口确认弹窗
 │   │   ├── Equalizer.tsx              # 均衡器
 │   │   ├── Sidebar.tsx                # 侧边栏导航
 │   │   ├── TitleBar.tsx               # 标题栏
@@ -88,6 +90,7 @@ QinPlayer/
 │   │   ├── colorExtract.ts            # 封面取色
 │   │   ├── featureFlags.ts            # 功能开关
 │   │   ├── albumSort.ts               # 专辑本地化排序
+│   │   ├── trackSort.ts               # 歌曲本地化稳定排序
 │   │   ├── formatTime.ts              # 时间格式化
 │   │   ├── currentTimeRef.ts          # 播放时间 ref
 │   │   └── mediaSession.ts            # 系统媒体控制
@@ -108,6 +111,7 @@ QinPlayer/
 │   │   ├── content.css                # 内容区
 │   │   ├── localmusic.css             # 本地音乐 (163行)
 │   │   ├── albums.css                 # 专辑页面
+│   │   ├── sort-menu.css              # 通用排序菜单
 │   │   ├── recent-liked.css           # 最近/喜欢
 │   │   ├── search.css                 # 搜索
 │   │   ├── contextmenu.css            # 右键菜单
@@ -180,6 +184,10 @@ QinPlayer/
 ### 搜索
 - 按歌名、歌手搜索
 
+### 本地音乐
+- 默认按歌名拼音/本地化字母序升序，可切换歌名、歌手、播放次数及升序/降序
+- 排序仅在页面内派生且不持久化；从当前页面起播时，播放队列使用当前排序
+
 ### 歌词
 - 读取本地 .lrc 文件，逐行滚动，当前行高亮
 - 支持三种双语格式：同时间戳双行（原文+翻译）、｜分隔、空格分隔
@@ -203,6 +211,8 @@ QinPlayer/
 
 ### 我喜欢的
 - 列表里每首歌旁心形按钮标记
+- 默认按歌名升序，可切换歌名、歌手、播放次数及升序/降序
+- 空值、未知歌手和非法播放次数在升降序中都固定末尾；并列项按歌名、歌手、歌曲 ID 升序决胜
 
 ### 我的
 - 个人信息（头像、昵称，可在设置页编辑；累计听歌时长、起始日期）
@@ -223,8 +233,11 @@ QinPlayer/
 - 主窗口按钮触发；进入前保存正常 bounds，退出时恢复，视图切换不发送窗口 IPC
 
 ### 系统托盘
-- 最小化到托盘继续播放
+- 关闭窗口行为可选：最小化到托盘、直接退出、每次询问；缺失或非法设置默认最小化
+- 每次询问使用 renderer 自定义弹窗，Escape 取消，勾选“不再询问”后才保存本次最小化/退出选择
+- tray feature flag 关闭时所有关闭偏好都按直接退出执行，避免窗口隐藏后无法恢复
 - 右键菜单：上一首/播放暂停/下一首/显示主窗口/退出
+- 托盘“退出”、before-quit 和系统退出绕过询问弹窗
 
 ### 系统媒体控制
 - Media Session API 接管 Windows 任务栏媒体控制
@@ -279,7 +292,7 @@ Apple Music 风，精致克制。
 | 无封面 | 显示默认占位图 |
 | 新建歌单 | 导航栏"歌单"旁 + 按钮 |
 | 右键菜单 | 播放、添加到歌单、从歌单移除、打开文件所在目录、歌曲信息 |
-| 关闭窗口 | 最小化到托盘继续播放 |
+| 关闭窗口 | 按设置最小化到托盘、直接退出或每次询问；无托盘时直接退出 |
 | 迷你模式 | 主窗口按钮触发 |
 
 ---
@@ -298,7 +311,7 @@ Apple Music 风，精致克制。
 | 分类 | 内容 |
 |------|------|
 | 个人信息 | 昵称编辑（≤20字符）、头像更换（jpg/png，复制到 userData） |
-| 通用 | 主题切换（亮色/暗色/跟随系统）、开机自启动 |
+| 通用 | 主题切换（亮色/暗色/跟随系统）、关闭窗口行为、减少动画、开机自启动 |
 | 播放 | 音频输出设备、默认播放模式、淡入淡出开关 |
 | 文件管理 | 音乐文件夹路径（多目录）、歌词搜索规则、歌词时间轴偏移（±0.5s） |
 | 数据 | 存储位置自定义、导入/导出数据 |
@@ -484,7 +497,7 @@ Main Process ✓ 负责 SQLite、文件系统、窗口、IPC
 - 不联网，纯本地
 - 不做全局快捷键（暂时）
 - 不导入 .m3u 歌单，只手动建
-- 窗口关闭最小化到托盘，不退出
+- 窗口关闭默认最小化到托盘，也可设置直接退出或每次询问；无托盘时必须退出
 - 单实例锁：不允许重复打开多个窗口
 - 主进程必须用 TypeScript + electron-vite（端到端类型安全）
 - 自定义协议必须在 app.whenReady 之前注册为特权协议
@@ -497,8 +510,8 @@ Main Process ✓ 负责 SQLite、文件系统、窗口、IPC
 ## 测试覆盖
 
 - 框架：Vitest + @testing-library/react
-- 用例数：384 个（39 个测试文件）
-- 覆盖范围：formatTime、lrcParser、albumSort、playerStore、uiStore、PlayerBar、LyricsPanel、LyricsFullscreen、MiniPlayer、MiniLyricsView、MiniQueueView、AlbumSortMenu、Albums、SongList、PlaylistPanel、featureFlags、Sidebar、useAudioSync、useTrackLyrics、windowBounds、Harness checks
+- 用例数：404 个（44 个测试文件）
+- 覆盖范围：formatTime、lrcParser、albumSort、trackSort、playerStore、uiStore、PlayerBar、LyricsPanel、LyricsFullscreen、MiniPlayer、MiniLyricsView、MiniQueueView、SortMenu、CloseCoordinator、CloseConfirmDialog、Albums、LocalMusic、Liked、Settings、SongList、PlaylistPanel、featureFlags、Sidebar、useAudioSync、useTrackLyrics、windowBounds、Harness checks
 - Feature Flags 消融验证：16 个 flag 逐个关闭不影响其他 flag
 
 ---

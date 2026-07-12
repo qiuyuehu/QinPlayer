@@ -16,7 +16,7 @@ import type { FeatureFlags } from '../src/types/ipc'
 let tray: Tray | null = null
 let getMainWindow: () => Electron.BrowserWindow | null
 let getIsPlaying: () => boolean
-let setIsQuitting: () => void
+let quitApp: () => void
 let onPlayPause: () => void
 let onPrev: () => void
 let onNext: () => void
@@ -29,7 +29,7 @@ let featureFlags: FeatureFlags
 export function createTray(
   mainWindowGetter: () => Electron.BrowserWindow | null,
   isPlayingGetter: () => boolean,
-  setIsQuittingFn: () => void,
+  quitAppFn: () => void,
   playPauseHandler: () => void,
   prevHandler: () => void,
   nextHandler: () => void,
@@ -38,7 +38,7 @@ export function createTray(
   // 保存回调引用
   getMainWindow = mainWindowGetter
   getIsPlaying = isPlayingGetter
-  setIsQuitting = setIsQuittingFn
+  quitApp = quitAppFn
   onPlayPause = playPauseHandler
   onPrev = prevHandler
   onNext = nextHandler
@@ -109,10 +109,12 @@ export function updateMenu(): void {
     },
     { type: 'separator' },
     {
+      // closeCoordinator.quit() 内部设 isQuitting + 调 app.quit()
+      // app.quit() 触发 before-quit → closeCoordinator.beforeQuit()（幂等）
+      // 主窗口 close 事件因 isQuitting=true 直接放行，不触发询问
       label: '退出',
       click: () => {
-        setIsQuitting()
-        app.quit()
+        quitApp()
       }
     }
   ])

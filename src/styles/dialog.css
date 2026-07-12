@@ -161,3 +161,65 @@
   color: var(--accent);
   text-decoration-color: var(--accent);
 }
+
+/* 关闭确认弹窗复用通用 dialog token，仅定义内容布局。 */
+.close-dialog {
+  width: min(360px, calc(100vw - 32px));
+  min-width: 0;
+  padding: 20px;
+}
+
+.close-dialog__title {
+  margin: 0 0 14px;
+  color: var(--text-primary);
+  font-size: 16px;
+}
+
+.close-dialog__remember {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.close-dialog__actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.close-dialog__button {
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.close-dialog__button:hover {
+  border-color: var(--accent);
+}
+
+.close-dialog__button--danger {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+
+@media (max-width: 500px), (max-height: 240px) {
+  .close-dialog {
+    width: min(360px, calc(100vw - 20px));
+    padding: 10px 12px;
+  }
+
+  .close-dialog__title { margin-bottom: 8px; font-size: 14px; }
+  .close-dialog__actions { margin-top: 8px; }
+  .close-dialog__button { height: 30px; font-size: 12px; }
+}

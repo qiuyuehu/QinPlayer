@@ -39,3 +39,15 @@
   font-size: 13px;
   gap: 4px;
 }
+
+.liked-page__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.liked-page__header .liked-page__title {
+  margin-bottom: 0;
+}

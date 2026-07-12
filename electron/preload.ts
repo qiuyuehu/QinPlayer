@@ -42,6 +42,7 @@ const INVOKE_CHANNELS = new Set([
 ])
 
 const SEND_CHANNELS = new Set([
+  'close:ready', 'close:respond',
   'window:minimize', 'window:maximize', 'window:close',
   'window:set-mini-mode', 'window:set-always-on-top',
   'player:playing-changed',
@@ -50,6 +51,7 @@ const SEND_CHANNELS = new Set([
 ])
 
 const ON_CHANNELS = new Set([
+  'close:request',
   'window:maximized',
   'tray:play-pause', 'tray:prev', 'tray:next',
   'theme:system-changed',

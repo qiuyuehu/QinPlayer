@@ -9,9 +9,18 @@
 //   - 错误兜底：Worker 启动失败、文件夹不可访问等场景都有处理
 // =============================================================================
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import SongList from '../components/SongList'           // 复用歌曲列表组件（虚拟列表+右键菜单）
-import type { Track } from '../types'
+import SortMenu from '../components/SortMenu'
+import { sortTracks } from '../utils/trackSort'
+import type { TrackSortBy } from '../utils/trackSort'
+import type { SortOrder, Track } from '../types'
+
+const TRACK_SORT_FIELDS = [
+  { value: 'title', label: '歌名' },
+  { value: 'artist', label: '歌手' },
+  { value: 'playCount', label: '播放次数' },
+] as const
 
 // LocalMusic — 本地音乐页面，扫描文件夹 + 显示歌曲列表
 function LocalMusic() {
@@ -22,6 +31,12 @@ function LocalMusic() {
   const [error, setError] = useState<string | null>(null)            // 错误信息
   const [progress, setProgress] = useState(0)           // 扫描进度百分比（0-100）
   const [scanTotal, setScanTotal] = useState(0)         // 扫描到的文件总数
+  const [sortBy, setSortBy] = useState<TrackSortBy>('title')
+  const [sortOrder, setSortOrder] = useState<SortOrder>('asc')
+  const sortedTracks = useMemo(
+    () => sortTracks(tracks, sortBy, sortOrder),
+    [sortBy, sortOrder, tracks],
+  )
 
   // ---------------------------------------------------------------------------
   // 启动时从数据库加载已有歌曲
@@ -134,13 +149,25 @@ function LocalMusic() {
       {/* 顶部操作栏 */}
       <div className="local-music__header">
         <h2 className="local-music__title">本地音乐</h2>
-        <button
-          className="local-music__add-btn"
-          onClick={handleSelectFolder}
-          disabled={scanning}   // 扫描中禁用按钮，防止重复触发
-        >
-          {scanning ? '扫描中...' : '选择文件夹'}  {/* 动态按钮文案 */}
-        </button>
+        <div className="local-music__header-actions">
+          {tracks.length > 0 && (
+            <SortMenu
+              fields={TRACK_SORT_FIELDS}
+              sortBy={sortBy}
+              sortOrder={sortOrder}
+              ariaLabel="本地音乐排序"
+              onSortByChange={setSortBy}
+              onSortOrderChange={setSortOrder}
+            />
+          )}
+          <button
+            className="local-music__add-btn"
+            onClick={handleSelectFolder}
+            disabled={scanning}   // 扫描中禁用按钮，防止重复触发
+          >
+            {scanning ? '扫描中...' : '选择文件夹'}  {/* 动态按钮文案 */}
+          </button>
+        </div>
       </div>
 
       {/* 文件夹路径 */}
@@ -174,7 +201,7 @@ function LocalMusic() {
 
       {/* 歌曲列表 */}
       {tracks.length > 0 && (   // 有歌曲时才渲染列表，避免空列表占位
-        <SongList tracks={tracks} showIndex showAlbum={false} />
+        <SongList tracks={sortedTracks} showIndex showAlbum={false} />
       )}
 
       {/* 空状态 */}

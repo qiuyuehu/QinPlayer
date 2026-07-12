@@ -1,0 +1,124 @@
+/* =============================================================================
+   通用排序菜单
+   ============================================================================= */
+
+.sort-menu {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.sort-menu__trigger {
+  width: auto;
+  min-width: 120px;
+  height: 32px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 14px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  text-align: center;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, scale var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.sort-menu__trigger:hover,
+.sort-menu__trigger[aria-expanded="true"] {
+  border-color: var(--border);
+  background: var(--control-hover);
+  color: var(--text-primary);
+}
+
+.sort-menu__summary,
+.sort-menu__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sort-menu__chevron {
+  transition: transform 0.15s ease;
+}
+
+.sort-menu__chevron--open {
+  transform: rotate(180deg);
+}
+
+.sort-menu__popup {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  width: 156px;
+  padding: 4px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-md);
+  animation: sortMenuIn var(--motion-duration-fast) var(--motion-ease-emphasized);
+}
+
+@keyframes sortMenuIn {
+  from { opacity: 0; translate: 0 calc(-1 * var(--motion-distance-sm)); }
+  to { opacity: 1; translate: 0 0; }
+}
+
+.sort-menu__popup [role="group"] {
+  display: grid;
+}
+
+.sort-menu__item {
+  width: 100%;
+  height: 34px;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+}
+
+.sort-menu__item:hover {
+  background: var(--control-hover);
+  color: var(--text-primary);
+}
+
+.sort-menu__item--checked {
+  background: var(--accent-subtle);
+  color: var(--accent);
+}
+
+.sort-menu__check {
+  width: 18px;
+  color: var(--accent);
+  font-size: 9px;
+  text-align: center;
+}
+
+.sort-menu__separator {
+  height: 1px;
+  margin: 4px 8px;
+  background: var(--border-subtle);
+}
+
+.sort-menu__trigger:focus-visible,
+.sort-menu__item:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sort-menu__trigger,
+  .sort-menu__chevron { transition: none; }
+  .sort-menu__popup { animation: none; }
+}

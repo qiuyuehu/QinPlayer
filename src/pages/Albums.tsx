@@ -7,10 +7,15 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import SongList from '../components/SongList'
-import AlbumSortMenu from '../components/AlbumSortMenu'
+import SortMenu from '../components/SortMenu'
 import { sortAlbums } from '../utils/albumSort'
 import type { AlbumSortBy } from '../utils/albumSort'
 import type { Album, SortOrder, Track } from '../types'
+
+const ALBUM_SORT_FIELDS = [
+  { value: 'name', label: '专辑名' },
+  { value: 'artist', label: '歌手' },
+] as const
 
 /**
  * 专辑页面组件
@@ -94,9 +99,11 @@ function Albums() {
       <div className="albums__header">
         <h2 className="albums__title">专辑</h2>
         <div className="albums__header-actions">
-          <AlbumSortMenu
+          <SortMenu
+            fields={ALBUM_SORT_FIELDS}
             sortBy={sortBy}
             sortOrder={sortOrder}
+            ariaLabel="专辑排序"
             onSortByChange={setSortBy}
             onSortOrderChange={setSortOrder}
           />
