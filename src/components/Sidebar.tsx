@@ -7,7 +7,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useUIStore } from '../stores/uiStore'
-import { IconClock, IconMusic, IconDisc, IconList, IconStar, IconGear } from './Icons'
+import { IconClock, IconMusic, IconDisc, IconList, IconStar, IconUser, IconGear } from './Icons'
 import { isNavAllowed } from '../utils/featureFlags'
 
 // 导航项定义（使用 SVG 图标组件，统一扁平 stroke 风格）
@@ -17,6 +17,7 @@ const NAV_ITEMS = [
   { id: 'albums',      label: '专辑',     Icon: IconDisc },
   { id: 'playlists',   label: '歌单',     Icon: IconList },
   { id: 'liked',       label: '我喜欢的', Icon: IconStar },
+  { id: 'profile',     label: '我的',     Icon: IconUser },
   { id: 'settings',    label: '设置',     Icon: IconGear },
 ]
 

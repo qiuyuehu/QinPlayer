@@ -253,6 +253,16 @@ export function IconList({ width = 20, height = 20, className }: IconProps) {
   )
 }
 
+/** 用户（我的） */
+export function IconUser({ width = 20, height = 20, className }: IconProps) {
+  return (
+    <svg width={width} height={height} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <circle cx="10" cy="6.5" r="3" />
+      <path d="M4.5 17c.6-3.1 2.4-4.7 5.5-4.7s4.9 1.6 5.5 4.7" />
+    </svg>
+  )
+}
+
 /** 齿轮（设置） */
 export function IconGear({ width = 20, height = 20, className }: IconProps) {
   return (

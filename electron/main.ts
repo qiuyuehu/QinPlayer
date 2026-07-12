@@ -25,6 +25,7 @@ import { registerWindowIPC } from './ipc/window'
 import { registerProtocol } from './ipc/protocol'
 import { registerScanIPC, startIncrementalScan } from './ipc/scan'
 import { registerEqIPC } from './ipc/eq'
+import { registerListeningIPC } from './ipc/listening'
 import { createTray, updateMenu, destroyTray } from './tray'
 import { loadWindowBounds, loadWindowState, normalizeWindowBounds, saveWindowBounds, saveWindowState } from './windowBounds'
 import { DEFAULT_FEATURE_FLAGS } from '../src/utils/featureFlags'
@@ -267,6 +268,7 @@ app.whenReady().then(async () => {
   registerPlaylistsIPC()
   registerSettingsIPC(getMainWindow)
   registerEqIPC()
+  registerListeningIPC(() => currentFeatureFlags)
 
   // 4. 创建主窗口
   createWindow(featureFlags)

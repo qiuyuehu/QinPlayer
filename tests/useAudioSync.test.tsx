@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { act, render, waitFor } from '@testing-library/react'
+import { StrictMode } from 'react'
 import { useAudioSync } from '../src/hooks/useAudioSync'
 import { usePlayerStore } from '../src/stores/playerStore'
 import { useUIStore } from '../src/stores/uiStore'
@@ -18,6 +19,18 @@ const pauseMock = vi.fn()
 let timeUpdateHandler: ((time: number, duration: number) => void) | undefined
 let loadedMetadataHandler: ((duration: number) => void) | undefined
 let endedHandler: (() => void) | undefined
+let enginePlaying = true
+
+const trackerMocks = vi.hoisted(() => ({
+  observe: vi.fn(),
+  flush: vi.fn().mockResolvedValue(undefined),
+  resetSample: vi.fn(),
+  discard: vi.fn(),
+}))
+
+vi.mock('../src/utils/listeningTracker', () => ({
+  listeningTracker: trackerMocks,
+}))
 
 const onTimeUpdateMock = vi.fn((callback: (time: number, duration: number) => void) => {
   timeUpdateHandler = callback
@@ -31,6 +44,7 @@ const onEndedMock = vi.fn((callback: () => void) => {
 
 vi.mock('../src/utils/AudioEngine', () => ({
   getAudioEngine: vi.fn(() => ({
+    get playing() { return enginePlaying },
     load: loadMock,
     loadWithFade: loadWithFadeMock,
     play: playMock,
@@ -80,6 +94,7 @@ describe('useAudioSync', () => {
     timeUpdateHandler = undefined
     loadedMetadataHandler = undefined
     endedHandler = undefined
+    enginePlaying = true
     currentTimeRef.current = 0
     act(() => {
       useUIStore.setState({
@@ -226,5 +241,92 @@ describe('useAudioSync', () => {
     expect(loadWithFadeMock).toHaveBeenCalledTimes(3)
     expect(pauseMock).not.toHaveBeenCalled()
     expect(usePlayerStore.getState().isPlaying).toBe(true)
+  })
+
+  it('真实播放 timeupdate 应使用实时曲目和墙钟采样', async () => {
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(123_456)
+    render(<HookHost />)
+    await waitFor(() => expect(loadedMetadataHandler).toBeDefined())
+    act(() => loadedMetadataHandler!(track.duration))
+
+    act(() => timeUpdateHandler!(5, track.duration))
+
+    expect(trackerMocks.observe).toHaveBeenCalledWith('1:C:\\music\\a.mp3', 5, 123_456)
+    nowSpy.mockRestore()
+  })
+
+  it('缓冲停滞或 engine 未播放时不应采样', async () => {
+    render(<HookHost />)
+    await waitFor(() => expect(loadedMetadataHandler).toBeDefined())
+    act(() => loadedMetadataHandler!(track.duration))
+    enginePlaying = false
+
+    act(() => timeUpdateHandler!(5, track.duration))
+
+    expect(trackerMocks.observe).not.toHaveBeenCalled()
+  })
+
+  it('seek、切歌和暂停应该 flush 并重置采样基线', async () => {
+    const view = render(<HookHost />)
+    await waitFor(() => expect(loadedMetadataHandler).toBeDefined())
+    act(() => loadedMetadataHandler!(track.duration))
+    trackerMocks.flush.mockClear()
+    trackerMocks.resetSample.mockClear()
+
+    act(() => usePlayerStore.getState().setSeekTime(30))
+    expect(trackerMocks.flush).toHaveBeenCalledTimes(1)
+    expect(trackerMocks.resetSample).toHaveBeenCalledTimes(1)
+
+    act(() => usePlayerStore.getState().setCurrentTrack(secondTrack))
+    expect(trackerMocks.flush).toHaveBeenCalledTimes(2)
+    expect(trackerMocks.resetSample).toHaveBeenCalledTimes(2)
+
+    act(() => usePlayerStore.getState().setPlaying(false))
+    expect(trackerMocks.flush).toHaveBeenCalledTimes(3)
+    expect(trackerMocks.resetSample).toHaveBeenCalledTimes(3)
+    view.unmount()
+  })
+
+  it.each(['profile', 'playback'] as const)(
+    '%s 关闭时应该 discard 且后续 timeupdate 为 0 写入',
+    async (flag) => {
+      render(<HookHost />)
+      await waitFor(() => expect(loadedMetadataHandler).toBeDefined())
+      act(() => loadedMetadataHandler!(track.duration))
+      trackerMocks.discard.mockClear()
+      trackerMocks.observe.mockClear()
+
+      act(() => useUIStore.getState().setFeatureFlags({
+        ...DEFAULT_FEATURE_FLAGS,
+        [flag]: false,
+      }))
+      act(() => timeUpdateHandler!(5, track.duration))
+
+      expect(trackerMocks.discard).toHaveBeenCalledTimes(1)
+      expect(trackerMocks.observe).not.toHaveBeenCalled()
+    },
+  )
+
+  it('ended 和 pagehide 应该 flush 并重置', async () => {
+    render(<HookHost />)
+    await waitFor(() => expect(loadedMetadataHandler).toBeDefined())
+    act(() => loadedMetadataHandler!(track.duration))
+    trackerMocks.flush.mockClear()
+    trackerMocks.resetSample.mockClear()
+
+    act(() => endedHandler!())
+    expect(trackerMocks.flush).toHaveBeenCalledTimes(1)
+    window.dispatchEvent(new Event('pagehide'))
+    expect(trackerMocks.flush).toHaveBeenCalledTimes(2)
+    expect(trackerMocks.resetSample).toHaveBeenCalledTimes(2)
+  })
+
+  it('StrictMode effect replay 不应重复注册引擎事件或触发 flush', async () => {
+    render(<StrictMode><HookHost /></StrictMode>)
+
+    await waitFor(() => expect(onTimeUpdateMock).toHaveBeenCalledTimes(1))
+    expect(onLoadedMetadataMock).toHaveBeenCalledTimes(1)
+    expect(onEndedMock).toHaveBeenCalledTimes(1)
+    expect(trackerMocks.flush).not.toHaveBeenCalled()
   })
 })

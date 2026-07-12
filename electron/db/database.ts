@@ -10,6 +10,7 @@ import Database from 'better-sqlite3'
 import { app } from 'electron'
 import { join } from 'path'
 import { mkdir } from 'fs/promises'
+import { ensureListeningStatsTable } from './listeningRepository'
 
 // ---------------------------------------------------------------------------
 // 数据库实例（模块级单例）
@@ -44,6 +45,7 @@ export async function initDatabase(): Promise<Database.Database> {
 
     // 创建表结构
     createTables(db)
+    ensureListeningStatsTable(db)
 
     // 创建封面缓存目录
     const coversDir = join(app.getPath('userData'), 'covers')

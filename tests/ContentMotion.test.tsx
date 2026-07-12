@@ -12,6 +12,7 @@ vi.mock('../src/pages/Playlists', () => ({ default: () => <div>playlists page</d
 vi.mock('../src/pages/Liked', () => ({ default: () => <div>liked page</div> }))
 vi.mock('../src/pages/Lyrics', () => ({ default: () => <div>lyrics page</div> }))
 vi.mock('../src/pages/Settings', () => ({ default: () => <div>settings page</div> }))
+vi.mock('../src/pages/MyProfile', () => ({ default: () => <div>profile page</div> }))
 
 import Content from '../src/components/Content'
 
@@ -43,6 +44,22 @@ describe('Content motion', () => {
     act(() => useUIStore.getState().setActiveNav('settings'))
     expect(screen.queryByText('albums page')).not.toBeInTheDocument()
     expect(screen.getAllByText('settings page')).toHaveLength(1)
+
+    act(() => useUIStore.getState().setActiveNav('profile'))
+    expect(screen.queryByText('settings page')).not.toBeInTheDocument()
+    expect(screen.getAllByText('profile page')).toHaveLength(1)
+  })
+
+  it('profile=false 时直接设置 profile 导航应该稳定回退 LocalMusic', () => {
+    useUIStore.setState({
+      activeNav: 'profile',
+      featureFlags: { ...DEFAULT_FEATURE_FLAGS, profile: false },
+    })
+
+    render(<Content />)
+
+    expect(screen.getAllByText('local page')).toHaveLength(1)
+    expect(screen.queryByText('profile page')).not.toBeInTheDocument()
   })
 
   it('uses LocalMusic as the stable key and page when a nav flag is disabled', () => {

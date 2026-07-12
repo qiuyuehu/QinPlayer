@@ -52,6 +52,7 @@ describe('Sidebar — Feature Flag 导航过滤', () => {
     expect(screen.getByText('专辑')).toBeInTheDocument()
     expect(screen.getByText('歌单')).toBeInTheDocument()
     expect(screen.getByText('我喜欢的')).toBeInTheDocument()
+    expect(screen.getByText('我的')).toBeInTheDocument()
     expect(screen.getByText('设置')).toBeInTheDocument()
   })
 
@@ -86,6 +87,19 @@ describe('Sidebar — Feature Flag 导航过滤', () => {
     expect(screen.queryByText('设置')).not.toBeInTheDocument()
   })
 
+  it('profile=false 时应隐藏"我的"', () => {
+    setFlags({ profile: false })
+    render(<Sidebar />)
+    expect(screen.queryByText('我的')).not.toBeInTheDocument()
+  })
+
+  it('"我的"应该位于"我喜欢的"之后、"设置"之前', () => {
+    render(<Sidebar />)
+    const labels = screen.getAllByRole('button').map((button) => button.textContent?.trim())
+    expect(labels.indexOf('我的')).toBeGreaterThan(labels.indexOf('我喜欢的'))
+    expect(labels.indexOf('我的')).toBeLessThan(labels.indexOf('设置'))
+  })
+
   it('search=false 时应隐藏搜索框', () => {
     setFlags({ search: false })
     render(<Sidebar />)
@@ -101,6 +115,7 @@ describe('Sidebar — Feature Flag 导航过滤', () => {
     setFlags({
       recent: false, albums: false, playlists: false,
       liked: false, settings: false, search: false,
+      profile: false,
     })
     render(<Sidebar />)
     expect(screen.getByText('本地音乐')).toBeInTheDocument()
@@ -108,6 +123,7 @@ describe('Sidebar — Feature Flag 导航过滤', () => {
     expect(screen.queryByText('专辑')).not.toBeInTheDocument()
     expect(screen.queryByText('歌单')).not.toBeInTheDocument()
     expect(screen.queryByText('我喜欢的')).not.toBeInTheDocument()
+    expect(screen.queryByText('我的')).not.toBeInTheDocument()
     expect(screen.queryByText('设置')).not.toBeInTheDocument()
   })
 })

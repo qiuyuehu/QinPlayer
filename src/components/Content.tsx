@@ -16,6 +16,7 @@ import Playlists from '../pages/Playlists'
 import Liked from '../pages/Liked'
 import Lyrics from '../pages/Lyrics'
 import Settings from '../pages/Settings'
+import MyProfile from '../pages/MyProfile'
 import { isNavAllowed } from '../utils/featureFlags'
 import { isReducedMotionActive } from '../utils/motionPreference'
 
@@ -108,6 +109,8 @@ function Content() {
         return <Liked />
       case 'settings':
         return <Settings />
+      case 'profile':
+        return <MyProfile />
       default:
         return <LocalMusic />
     }

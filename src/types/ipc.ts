@@ -18,6 +18,7 @@ export type FeatureFlagKey =
   | 'albums'
   | 'recent'
   | 'liked'
+  | 'profile'
   | 'search'
   | 'miniMode'
   | 'tray'
@@ -36,6 +37,7 @@ export interface FeatureFlags {
   albums: boolean
   recent: boolean
   liked: boolean
+  profile: boolean
   search: boolean
   miniMode: boolean
   tray: boolean
@@ -60,6 +62,20 @@ export interface IpcChannels {
   'config:getFeatureFlags': {
     args: void
     return: FeatureFlags
+  }
+
+  // --- 听歌统计 ---
+  'listening:addSeconds': {
+    args: { date: string; seconds: number }
+    return: void
+  }
+  'listening:getDays': {
+    args: void
+    return: ListeningDay[]
+  }
+  'listening:getRanking': {
+    args: { limit: number }
+    return: ListeningRankingEntry[]
   }
 
   // --- 文件夹管理 ---
@@ -185,6 +201,16 @@ export interface IpcChannels {
     args: void
     return: boolean
   }
+}
+
+export interface ListeningDay {
+  date: string
+  seconds: number
+}
+
+export interface ListeningRankingEntry {
+  track: Track
+  playCount: number
 }
 
 // ---------------------------------------------------------------------------

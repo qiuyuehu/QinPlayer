@@ -27,6 +27,7 @@ window.electronAPI = {
     albums: true,
     recent: true,
     liked: true,
+    profile: true,
     search: true,
     miniMode: true,
     tray: true,

@@ -21,6 +21,7 @@ const ALL_OFF: FeatureFlags = {
   albums: false,
   recent: false,
   liked: false,
+  profile: false,
   search: false,
   miniMode: false,
   tray: false,
@@ -35,7 +36,7 @@ const ALL_OFF: FeatureFlags = {
 
 describe('isNavAllowed — 导航守卫', () => {
   it('全部开启时所有导航项都允许', () => {
-    const navs = ['recent', 'local', 'albums', 'playlists', 'liked', 'lyrics', 'settings', 'search']
+    const navs = ['recent', 'local', 'albums', 'playlists', 'liked', 'profile', 'lyrics', 'settings', 'search']
     for (const nav of navs) {
       expect(isNavAllowed(nav, DEFAULT_FEATURE_FLAGS)).toBe(true)
     }
@@ -47,6 +48,7 @@ describe('isNavAllowed — 导航守卫', () => {
     expect(isNavAllowed('albums', ALL_OFF)).toBe(false)
     expect(isNavAllowed('playlists', ALL_OFF)).toBe(false)
     expect(isNavAllowed('liked', ALL_OFF)).toBe(false)
+    expect(isNavAllowed('profile', ALL_OFF)).toBe(false)
     expect(isNavAllowed('lyrics', ALL_OFF)).toBe(false)
     expect(isNavAllowed('settings', ALL_OFF)).toBe(false)
     expect(isNavAllowed('search', ALL_OFF)).toBe(false)
@@ -85,6 +87,11 @@ describe('hasFeature — 单项检查', () => {
 
   it('queuePanel 默认开启', () => {
     expect(hasFeature(DEFAULT_FEATURE_FLAGS, 'queuePanel')).toBe(true)
+  })
+
+  it('profile 默认开启且包含在 key 列表', () => {
+    expect(hasFeature(DEFAULT_FEATURE_FLAGS, 'profile')).toBe(true)
+    expect(FEATURE_FLAG_KEYS).toContain('profile')
   })
 
   it('对应 flag 为 true 返回 true', () => {

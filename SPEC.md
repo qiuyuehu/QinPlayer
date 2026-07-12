@@ -68,6 +68,7 @@ QinPlayer/
 │   │   ├── Playlists.tsx              # 歌单页面 (337行)
 │   │   ├── RecentlyPlayed.tsx         # 最近播放
 │   │   ├── Liked.tsx                  # 我喜欢的
+│   │   ├── MyProfile.tsx              # 我的（听歌统计）
 │   │   ├── Search.tsx                 # 搜索结果
 │   │   └── Settings.tsx               # 设置页面 (495行)
 │   │
@@ -203,6 +204,17 @@ QinPlayer/
 ### 我喜欢的
 - 列表里每首歌旁心形按钮标记
 
+### 我的
+- 个人信息（头像、昵称"秋月"、累计听歌时长、起始日期）
+- 本周活跃环形图（本周有播放记录的天数 N/7）
+- 今日/本周/本月/连续听歌时长
+- 近 7 天听歌趋势柱状图（纯 CSS 实现）
+- 总计/本月/本周/今日时长统计卡片
+- 全部时间播放排行 Top 10（复用 songs.play_count，不修改 SongList）
+- 统计基于真实媒体时间增量（AudioEngine timeupdate），不按 isPlaying 定时计
+- 数据按本地自然日聚合，秒级精度，30 秒批量落库
+- `profile` feature flag 控制入口和数据采集
+
 ### 迷你模式
 - 固定 `400×150` 壳层，歌曲、歌词、队列三种视图切换时不改变窗口尺寸或位置
 - 歌曲视图显示封面、歌名、歌手/专辑、进度与时长；歌词视图显示当前句和下一句；队列视图支持滚动、当前项定位与点击播放
@@ -233,7 +245,7 @@ QinPlayer/
 Apple Music 风，精致克制。
 
 ### 主窗口布局（左右分栏）
-- 左侧导航栏：搜索、最近播放、本地音乐、专辑、歌单、我喜欢的、设置
+- 左侧导航栏：搜索、最近播放、本地音乐、专辑、歌单、我喜欢的、我的、设置
 - 右侧内容区：歌曲列表 / 专辑网格 / 歌词界面 / 搜索结果
 - 底部固定：播放控制条
 
@@ -484,7 +496,7 @@ Main Process ✓ 负责 SQLite、文件系统、窗口、IPC
 ## 测试覆盖
 
 - 框架：Vitest + @testing-library/react
-- 用例数：317 个（34 个测试文件）
+- 用例数：384 个（39 个测试文件）
 - 覆盖范围：formatTime、lrcParser、albumSort、playerStore、uiStore、PlayerBar、LyricsPanel、LyricsFullscreen、MiniPlayer、MiniLyricsView、MiniQueueView、AlbumSortMenu、Albums、SongList、PlaylistPanel、featureFlags、Sidebar、useAudioSync、useTrackLyrics、windowBounds、Harness checks
 - Feature Flags 消融验证：16 个 flag 逐个关闭不影响其他 flag
 

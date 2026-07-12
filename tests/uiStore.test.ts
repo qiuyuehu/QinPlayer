@@ -91,4 +91,10 @@ describe('uiStore', () => {
     expect(isNavAllowed('albums', flags)).toBe(false)
     expect(isNavAllowed('local', flags)).toBe(true)
   })
+
+  it('profile=false 时应该拦截 profile 导航', () => {
+    const flags = { ...DEFAULT_FEATURE_FLAGS, profile: false }
+    expect(isNavAllowed('profile', flags)).toBe(false)
+    expect(isNavAllowed('local', flags)).toBe(true)
+  })
 })

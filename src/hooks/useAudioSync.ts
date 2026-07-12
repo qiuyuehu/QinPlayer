@@ -20,6 +20,7 @@ import { getAudioEngine, hasAudioEngine } from '../utils/AudioEngine'
 import { updateMediaSession, setPlaybackState, registerMediaSessionActions } from '../utils/mediaSession'
 import { currentTimeRef } from '../utils/currentTimeRef'
 import { useUIStore } from '../stores/uiStore'
+import { listeningTracker } from '../utils/listeningTracker'
 
 // useAudioSync — 播放器状态同步 hook，驱动 AudioEngine + Media Session + 事件监听
 export function useAudioSync() {
@@ -38,6 +39,9 @@ export function useAudioSync() {
   const pendingSeekRef = useRef<number | null>(null)  // 启动时恢复的 seek 位置
   // 曲目切换期间旧音频仍可能在淡出并发送事件；新 metadata 就绪前忽略这些事件。
   const trackTransitionRef = useRef(false)
+  const trackedTrackKeyRef = useRef<string | null>(null)
+  const previousPlayingRef = useRef(isPlaying)
+  const trackingEnabledRef = useRef(featureFlags.playback && featureFlags.profile)
   const fadeEnabled = usePlayerStore((s) => s.fadeEnabled)  // 淡入淡出开关
 
   // 标记：引擎事件是否已注册
@@ -53,6 +57,18 @@ export function useAudioSync() {
       if (trackTransitionRef.current) return
       currentTimeRef.current = time    // 写入共享 ref，不触发 re-render
       if (dur > 0) setDuration(dur)
+
+      const liveFlags = useUIStore.getState().featureFlags
+      const livePlayer = usePlayerStore.getState()
+      if (
+        liveFlags.playback
+        && liveFlags.profile
+        && engine.playing
+        && livePlayer.currentTrack
+      ) {
+        const trackKey = `${livePlayer.currentTrack.id}:${livePlayer.currentTrack.filePath}`
+        listeningTracker.observe(trackKey, time, Date.now())
+      }
     })
 
     engine.onLoadedMetadata((dur) => {
@@ -71,6 +87,10 @@ export function useAudioSync() {
       // 手动切歌的淡出阶段可能收到旧歌曲 ended，不能因此再跳一首。
       if (trackTransitionRef.current) return
       if (!useUIStore.getState().featureFlags.playback) return
+
+      const liveFlags = useUIStore.getState().featureFlags
+      if (liveFlags.profile) void listeningTracker.flush()
+      listeningTracker.resetSample()
 
       const mode = usePlayerStore.getState().playMode
       if (mode === 'loop') {
@@ -121,10 +141,42 @@ export function useAudioSync() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [featureFlags.playback])
 
+  // profile/playback 关闭时必须立即丢弃 pending，关闭后不允许继续写入统计。
+  useEffect(() => {
+    const trackingEnabled = featureFlags.playback && featureFlags.profile
+    if (trackingEnabledRef.current && !trackingEnabled) {
+      listeningTracker.discard()
+    } else if (!trackingEnabledRef.current && trackingEnabled) {
+      listeningTracker.resetSample()
+    }
+    trackingEnabledRef.current = trackingEnabled
+  }, [featureFlags.playback, featureFlags.profile])
+
+  // 页面刷新/关闭前尽力提交；异步 pagehide 不承诺异常退出零丢失。
+  useEffect(() => {
+    const handlePageHide = () => {
+      const flags = useUIStore.getState().featureFlags
+      if (flags.playback && flags.profile) void listeningTracker.flush()
+      listeningTracker.resetSample()
+    }
+    window.addEventListener('pagehide', handlePageHide)
+    return () => window.removeEventListener('pagehide', handlePageHide)
+  }, [])
+
   // ---------------------------------------------------------------------------
   // currentTrack 变化 → 加载音频
   // ---------------------------------------------------------------------------
   useEffect(() => {
+    const nextTrackKey = currentTrack ? `${currentTrack.id}:${currentTrack.filePath}` : null
+    if (trackedTrackKeyRef.current !== nextTrackKey) {
+      const flags = useUIStore.getState().featureFlags
+      if (trackedTrackKeyRef.current !== null && flags.playback && flags.profile) {
+        void listeningTracker.flush()
+      }
+      listeningTracker.resetSample()
+      trackedTrackKeyRef.current = nextTrackKey
+    }
+
     if (!featureFlags.playback) {
       trackTransitionRef.current = false
       return
@@ -184,6 +236,16 @@ export function useAudioSync() {
   // isPlaying 变化 → 播放/暂停
   // ---------------------------------------------------------------------------
   useEffect(() => {
+    const wasPlaying = previousPlayingRef.current
+    if (wasPlaying && !isPlaying) {
+      const flags = useUIStore.getState().featureFlags
+      if (flags.playback && flags.profile) void listeningTracker.flush()
+      listeningTracker.resetSample()
+    } else if (!wasPlaying && isPlaying) {
+      listeningTracker.resetSample()
+    }
+    previousPlayingRef.current = isPlaying
+
     if (!featureFlags.playback) {
       if (isPlaying) setIsPlaying(false)
       return
@@ -226,6 +288,10 @@ export function useAudioSync() {
   useEffect(() => {
     if (!featureFlags.playback) return
     if (seekTime === null || isNaN(seekTime)) return
+
+    const liveFlags = useUIStore.getState().featureFlags
+    if (liveFlags.profile) void listeningTracker.flush()
+    listeningTracker.resetSample()
 
     if (!hasAudioEngine()) {
       // 引擎还没创建（启动恢复场景），存到 ref 等加载完后 seek

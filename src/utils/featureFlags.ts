@@ -13,6 +13,7 @@ export const FEATURE_FLAG_KEYS: readonly FeatureFlagKey[] = [
   'albums',
   'recent',
   'liked',
+  'profile',
   'search',
   'miniMode',
   'tray',
@@ -32,6 +33,7 @@ export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
   albums: true,
   recent: true,
   liked: true,
+  profile: true,
   search: true,
   miniMode: true,
   tray: true,
@@ -50,6 +52,7 @@ const NAV_FLAG_MAP: Partial<Record<string, FeatureFlagKey>> = {
   albums: 'albums',
   playlists: 'playlists',
   liked: 'liked',
+  profile: 'profile',
   lyrics: 'lyrics',
   settings: 'settings',
 }

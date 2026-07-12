@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>"我的"页面预览 — QinPlayer</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "SF Pro Text", "SF Pro Display", "Helvetica Neue", "PingFang SC", sans-serif;
+    background: #141312;
+    color: #e7e1d8;
+    display: flex;
+    height: 680px;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── 侧边栏 ── */
+  .sidebar {
+    width: 200px;
+    background: #1d1b18;
+    border-right: 1px solid #2a2621;
+    padding: 20px 0;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+  .sidebar__logo {
+    padding: 0 20px 24px;
+    font-size: 15px;
+    font-weight: 700;
+    color: #e7e1d8;
+    letter-spacing: 0.5px;
+  }
+  .sidebar__item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 20px;
+    color: #746b60;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+    letter-spacing: 0.2px;
+  }
+  .sidebar__item:hover { background: rgba(231,225,216,0.05); color: #aaa095; }
+  .sidebar__item--active {
+    color: #c0914f;
+    background: rgba(192,145,79,0.08);
+  }
+  .sidebar__icon {
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .sidebar__icon svg { stroke: currentColor; }
+
+  /* ── 内容区 ── */
+  .content {
+    flex: 1;
+    padding: 36px 44px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    min-width: 0;
+  }
+  .content__title {
+    font-size: 22px;
+    font-weight: 700;
+    color: #e7e1d8;
+    letter-spacing: -0.3px;
+  }
+
+  /* ── Hero：头像+名字 | 环形图+时长 ── */
+  .hero {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    padding: 4px 0;
+  }
+  .hero-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-shrink: 0;
+    margin-right: 36px;
+  }
+  .avatar {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: #2a2621;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid rgba(192,145,79,0.2);
+    flex-shrink: 0;
+  }
+  .hero-left__info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .hero-left__name {
+    font-size: 18px;
+    font-weight: 700;
+    color: #e7e1d8;
+    letter-spacing: -0.3px;
+  }
+  .hero-left__sub {
+    font-size: 12px;
+    color: #746b60;
+    font-weight: 500;
+  }
+  .hero-left__date {
+    font-size: 11px;
+    color: #5a5449;
+    font-weight: 400;
+  }
+  .hero-right {
+    display: flex;
+    align-items: center;
+    gap: 36px;
+  }
+
+  .ring-wrap {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .ring-title {
+    font-size: 11px;
+    color: #746b60;
+    font-weight: 500;
+    letter-spacing: 0.2px;
+  }
+  .ring {
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    background: conic-gradient(
+      #c0914f 0deg,
+      #c0914f calc(var(--ring-pct, 62) * 3.6deg),
+      #2a2621 calc(var(--ring-pct, 62) * 3.6deg),
+      #2a2621 360deg
+    );
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.4s ease;
+  }
+  .ring-inner {
+    width: 108px;
+    height: 108px;
+    border-radius: 50%;
+    background: #141312;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+  }
+  .ring-pct {
+    font-size: 28px;
+    font-weight: 700;
+    color: #e7e1d8;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -1px;
+  }
+  .ring-label {
+    font-size: 11px;
+    color: #746b60;
+    font-weight: 500;
+  }
+
+  .hero-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .hero-stat { display: flex; flex-direction: column; gap: 3px; }
+  .hero-stat__value {
+    font-size: 26px;
+    font-weight: 700;
+    color: #e7e1d8;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.5px;
+  }
+  .hero-stat__label {
+    font-size: 12px;
+    color: #746b60;
+    font-weight: 500;
+  }
+
+  /* ── 近7天趋势迷你柱状图 ── */
+  .trend {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .trend__title {
+    font-size: 11px;
+    color: #746b60;
+    font-weight: 500;
+    letter-spacing: 0.2px;
+  }
+  .trend__bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 9px;
+    height: 90px;
+  }
+  .trend__col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    height: 100%;
+    justify-content: flex-end;
+  }
+  .trend__bar {
+    width: 20px;
+    min-height: 4px;
+    background: #c0914f;
+    border-radius: 3px 3px 0 0;
+    opacity: 0.7;
+    transition: opacity 0.15s ease;
+  }
+  .trend__col:hover .trend__bar {
+    opacity: 1;
+  }
+  .trend__label {
+    font-size: 9px;
+    color: #5a5449;
+    font-weight: 500;
+  }
+
+  /* ── 时长卡片 ── */
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+  .card {
+    background: #1d1b18;
+    border: 1px solid rgba(42,38,33,0.8);
+    border-radius: 10px;
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .card:hover {
+    border-color: rgba(192,145,79,0.2);
+    background: rgba(29,27,24,0.8);
+  }
+  .card__label {
+    font-size: 12px;
+    color: #746b60;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+  }
+  .card__value {
+    font-size: 22px;
+    font-weight: 700;
+    color: #e7e1d8;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.5px;
+  }
+  .card__sub {
+    font-size: 11px;
+    color: #5a5449;
+    font-weight: 400;
+  }
+
+  /* ── 排行榜（复用 SongList 样式） ── */
+  .ranking {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    width: 100%;
+  }
+  .ranking__header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 8px;
+  }
+  .ranking__title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #e7e1d8;
+    letter-spacing: -0.2px;
+  }
+  .ranking__tabs {
+    display: flex;
+    gap: 2px;
+    background: rgba(42,38,33,0.5);
+    border-radius: 6px;
+    padding: 2px;
+  }
+  .ranking__tab {
+    padding: 5px 14px;
+    border-radius: 5px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #746b60;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .ranking__tab:hover { color: #aaa095; }
+  .ranking__tab--active {
+    color: #e7e1d8;
+    background: rgba(192,145,79,0.15);
+  }
+
+  /* SongList 样式复用 */
+  .song-list__header {
+    display: flex;
+    align-items: center;
+    padding: 8px 24px;
+    background: #1d1b18;
+    font-size: 11px;
+    font-weight: 500;
+    color: #746b60;
+    border-bottom: 1px solid rgba(42,38,33,0.6);
+  }
+  .song-list__row {
+    display: flex;
+    align-items: center;
+    padding: 8px 24px;
+    height: 44px;
+    font-size: 13px;
+    color: #e7e1d8;
+    border-bottom: 1px solid rgba(42,38,33,0.4);
+    cursor: pointer;
+    transition: background-color 0.1s ease;
+  }
+  .song-list__row:hover {
+    background: rgba(231,225,216,0.04);
+  }
+  .song-list__col {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0 4px;
+    display: flex;
+    align-items: center;
+  }
+  .song-list__col--index {
+    width: 40px;
+    flex-shrink: 0;
+    text-align: center;
+    justify-content: center;
+    color: #746b60;
+    font-size: 12px;
+  }
+  .song-list__col--title {
+    flex: 1;
+    min-width: 0;
+    font-weight: 500;
+  }
+  .song-list__col--artist {
+    width: 200px;
+    color: #aaa095;
+    flex-shrink: 0;
+  }
+  .song-list__col--count {
+    width: 80px;
+    text-align: right;
+    justify-content: flex-end;
+    color: #746b60;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+
+<!-- 侧边栏 -->
+<div class="sidebar">
+  <div class="sidebar__logo">QinPlayer</div>
+  <button class="sidebar__item">
+    <span class="sidebar__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+    最近播放
+  </button>
+  <button class="sidebar__item">
+    <span class="sidebar__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>
+    本地音乐
+  </button>
+  <button class="sidebar__item">
+    <span class="sidebar__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg></span>
+    专辑
+  </button>
+  <button class="sidebar__item">
+    <span class="sidebar__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></span>
+    歌单
+  </button>
+  <button class="sidebar__item">
+    <span class="sidebar__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>
+    我喜欢的
+  </button>
+  <button class="sidebar__item sidebar__item--active">
+    <span class="sidebar__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+    我的
+  </button>
+  <button class="sidebar__item">
+    <span class="sidebar__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
+    设置
+  </button>
+</div>
+
+<!-- 内容区 -->
+<div class="content">
+  <div class="content__title">我的</div>
+
+  <!-- Hero：头像+名字 | 环形图+时长 -->
+  <div class="hero">
+    <div class="hero-left">
+      <div class="avatar">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#5a5449" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </div>
+      <div class="hero-left__info">
+        <div class="hero-left__name">秋月</div>
+        <div class="hero-left__sub">累计听歌 128 小时</div>
+        <div class="hero-left__date">自 2026-06-01 开始</div>
+      </div>
+    </div>
+    <div class="hero-right">
+      <div class="ring-wrap">
+        <div class="ring-title">本周听歌占比</div>
+        <div class="ring" style="--ring-pct: 62">
+          <div class="ring-inner">
+            <div class="ring-pct">62%</div>
+            <div class="ring-label">占本周</div>
+          </div>
+        </div>
+      </div>
+      <div class="hero-stats">
+        <div class="hero-stat">
+          <div class="hero-stat__value">1小时32分</div>
+          <div class="hero-stat__label">今日听歌时长</div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-stat__value">8小时15分</div>
+          <div class="hero-stat__label">本周听歌时长</div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-stat__value">6 天</div>
+          <div class="hero-stat__label">连续听歌</div>
+        </div>
+      </div>
+      <div class="trend">
+        <div class="trend__title">近 7 天</div>
+        <div class="trend__bars">
+          <div class="trend__col">
+            <div class="trend__bar" style="height: 45%"></div>
+            <div class="trend__label">一</div>
+          </div>
+          <div class="trend__col">
+            <div class="trend__bar" style="height: 70%"></div>
+            <div class="trend__label">二</div>
+          </div>
+          <div class="trend__col">
+            <div class="trend__bar" style="height: 30%"></div>
+            <div class="trend__label">三</div>
+          </div>
+          <div class="trend__col">
+            <div class="trend__bar" style="height: 85%"></div>
+            <div class="trend__label">四</div>
+          </div>
+          <div class="trend__col">
+            <div class="trend__bar" style="height: 100%"></div>
+            <div class="trend__label">五</div>
+          </div>
+          <div class="trend__col">
+            <div class="trend__bar" style="height: 55%"></div>
+            <div class="trend__label">六</div>
+          </div>
+          <div class="trend__col">
+            <div class="trend__bar" style="height: 80%"></div>
+            <div class="trend__label">日</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 时长卡片 -->
+  <div class="cards">
+    <div class="card">
+      <div class="card__label">总计</div>
+      <div class="card__value">128<span style="font-size:14px;font-weight:500;color:#aaa095;margin-left:2px">小时</span></div>
+      <div class="card__sub">自 2026-06-01</div>
+    </div>
+    <div class="card">
+      <div class="card__label">本月</div>
+      <div class="card__value">24<span style="font-size:14px;font-weight:500;color:#aaa095;margin-left:2px">小时</span></div>
+      <div class="card__sub">7月</div>
+    </div>
+    <div class="card">
+      <div class="card__label">本周</div>
+      <div class="card__value">8<span style="font-size:14px;font-weight:500;color:#aaa095;margin-left:2px">小时</span> 15<span style="font-size:14px;font-weight:500;color:#aaa095;margin-left:2px">分</span></div>
+      <div class="card__sub">7.7 — 7.12</div>
+    </div>
+    <div class="card">
+      <div class="card__label">今日</div>
+      <div class="card__value">1<span style="font-size:14px;font-weight:500;color:#aaa095;margin-left:2px">小时</span> 32<span style="font-size:14px;font-weight:500;color:#aaa095;margin-left:2px">分</span></div>
+      <div class="card__sub">7月12日</div>
+    </div>
+  </div>
+
+  <!-- 听歌排行（复用 SongList 样式） -->
+  <div class="ranking">
+    <div class="ranking__header">
+      <div class="ranking__title">听歌排行</div>
+      <div class="ranking__tabs">
+        <button class="ranking__tab ranking__tab--active">本周</button>
+        <button class="ranking__tab">本月</button>
+        <button class="ranking__tab">全部</button>
+      </div>
+    </div>
+    <div class="song-list__header">
+      <div class="song-list__col song-list__col--index">#</div>
+      <div class="song-list__col song-list__col--title">标题</div>
+      <div class="song-list__col song-list__col--artist">歌手</div>
+      <div class="song-list__col song-list__col--count">播放次数</div>
+    </div>
+    <div class="song-list__row">
+      <div class="song-list__col song-list__col--index" style="color:#c0914f;font-weight:600">1</div>
+      <div class="song-list__col song-list__col--title">夜曲</div>
+      <div class="song-list__col song-list__col--artist">周杰伦</div>
+      <div class="song-list__col song-list__col--count">12</div>
+    </div>
+    <div class="song-list__row">
+      <div class="song-list__col song-list__col--index" style="color:#c0914f;font-weight:600">2</div>
+      <div class="song-list__col song-list__col--title">晴天</div>
+      <div class="song-list__col song-list__col--artist">周杰伦</div>
+      <div class="song-list__col song-list__col--count">8</div>
+    </div>
+    <div class="song-list__row">
+      <div class="song-list__col song-list__col--index" style="color:#c0914f;font-weight:600">3</div>
+      <div class="song-list__col song-list__col--title">稻香</div>
+      <div class="song-list__col song-list__col--artist">周杰伦</div>
+      <div class="song-list__col song-list__col--count">6</div>
+    </div>
+    <div class="song-list__row">
+      <div class="song-list__col song-list__col--index">4</div>
+      <div class="song-list__col song-list__col--title">七里香</div>
+      <div class="song-list__col song-list__col--artist">周杰伦</div>
+      <div class="song-list__col song-list__col--count">5</div>
+    </div>
+    <div class="song-list__row">
+      <div class="song-list__col song-list__col--index">5</div>
+      <div class="song-list__col song-list__col--title">青花瓷</div>
+      <div class="song-list__col song-list__col--artist">周杰伦</div>
+      <div class="song-list__col song-list__col--count">4</div>
+    </div>
+    <div class="song-list__row">
+      <div class="song-list__col song-list__col--index">6</div>
+      <div class="song-list__col song-list__col--title">告白气球</div>
+      <div class="song-list__col song-list__col--artist">周杰伦</div>
+      <div class="song-list__col song-list__col--count">3</div>
+    </div>
+    <div class="song-list__row">
+      <div class="song-list__col song-list__col--index">7</div>
+      <div class="song-list__col song-list__col--title">等你下课</div>
+      <div class="song-list__col song-list__col--artist">周杰伦</div>
+      <div class="song-list__col song-list__col--count">2</div>
+    </div>
+    <div class="song-list__row">
+      <div class="song-list__col song-list__col--index">8</div>
+      <div class="song-list__col song-list__col--title">以父之名</div>
+      <div class="song-list__col song-list__col--artist">周杰伦</div>
+      <div class="song-list__col song-list__col--count">2</div>
+    </div>
+    <div class="song-list__row">
+      <div class="song-list__col song-list__col--index">9</div>
+      <div class="song-list__col song-list__col--title">简单爱</div>
+      <div class="song-list__col song-list__col--artist">周杰伦</div>
+      <div class="song-list__col song-list__col--count">1</div>
+    </div>
+    <div class="song-list__row">
+      <div class="song-list__col song-list__col--index">10</div>
+      <div class="song-list__col song-list__col--title">龙卷风</div>
+      <div class="song-list__col song-list__col--artist">周杰伦</div>
+      <div class="song-list__col song-list__col--count">1</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -16,6 +16,8 @@ import { contextBridge, ipcRenderer } from 'electron'
 const INVOKE_CHANNELS = new Set([
   // 配置
   'config:getFeatureFlags',
+  // 听歌统计
+  'listening:addSeconds', 'listening:getDays', 'listening:getRanking',
   // 设置
   'settings:get', 'settings:set',
   'settings:getFolders', 'settings:addFolder', 'settings:removeFolder',
