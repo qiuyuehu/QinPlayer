@@ -196,14 +196,6 @@ function MyProfile() {
         ) : (
           <div className="profile-ranking__scroll">
             <table className="profile-ranking__table">
-              <thead>
-                <tr>
-                  <th scope="col">名次</th>
-                  <th scope="col">标题</th>
-                  <th scope="col">歌手</th>
-                  <th scope="col">播放次数</th>
-                </tr>
-              </thead>
               <tbody>
                 {ranking.map((entry, index) => (
                   <tr

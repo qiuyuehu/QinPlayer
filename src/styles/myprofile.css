@@ -286,7 +286,6 @@
   font-size: 12px;
 }
 
-.profile-ranking__table th,
 .profile-ranking__table td {
   height: 38px;
   padding: 0 10px;
@@ -297,13 +296,6 @@
   white-space: nowrap;
 }
 
-.profile-ranking__table th {
-  color: var(--text-muted);
-  font-size: 10px;
-  font-weight: 600;
-}
-
-.profile-ranking__table th:first-child,
 .profile-ranking__rank {
   width: 52px;
   text-align: center;
@@ -311,11 +303,10 @@
   font-variant-numeric: tabular-nums;
 }
 
-.profile-ranking__table th:nth-child(2) {
+.profile-ranking__title {
   width: 42%;
 }
 
-.profile-ranking__table th:last-child,
 .profile-ranking__count {
   width: 88px;
   text-align: right;
@@ -354,7 +345,7 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .profile-ranking__table th:nth-child(2) {
+  .profile-ranking__title {
     width: 38%;
   }
 
