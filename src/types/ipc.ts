@@ -202,7 +202,7 @@ export interface IpcChannels {
   }
   'eq:save': {
     args: { gains: number[] }
-    return: void
+    return: { success: boolean; error?: string }
   }
 
   // --- 系统 ---

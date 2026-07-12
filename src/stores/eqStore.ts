@@ -108,9 +108,10 @@ export const useEqStore = create<EqState>((set, get) => ({
 
   /** 设置单个频段增益，同步到 audioEngine + 防抖保存 */
   setGain: (index, value) => {
-    const clamped = Math.max(EQ_MIN, Math.min(EQ_MAX, value))
+    if (!Number.isInteger(index) || index < 0 || index >= DEFAULT_GAINS.length || !Number.isFinite(value) || value < EQ_MIN || value > EQ_MAX) return
+
     const newGains = [...get().gains]
-    newGains[index] = Math.round(clamped * 10) / 10  // 保留一位小数
+    newGains[index] = Math.round(value * 10) / 10  // 保留一位小数
 
     // 检查是否匹配某个预设
     const matchedPreset = EQ_PRESETS.find(p =>
@@ -134,11 +135,8 @@ export const useEqStore = create<EqState>((set, get) => ({
     const newGains = [...preset.gains]
     set({ gains: newGains, activePreset: presetName })
 
-    // 同步到音频引擎
-    const engine = getAudioEngine()
-    for (let i = 0; i < newGains.length; i++) {
-      engine.setEqGain(i, newGains[i])
-    }
+    // 单次提交完整状态，避免预设经过 10 个中间状态。
+    getAudioEngine().setAllEqGains(newGains)
 
     // 防抖保存
     debouncedSave(newGains)
@@ -165,7 +163,7 @@ export const useEqStore = create<EqState>((set, get) => ({
         if (Array.isArray(parsed) && parsed.length === 10) {
           const gains = parsed.map((g: unknown) => {
             const num = Number(g)
-            return Math.max(EQ_MIN, Math.min(EQ_MAX, isNaN(num) ? 0 : Math.round(num * 10) / 10))
+            return Math.max(EQ_MIN, Math.min(EQ_MAX, Number.isFinite(num) ? Math.round(num * 10) / 10 : 0))
           })
 
           // 检查是否匹配某个预设

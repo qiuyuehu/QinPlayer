@@ -8,8 +8,12 @@
 //   - AudioContext 在用户首次交互后才创建（避免白屏）
 // =============================================================================
 
+import { calculateEqHeadroom } from './eqResponse'
+
 // 均衡器频段频率（10段：32/64/125/250/500/1k/2k/4k/8k/16kHz）
 const EQ_FREQUENCIES: readonly number[] = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
+const EQ_GAIN_MIN = -12
+const EQ_GAIN_MAX = 12
 
 let equalizerEnabled = true
 
@@ -17,17 +21,27 @@ export function setAudioEngineEqualizerEnabled(enabled: boolean): void {
   equalizerEnabled = enabled
 }
 
+function isValidEqGain(value: number): boolean {
+  return Number.isFinite(value) && value >= EQ_GAIN_MIN && value <= EQ_GAIN_MAX
+}
+
+function isValidEqGains(gains: readonly number[]): boolean {
+  return gains.length === EQ_FREQUENCIES.length && gains.every(isValidEqGain)
+}
+
 export class AudioEngine {
   // --- 核心节点 ---
   private audioContext: AudioContext | null = null  // 延迟创建
-  private gainNode: GainNode | null = null
+  private eqHeadroomGain: GainNode | null = null
+  private fadeGain: GainNode | null = null
+  private volumeGain: GainNode | null = null
   private audioElement: HTMLAudioElement
   private sourceNode: MediaElementAudioSourceNode | null = null
   private webAudioConnected = false  // 是否已接入 Web Audio 图
 
   // --- 均衡器节点链 ---
   private eqFilters: BiquadFilterNode[] = []  // 10段 peaking 滤波器
-  private _pendingEqGains: number[] = []  // 等待应用的均衡器增益（Web Audio 接入前缓存）
+  private _currentEqGains: number[] = Array(EQ_FREQUENCIES.length).fill(0)
 
   // --- 状态回调（外部注册）---
   private _onTimeUpdate: ((currentTime: number, duration: number) => void) | null = null
@@ -108,16 +122,20 @@ export class AudioEngine {
         })
       : []
 
-    // 创建 GainNode（音量控制 + 淡入淡出）
-    this.gainNode = this.audioContext.createGain()
-    this.gainNode.connect(this.audioContext.destination)
+    // 分离 EQ 补偿、淡入淡出与用户音量，避免自动化覆盖用户设置。
+    this.eqHeadroomGain = this.audioContext.createGain()
+    this.fadeGain = this.audioContext.createGain()
+    this.volumeGain = this.audioContext.createGain()
+    this.eqHeadroomGain.connect(this.fadeGain)
+    this.fadeGain.connect(this.volumeGain)
+    this.volumeGain.connect(this.audioContext.destination)
 
     // 创建 MediaElementAudioSourceNode（只能创建一次）
     if (!this.sourceNode) {
       this.sourceNode = this.audioContext.createMediaElementSource(this.audioElement)
     }
 
-    // 连接信号链：source → eq[0] → ... → gainNode；EQ 关闭时 source → gainNode。
+    // 连接信号链：source → eq[0] → ... → eqHeadroom → fade → volume。
     // 先断开旧连接（如果有的话）
     this.sourceNode.disconnect()
     let lastNode: AudioNode = this.sourceNode
@@ -125,21 +143,20 @@ export class AudioEngine {
       lastNode.connect(filter)
       lastNode = filter
     }
-    lastNode.connect(this.gainNode)
+    lastNode.connect(this.eqHeadroomGain)
 
-    // 应用等待中的均衡器增益（eqStore 在 audioEngine 初始化前可能已加载数据库设置）
-    if (this._pendingEqGains.length > 0) {
-      for (let i = 0; i < this.eqFilters.length && i < this._pendingEqGains.length; i++) {
-        this.eqFilters[i].gain.value = this._pendingEqGains[i]
-      }
-      this._pendingEqGains = []
+    // 统一应用完整 gains，首次播放前的单段调整不会留下 sparse holes。
+    for (let index = 0; index < this.eqFilters.length; index++) {
+      this.eqFilters[index].gain.value = this._currentEqGains[index]
     }
+    this.updateEqHeadroom()
 
-    // ⚠️ 同步当前音量到 GainNode（防止接入 Web Audio 后音量断层）
-    // 接入前用 audioElement.volume 控制音量，接入后用 gainNode.gain
+    // ⚠️ 同步当前音量到 volumeGain（防止接入 Web Audio 后音量断层）
+    // 接入前用 audioElement.volume 控制音量，接入后用 volumeGain.gain
     // 必须在 webAudioConnected = true 之前同步，否则 setVolume 会走错分支
     const currentVol = this.audioElement.volume
-    this.gainNode.gain.setValueAtTime(currentVol, this.audioContext.currentTime)
+    this.volumeGain.gain.setValueAtTime(currentVol, this.audioContext.currentTime)
+    this.fadeGain.gain.setValueAtTime(1, this.audioContext.currentTime)
 
     this.webAudioConnected = true
   }
@@ -178,13 +195,13 @@ export class AudioEngine {
 
   /**
    * 设置音量 (0-1)
-   * 如果 Web Audio 已接入，用 GainNode（支持淡入淡出）
+   * 如果 Web Audio 已接入，用 volumeGain
    * 否则用 audioElement.volume（基础音量控制）
    */
   setVolume(vol: number): void {
     const v = Math.max(0, Math.min(1, vol))
-    if (this.gainNode && this.webAudioConnected) {
-      this.gainNode.gain.setTargetAtTime(v, this.audioContext!.currentTime, 0.01)
+    if (this.volumeGain && this.webAudioConnected) {
+      this.volumeGain.gain.setTargetAtTime(v, this.audioContext!.currentTime, 0.01)
     } else {
       this.audioElement.volume = v
     }
@@ -322,15 +339,15 @@ export class AudioEngine {
    * @param value 增益值（-12 ~ +12 dB）
    */
   setEqGain(index: number, value: number): void {
-    if (!equalizerEnabled) return
+    if (!equalizerEnabled || !Number.isInteger(index) || index < 0 || index >= EQ_FREQUENCIES.length || !isValidEqGain(value)) return
+
+    this._currentEqGains[index] = value
 
     if (this.eqFilters[index]) {
       // 滤波器已创建，直接设置增益
       this.eqFilters[index].gain.value = value
-    } else {
-      // 滤波器未创建（Web Audio 未接入），缓存到 pending 数组
-      this._pendingEqGains[index] = value
     }
+    this.updateEqHeadroom()
   }
 
   /**
@@ -338,17 +355,28 @@ export class AudioEngine {
    * @param gains 10 个增益值的数组（-12 ~ +12 dB）
    */
   setAllEqGains(gains: readonly number[]): void {
-    if (!equalizerEnabled) return
+    if (!equalizerEnabled || !isValidEqGains(gains)) return
+
+    this._currentEqGains = [...gains]
 
     if (this.eqFilters.length > 0) {
-      // 滤波器已创建，直接设置
-      for (let i = 0; i < this.eqFilters.length && i < gains.length; i++) {
-        this.eqFilters[i].gain.value = gains[i]
+      // 滤波器已创建，统一应用完整状态。
+      for (let i = 0; i < this.eqFilters.length; i++) {
+        this.eqFilters[i].gain.value = this._currentEqGains[i]
       }
-    } else {
-      // 滤波器未创建，缓存到 pending 数组
-      this._pendingEqGains = [...gains]
     }
+    this.updateEqHeadroom()
+  }
+
+  /** 更新 EQ 输出补偿，避免正增益预设放大到削波。 */
+  private updateEqHeadroom(): void {
+    if (!this.eqHeadroomGain || !this.audioContext) return
+
+    const headroom = calculateEqHeadroom(this.eqFilters, this.audioContext.sampleRate)
+    const gain = this.eqHeadroomGain.gain
+    const currentTime = this.audioContext.currentTime
+    gain.cancelScheduledValues(currentTime)
+    gain.setTargetAtTime(headroom, currentTime, 0.01)
   }
 
   // ---------------------------------------------------------------------------
@@ -363,7 +391,7 @@ export class AudioEngine {
    */
   fadeIn(duration: number, targetVolume: number = 1): void {
     this.ensureWebAudio()
-    const gain = this.gainNode!.gain
+    const gain = this.fadeGain!.gain
     const currentTime = this.audioContext!.currentTime
 
     // ⚠️ 关键：先清理之前的调度，防止多个 linearRamp 打架
@@ -379,7 +407,7 @@ export class AudioEngine {
    */
   fadeOut(duration: number): void {
     this.ensureWebAudio()
-    const gain = this.gainNode!.gain
+    const gain = this.fadeGain!.gain
     const currentTime = this.audioContext!.currentTime
     const currentVolume = gain.value
 

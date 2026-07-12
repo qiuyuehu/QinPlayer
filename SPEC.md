@@ -9,7 +9,7 @@
 | 项目 | 说明 |
 |------|------|
 | 定位 | 纯本地音乐播放器，不联网 |
-| 作者 | 秋月 + 衾衾 (Hermes Agent) |
+| 作者 | 秋月 + 衾衾 (Hermes Agent) + codex |
 | 技术栈 | Electron + React + TypeScript + Zustand + electron-vite |
 | 窗口 | 1000×680，可拉伸，适配 2K DPI，支持尺寸持久化 |
 | 主题 | 亮色/暗色/跟随系统，暗色底色 #121212 |
@@ -170,12 +170,14 @@ QinPlayer/
 ### 播放
 - 播放/暂停/上一首/下一首/进度条/音量
 - 播放模式：顺序播放、单曲循环、随机播放
-- 切歌淡入淡出（Web Audio API GainNode 实现）
+- 切歌淡入淡出（独立 `fadeGain` 实现，不覆盖用户 `volumeGain`）
 
 ### 均衡器
 - 10 段参数均衡器（32Hz ~ 16kHz，BiquadFilterNode 实现）
 - 5 个预设：流行、摇滚、古典、低音增强、人声突出
 - 自定义增益调节（-12dB ~ +12dB），防抖保存到数据库
+- 引擎始终维护完整的 10 段有限增益状态；IPC 拒绝非有限、越界或错误长度输入
+- 信号链为 `source → EQ → eqHeadroomGain → fadeGain → volumeGain → destination`；EQ 补偿按频响峰值计算，平坦响应保持 1
 
 ### 歌单
 - 手动创建歌单，支持增删改重命名
