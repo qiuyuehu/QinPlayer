@@ -16,6 +16,24 @@
   margin-bottom: 16px;
 }
 
+.playlists__header--detail {
+  gap: 8px;
+}
+
+.playlists__detail-heading {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.playlists__header--detail .playlists__title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .playlists__title {
   font-size: 20px;
   font-weight: 600;
@@ -46,6 +64,19 @@
   background-color: var(--accent);
   color: var(--text-on-accent);
   border-color: var(--accent);
+}
+
+.playlists__play-all {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.playlists__play-all:disabled {
+  cursor: default;
+  opacity: 0.5;
 }
 
 /* 歌单网格 */
@@ -179,7 +210,8 @@
 }
 
 .playlists__sort-btn:hover,
-.playlists__sort-btn--active {
+.playlists__sort-btn--active,
+.playlists__play-all:hover:not(:disabled) {
   background-color: var(--accent);
   color: var(--text-on-accent);
   border-color: var(--accent);

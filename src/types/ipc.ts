@@ -72,6 +72,16 @@ export interface NativeTrackMenuEntry {
   enabled: boolean
 }
 
+export interface NativeTrackMenuDisplayEntry extends NativeTrackMenuEntry {
+  label: string
+}
+
+export interface NativeTrackMenuWindowInit {
+  entries: NativeTrackMenuDisplayEntry[]
+  theme: 'dark' | 'light'
+  reducedMotion: boolean
+}
+
 export function normalizeCloseBehavior(value: unknown): CloseBehavior {
   return value === 'exit' || value === 'ask' ? value : 'minimize'
 }
@@ -106,8 +116,24 @@ export interface IpcChannels {
 
   // --- 原生歌曲菜单 ---
   'context-menu:show-track': {
-    args: { entries: NativeTrackMenuEntry[] }
+    args: {
+      entries: NativeTrackMenuEntry[]
+      theme: 'dark' | 'light'
+      reducedMotion: boolean
+    }
     return: NativeTrackMenuAction | null
+  }
+  'context-menu:window-get-init': {
+    args: void
+    return: NativeTrackMenuWindowInit | null
+  }
+  'context-menu:window-ready': {
+    args: void
+    return: void
+  }
+  'context-menu:window-resolve': {
+    args: { action: NativeTrackMenuAction | null }
+    return: void
   }
 
   // --- 文件夹管理 ---

@@ -1,4 +1,4 @@
-import type { FeatureFlags } from './ipc'
+import type { FeatureFlags, NativeTrackMenuAction, NativeTrackMenuWindowInit } from './ipc'
 
 // =============================================================================
 // QinPlayer — Electron API 类型声明
@@ -30,8 +30,15 @@ export interface ElectronAPI {
   on: (channel: string, callback: (...args: unknown[]) => void) => () => void
 }
 
+export interface ContextMenuWindowAPI {
+  getInit: () => Promise<NativeTrackMenuWindowInit | null>
+  ready: () => Promise<void>
+  resolve: (action: NativeTrackMenuAction | null) => Promise<void>
+}
+
 declare global {
   interface Window {
     electronAPI: ElectronAPI
+    contextMenuAPI: ContextMenuWindowAPI
   }
 }

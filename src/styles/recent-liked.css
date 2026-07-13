@@ -40,6 +40,16 @@
   gap: 4px;
 }
 
+.liked-page__empty-icon {
+  width: 32px;
+  height: 32px;
+  margin-bottom: 8px;
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .liked-page__header {
   display: flex;
   align-items: center;

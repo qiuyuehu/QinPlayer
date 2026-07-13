@@ -171,13 +171,40 @@ describe('PlaylistPanel', () => {
     usePlayerStore.setState({ currentTrack: trackA, playlist, priorityQueue: [trackC] })
     render(<PlaylistPanel onClose={vi.fn()} />)
 
-    fireEvent.contextMenu(screen.getByText('搁浅 - 周杰伦'))
+    fireEvent.contextMenu(screen.getByTitle('搁浅 - 周杰伦'))
     await screen.findByText('从接下来移除')
     expect(screen.queryByText('从播放列表移除')).not.toBeInTheDocument()
     fireEvent.click(screen.getByText('从接下来移除'))
 
     expect(usePlayerStore.getState().priorityQueue).toEqual([])
     expect(usePlayerStore.getState().playlist).toBe(playlist)
+  })
+
+  it('priority 行应该显示完整歌曲信息并只触发一次播放', () => {
+    usePlayerStore.setState({ currentTrack: trackA, playlist: [trackA], priorityQueue: [trackC] })
+    render(<PlaylistPanel onClose={vi.fn()} />)
+
+    const priorityRow = screen.getByTitle('搁浅 - 周杰伦').closest('.queue-panel__item--priority')!
+    expect(priorityRow.querySelector('.queue-panel__cover[src]')).toHaveAttribute(
+      'src',
+      'qinplayer://cover?path=C%3A%5Ccovers%5Cc.jpg',
+    )
+    expect(priorityRow).toHaveTextContent('搁浅')
+    expect(priorityRow).toHaveTextContent('周杰伦')
+    expect(priorityRow).toHaveTextContent('4:04')
+
+    fireEvent.click(screen.getByTitle('搁浅 - 周杰伦'))
+    expect(usePlayerStore.getState().currentTrack).toEqual(trackC)
+  })
+
+  it('应该移除重复标签，同时保留优先队列语义', () => {
+    usePlayerStore.setState({ playlist: [trackA, trackB], priorityQueue: [trackC] })
+    render(<PlaylistPanel onClose={vi.fn()} />)
+
+    expect(document.querySelector('.queue-panel__count')).not.toBeInTheDocument()
+    expect(screen.queryByText('播放列表')).not.toBeInTheDocument()
+    expect(screen.getByText('接下来 1 首')).toBeInTheDocument()
+    expect(document.querySelector('.queue-panel__item--priority')).toBeInTheDocument()
   })
 
   it('source 行应该把已有待播歌曲提升为下一首', async () => {
@@ -188,7 +215,10 @@ describe('PlaylistPanel', () => {
     })
     render(<PlaylistPanel onClose={vi.fn()} />)
 
-    fireEvent.contextMenu(screen.getByTitle('七里香 - 周杰伦'))
+    const sourceRow = screen.getAllByTitle('七里香 - 周杰伦').find(
+      (element) => element.classList.contains('queue-panel__item'),
+    )!
+    fireEvent.contextMenu(sourceRow)
     fireEvent.click(await screen.findByText('下一首播放'))
 
     expect(usePlayerStore.getState().priorityQueue).toEqual([trackB, trackC])

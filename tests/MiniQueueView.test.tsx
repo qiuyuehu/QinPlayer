@@ -142,6 +142,8 @@ describe('MiniQueueView', () => {
         { action: 'insert-next', enabled: false },
         { action: 'remove-playlist', enabled: true },
       ]),
+      theme: 'dark',
+      reducedMotion: false,
     }))
     expect(container.querySelector('.context-menu')).not.toBeInTheDocument()
   })

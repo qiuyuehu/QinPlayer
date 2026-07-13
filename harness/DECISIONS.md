@@ -4,13 +4,23 @@
 
 ---
 
+## 2026-07-13 Mini 主题子窗口菜单与 UI 修复
+
+- **Mini 菜单**：主窗口继续通过单一 `context-menu:show-track` 调用菜单。主进程优先创建透明、沙箱隔离的短生命周期子窗口，专用 preload 仅暴露 `getInit`、`ready`、`resolve`；主进程固定标签并校验主/子 sender、主题、减少动画、action 与 enabled，保证单 pending 和单次 settle。
+- **回退与取消**：子窗口创建、加载或 ready 超时失败时回退原生 Menu；Escape、失焦、切换视图、关闭 Mini 与取消操作只结算 `null`，不误触发回退菜单。
+- **界面行为**：优先播放项显示完整曲目信息；“我喜欢的”空状态使用星标图标；歌单详情的“播放全部”仅在歌曲已加载、非空且允许播放时写入该歌单并播放首曲，旧异步响应不能覆盖新选择。
+- **窗口**：进入 Mini 后设为不可拉伸，退出 Mini 前恢复可拉伸，仍使用固定 `400×150` 壳层。
+- **状态**：Harness、生产构建、类型检查和 53 个测试文件/518 个测试通过；真实 Electron 的菜单越界、主题、DPI 与多显示器行为待人工验收。
+
+---
+
 ## 2026-07-13 下一首提升、detached 游标与 Mini 原生菜单
 
 - **下一首语义**：保留 `priorityQueue`、恢复锚点、已消费 ID 与内部 `commitTrack`；`insertNext` 对歌曲去重后提升到队首，连续选择采用 LIFO。本决策只替代 2026-07-12 决策中的 FIFO 排序，不替代其恢复状态机。
 - **来源移除**：从播放列表移除只修改会话内 playlist，不删除曲库或数据库歌单关系；移除当前曲或恢复锚点后，以非持久化 `detachedPlaylistIndex` 保存 successor，消费后立即清理。
 - **自然结束**：待播、恢复锚点、detached 或当前曲已不在来源列表时先走 `nextTrack()`；loop 只在这些状态都不存在时重播原曲。
-- **Mini 菜单**：主窗口保留 HTML `ContextMenu`；Mini 队列使用单一 `context-menu:show-track` invoke，主进程校验当前 sender、受限 action/enabled、固定中文 label 与单 pending，并以 `action | null` 单次返回。
-- **状态**：类型检查、分批测试、Harness、生产构建和全量测试通过；真实 Electron 原生菜单越界与连续右键体验待主人验证。
+- **Mini 菜单**：此处的受限 action、固定中文标签、单 pending 与 `action | null` 返回约束继续有效；渲染载体由上方 2026-07-13 决策替代。
+- **状态**：原生菜单的真实 Electron 验收已由上方主题子窗口菜单验收替代。
 
 ## 2026-07-12 待播队列使用 FIFO 与恢复锚点
 

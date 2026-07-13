@@ -51,11 +51,14 @@ describe('Liked 排序', () => {
     expect(usePlayerStore.getState().playlist.map(({ id }) => id)).toEqual([2, 1])
   })
 
-  it('空列表保留现有空状态且不显示无意义菜单', async () => {
+  it('空列表应该使用星标空状态且不显示无意义菜单', async () => {
     invoke.mockResolvedValue([])
     render(<Liked />)
 
     expect(await screen.findByText('还没有收藏歌曲')).toBeInTheDocument()
+    expect(screen.getByText('点击歌曲旁的星标收藏')).toBeInTheDocument()
+    expect(document.querySelector('.liked-page__empty-icon')).toBeInTheDocument()
+    expect(document.body.textContent).not.toContain('❤️')
     expect(screen.queryByRole('button', { name: /升序|降序/ })).not.toBeInTheDocument()
   })
 })

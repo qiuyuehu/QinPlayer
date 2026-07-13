@@ -8,7 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { formatTime } from '../utils/formatTime'
 import { IconMusic } from './Icons'
 import type { Track } from '../types'
-import { useNativeTrackContextMenu } from '../hooks/useNativeTrackContextMenu'
+import { useMiniTrackContextMenu } from '../hooks/useMiniTrackContextMenu'
 import SongInfoDialog from './SongInfoDialog'
 
 interface MiniQueueViewProps {
@@ -25,7 +25,7 @@ interface MiniQueueViewProps {
 function MiniQueueView({ tracks, priorityQueue = [], currentTrackId, onPlay, onRemovePriority = () => {}, onInsertNext = () => {}, onRemoveFromPlaylist = () => {}, canInsertNext = () => false }: MiniQueueViewProps) {
   const itemRefs = useRef<Map<number, HTMLButtonElement>>(new Map())
   const [brokenCoverIds, setBrokenCoverIds] = useState<Set<number>>(new Set())
-  const trackMenu = useNativeTrackContextMenu({
+  const trackMenu = useMiniTrackContextMenu({
     onPlay,
     onInsertNext,
     onRemovePriority,

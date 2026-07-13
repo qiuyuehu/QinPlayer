@@ -9,8 +9,10 @@ import { useState, useEffect, useCallback, useRef, type KeyboardEvent, type Mous
 import SongList from '../components/SongList'
 import CreatePlaylistDialog from '../components/CreatePlaylistDialog'
 import ContextMenu, { type MenuItem } from '../components/ContextMenu'
-import { IconList, IconClose } from '../components/Icons'
+import { IconList, IconClose, IconPlay } from '../components/Icons'
 import type { Track, Playlist } from '../types'
+import { usePlayerStore } from '../stores/playerStore'
+import { useUIStore } from '../stores/uiStore'
 
 /**
  * 歌单页面组件
@@ -25,6 +27,7 @@ function Playlists() {
   const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null)
   // 当前歌单内的歌曲列表
   const [songs, setSongs] = useState<Track[]>([])
+  const [songsLoading, setSongsLoading] = useState(false)
   // 是否显示新建歌单弹窗
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [contextMenu, setContextMenu] = useState<{
@@ -36,10 +39,14 @@ function Playlists() {
   const [editingName, setEditingName] = useState('')
   const skipRenameBlurRef = useRef(false)
   const renameSubmittingRef = useRef(false)
+  const songsRequestTokenRef = useRef(0)
   // 歌单内歌曲排序字段：added（添加时间）或 playCount（播放次数）
   const [sortBy, setSortBy] = useState<'added' | 'playCount'>('added')
   // 排序方向：asc 升序 / desc 降序
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+  const setPlaylist = usePlayerStore((state) => state.setPlaylist)
+  const playTrack = usePlayerStore((state) => state.playTrack)
+  const featureFlags = useUIStore((state) => state.featureFlags)
 
   // --- 加载歌单列表 ---
   // useCallback 包裹以避免每次渲染创建新函数，保持 useEffect 依赖稳定
@@ -61,6 +68,9 @@ function Playlists() {
   // --- 加载歌单内歌曲 ---
   // 依赖 sortBy 和 sortOrder，排序方式变化时自动重新加载
   const loadPlaylistSongs = useCallback(async (playlistId: number) => {
+    const requestToken = ++songsRequestTokenRef.current
+    setSongs([])
+    setSongsLoading(true)
     try {
       // 按当前排序方式获取歌单内歌曲
       const trackList = await window.electronAPI.invoke('playlists:getSongs', {
@@ -68,18 +78,44 @@ function Playlists() {
         sortBy,
         order: sortOrder
       }) as Track[]
-      setSongs(trackList)
+      if (requestToken === songsRequestTokenRef.current) setSongs(trackList)
     } catch (e) {
-      console.error('加载歌单歌曲失败:', e)
+      if (requestToken === songsRequestTokenRef.current) console.error('加载歌单歌曲失败:', e)
+    } finally {
+      if (requestToken === songsRequestTokenRef.current) setSongsLoading(false)
     }
   }, [sortBy, sortOrder])
 
   // 选中歌单或排序方式变化时重新加载歌曲列表
   useEffect(() => {
     if (selectedPlaylist) {
-      loadPlaylistSongs(selectedPlaylist.id)
+      void loadPlaylistSongs(selectedPlaylist.id)
+    } else {
+      songsRequestTokenRef.current += 1
+      setSongs([])
+      setSongsLoading(false)
     }
   }, [selectedPlaylist, loadPlaylistSongs])
+
+  const handleSelectPlaylist = useCallback((playlist: Playlist) => {
+    songsRequestTokenRef.current += 1
+    setSongs([])
+    setSelectedPlaylist(playlist)
+  }, [])
+
+  const handleBackToList = useCallback(() => {
+    songsRequestTokenRef.current += 1
+    setSongs([])
+    setSongsLoading(false)
+    setSelectedPlaylist(null)
+    void loadPlaylists()
+  }, [loadPlaylists])
+
+  const handlePlayAll = useCallback(() => {
+    if (songsLoading || songs.length === 0 || !featureFlags.playback) return
+    setPlaylist(songs)
+    playTrack(songs[0])
+  }, [featureFlags.playback, playTrack, setPlaylist, songs, songsLoading])
 
   // --- 创建歌单 ---
   // 接收新歌单名称，调用 IPC 创建后刷新列表
@@ -162,19 +198,14 @@ function Playlists() {
     return (
       <div className="playlists">
         {/* 返回按钮 + 歌单信息头部 */}
-        <div className="playlists__header">
-          {/* 点击返回按钮清空选中状态，回到歌单列表视图 */}
-          <button
-            className="playlists__back-btn"
-            onClick={() => {
-              setSelectedPlaylist(null)
-              loadPlaylists()  // 刷新歌单列表（封面可能已更新）
-            }}
-          >
-            ← 返回
-          </button>
-          <h2 className="playlists__title">{selectedPlaylist.name}</h2>
-          <span className="playlists__count">{songs.length} 首</span>
+        <div className="playlists__header playlists__header--detail">
+          <div className="playlists__detail-heading">
+            <button className="playlists__back-btn" onClick={handleBackToList}>
+              ← 返回
+            </button>
+            <h2 className="playlists__title">{selectedPlaylist.name}</h2>
+            <span className="playlists__count">{songs.length} 首</span>
+          </div>
         </div>
 
         {/* 排序控制栏：切换排序字段和升降序 */}
@@ -200,10 +231,22 @@ function Playlists() {
           >
             {sortOrder === 'asc' ? '↑ 升序' : '↓ 降序'}
           </button>
+          <button
+            type="button"
+            className="playlists__sort-btn playlists__play-all"
+            title="播放全部"
+            disabled={songsLoading || songs.length === 0 || !featureFlags.playback}
+            onClick={handlePlayAll}
+          >
+            <IconPlay width={14} height={14} />
+            播放全部
+          </button>
         </div>
 
         {/* 歌曲列表或空状态提示 */}
-        {songs.length > 0 ? (
+        {songsLoading ? (
+          <div className="playlists__empty">加载中...</div>
+        ) : songs.length > 0 ? (
           <SongList
             tracks={songs}
             showIndex
@@ -215,7 +258,7 @@ function Playlists() {
                 songId
               })
               // 移除后重新加载确保列表一致
-              loadPlaylistSongs(selectedPlaylist.id)
+              void loadPlaylistSongs(selectedPlaylist.id)
             }}
           />
         ) : (
@@ -252,7 +295,7 @@ function Playlists() {
               className="playlists__card"
               // 点击卡片进入该歌单详情视图
               onClick={() => {
-                if (editingPlaylistId !== pl.id) setSelectedPlaylist(pl)
+                if (editingPlaylistId !== pl.id) handleSelectPlaylist(pl)
               }}
               onContextMenu={(event) => handleCardContextMenu(event, pl)}
             >

@@ -8,6 +8,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import SongList from '../components/SongList'
 import SortMenu from '../components/SortMenu'
+import { IconStar } from '../components/Icons'
 import { sortTracks } from '../utils/trackSort'
 import type { TrackSortBy } from '../utils/trackSort'
 import type { SortOrder, Track } from '../types'
@@ -86,8 +87,9 @@ function Liked() {
       ) : (
         // 无收藏时的空状态引导，提示用户操作方式
         <div className="liked-page__empty">
+          <span className="liked-page__empty-icon" aria-hidden="true"><IconStar width={32} height={32} /></span>
           <p>还没有收藏歌曲</p>
-          <p>点击歌曲旁的 ❤️ 收藏</p>
+          <p>点击歌曲旁的星标收藏</p>
         </div>
       )}
     </div>

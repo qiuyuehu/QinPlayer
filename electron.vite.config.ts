@@ -24,7 +24,8 @@ export default defineConfig({
     build: {
       rollupOptions: {
         input: {
-          index: resolve(__dirname, 'electron/preload.ts')
+          index: resolve(__dirname, 'electron/preload.ts'),
+          contextMenu: resolve(__dirname, 'electron/contextMenuPreload.ts')
         }
       }
     }
@@ -37,7 +38,8 @@ export default defineConfig({
     build: {
       rollupOptions: {
         input: {
-          index: resolve(__dirname, 'index.html')
+          index: resolve(__dirname, 'index.html'),
+          miniContextMenu: resolve(__dirname, 'mini-context-menu.html')
         }
       }
     },

@@ -184,6 +184,7 @@ QinPlayer/
 ### 歌单
 - 手动创建歌单，支持增删改重命名
 - 歌曲排序：按添加顺序 / 按播放次数，升序/降序
+- 歌单详情在歌曲加载完成、非空且播放功能可用时支持“播放全部”；切换、返回或重新排序时，过期异步结果不得覆盖当前选择
 
 ### 搜索
 - 按歌名、歌手搜索
@@ -232,6 +233,7 @@ QinPlayer/
 ### 迷你模式
 - 固定 `400×150` 壳层，歌曲、歌词、队列三种视图切换时不改变窗口尺寸或位置
 - 歌曲视图显示封面、歌名、歌手/专辑、进度与时长；歌词视图显示当前句和下一句；队列视图支持滚动、当前项定位与点击播放
+- Mini 队列右键菜单由透明、沙箱隔离的独立子窗口渲染；其专用 preload 只暴露初始化、ready 与 action 结算，创建、加载或 ready 超时回退原生菜单
 - 音量、置顶、展开位于工具栏左侧（窗口控制）；上一首、播放/暂停、下一首居中（播放控制）；视图选择和播放方式位于右侧（内容切换）；关闭按钮固定在右上角
 - `playback` 或 `miniMode` 关闭时不渲染；`lyrics` / `queuePanel` 关闭时隐藏对应入口，并从失效视图安全回退到歌曲视图
 - 主窗口按钮触发；进入前保存正常 bounds，退出时恢复，视图切换不发送窗口 IPC
@@ -249,7 +251,7 @@ QinPlayer/
 
 ### 窗口尺寸持久化
 - 退出时保存窗口位置和尺寸，下次启动恢复
-- 迷你模式进入前保存正常 bounds，退出时恢复
+- 迷你模式进入前保存正常 bounds，进入后不可拉伸，退出时恢复 bounds 与可拉伸状态
 - 最大化/最小化状态保存与恢复
 - 多显示器变化时自动 clamp 到可见区域，标题栏至少 60px 可见
 - feature flag `windowSizePersist` 控制，默认开启
@@ -296,7 +298,7 @@ Apple Music 风，精致克制。
 | 无封面 | 显示默认占位图 |
 | 新建歌单 | 导航栏"歌单"旁 + 按钮 |
 | 主窗口歌曲右键菜单 | 播放、下一首播放、添加到歌单、按宿主移除、打开文件所在目录、歌曲信息；继续使用主题化 HTML 菜单 |
-| Mini 队列右键菜单 | 使用 Electron 原生菜单越过 `400×150` 窗口边界；source 与 priority 使用受限 action ID 区分移除语义 |
+| Mini 队列右键菜单 | 使用主题化透明子窗口越过 `400×150` 窗口边界；主进程校验 source/priority 的受限 action ID，窗口不可用时回退 Electron 原生菜单 |
 | 关闭窗口 | 按设置最小化到托盘、直接退出或每次询问；无托盘时直接退出 |
 | 迷你模式 | 主窗口按钮触发 |
 
@@ -515,8 +517,8 @@ Main Process ✓ 负责 SQLite、文件系统、窗口、IPC
 ## 测试覆盖
 
 - 框架：Vitest + @testing-library/react
-- 用例数：505 个（51 个测试文件）
-- 覆盖范围：formatTime、lrcParser、albumSort、trackSort、playerStore、uiStore、PlayerBar、LyricsPanel、LyricsFullscreen、MiniPlayer、MiniLyricsView、MiniQueueView、SortMenu、ContextMenu、原生歌曲菜单 IPC/Hook、CloseCoordinator、CloseConfirmDialog、Albums、LocalMusic、Liked、Settings、SongList、PlaylistPanel、featureFlags、Sidebar、useAudioSync、useTrackContextMenu、useTrackLyrics、windowBounds、Harness checks
+- 用例数：520 个（53 个测试文件）
+- 覆盖范围：formatTime、lrcParser、albumSort、trackSort、playerStore、uiStore、PlayerBar、LyricsPanel、LyricsFullscreen、MiniPlayer、MiniLyricsView、MiniQueueView、MiniContextMenu、SortMenu、ContextMenu、Mini 菜单 IPC/Hook、CloseCoordinator、CloseConfirmDialog、Albums、LocalMusic、Liked、Settings、SongList、PlaylistPanel、Playlists、featureFlags、Sidebar、useAudioSync、useTrackContextMenu、useTrackLyrics、windowBounds、window IPC、Harness checks
 - Feature Flags 消融验证：16 个 flag 逐个关闭不影响其他 flag
 
 ---

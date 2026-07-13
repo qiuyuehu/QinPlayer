@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { NativeTrackMenuAction, NativeTrackMenuEntry } from '../types/ipc'
 import type { Track } from '../types'
 
-export type NativeTrackMenuKind = 'source' | 'priority'
+export type MiniTrackMenuKind = 'source' | 'priority'
 
 interface Options {
   onPlay: (track: Track) => void
@@ -12,7 +12,7 @@ interface Options {
   canInsertNext: (track: Track) => boolean
 }
 
-function getEntries(track: Track, kind: NativeTrackMenuKind, canInsertNext: (track: Track) => boolean): NativeTrackMenuEntry[] {
+function getEntries(track: Track, kind: MiniTrackMenuKind, canInsertNext: (track: Track) => boolean): NativeTrackMenuEntry[] {
   if (kind === 'priority') {
     return [
       { action: 'play', enabled: true },
@@ -31,7 +31,11 @@ function getEntries(track: Track, kind: NativeTrackMenuKind, canInsertNext: (tra
   ]
 }
 
-export function useNativeTrackContextMenu(options: Options) {
+function getThemeSnapshot(): 'dark' | 'light' {
+  return document.documentElement.dataset.theme === 'light' ? 'light' : 'dark'
+}
+
+export function useMiniTrackContextMenu(options: Options) {
   const [songInfoTrack, setSongInfoTrack] = useState<Track | null>(null)
   const mountedRef = useRef(false)
   const pendingRef = useRef(false)
@@ -46,7 +50,7 @@ export function useNativeTrackContextMenu(options: Options) {
     }
   }, [])
 
-  const open = useCallback(async (event: React.MouseEvent, track: Track, kind: NativeTrackMenuKind): Promise<void> => {
+  const open = useCallback(async (event: React.MouseEvent, track: Track, kind: MiniTrackMenuKind): Promise<void> => {
     event.preventDefault()
     if (pendingRef.current) return
 
@@ -55,6 +59,8 @@ export function useNativeTrackContextMenu(options: Options) {
     try {
       const action = await window.electronAPI.invoke('context-menu:show-track', {
         entries: getEntries(track, kind, options.canInsertNext),
+        theme: getThemeSnapshot(),
+        reducedMotion: document.documentElement.dataset.reducedMotion === 'true',
       }) as NativeTrackMenuAction | null
       if (!mountedRef.current || requestToken !== requestTokenRef.current || action === null) return
 
@@ -82,7 +88,7 @@ export function useNativeTrackContextMenu(options: Options) {
       }
     } catch (error) {
       if (mountedRef.current && requestToken === requestTokenRef.current) {
-        console.error('[MiniQueue] 打开原生歌曲菜单失败:', error)
+        console.error('[MiniQueue] 打开 Mini 歌曲菜单失败:', error)
       }
     } finally {
       if (requestToken === requestTokenRef.current) pendingRef.current = false

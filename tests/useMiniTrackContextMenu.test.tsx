@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useNativeTrackContextMenu } from '../src/hooks/useNativeTrackContextMenu'
+import { useMiniTrackContextMenu } from '../src/hooks/useMiniTrackContextMenu'
 import type { NativeTrackMenuAction, NativeTrackMenuEntry } from '../src/types/ipc'
 import type { Track } from '../src/types'
 
@@ -44,7 +44,7 @@ function deferred<T>() {
   return { promise, resolve, reject }
 }
 
-describe('useNativeTrackContextMenu', () => {
+describe('useMiniTrackContextMenu', () => {
   const invokeMock = vi.fn()
 
   beforeEach(() => {
@@ -55,7 +55,9 @@ describe('useNativeTrackContextMenu', () => {
 
   it('source 与 priority 应该发送固定 action IDs 和 enabled', async () => {
     const options = createOptions()
-    const { result } = renderHook(() => useNativeTrackContextMenu(options))
+    document.documentElement.dataset.theme = 'light'
+    document.documentElement.dataset.reducedMotion = 'true'
+    const { result } = renderHook(() => useMiniTrackContextMenu(options))
 
     await act(async () => result.current.open(contextEvent(), trackA, 'source'))
     await act(async () => result.current.open(contextEvent(), trackB, 'priority'))
@@ -68,6 +70,8 @@ describe('useNativeTrackContextMenu', () => {
         { action: 'open-location', enabled: true },
         { action: 'show-info', enabled: true },
       ] satisfies NativeTrackMenuEntry[],
+      theme: 'light',
+      reducedMotion: true,
     })
     expect(invokeMock).toHaveBeenNthCalledWith(2, 'context-menu:show-track', {
       entries: [
@@ -76,12 +80,14 @@ describe('useNativeTrackContextMenu', () => {
         { action: 'open-location', enabled: true },
         { action: 'show-info', enabled: true },
       ] satisfies NativeTrackMenuEntry[],
+      theme: 'light',
+      reducedMotion: true,
     })
   })
 
   it('应该把返回 action 路由到右键时捕获的歌曲', async () => {
     const options = createOptions()
-    const { result } = renderHook(() => useNativeTrackContextMenu(options))
+    const { result } = renderHook(() => useMiniTrackContextMenu(options))
     const cases: Array<[NativeTrackMenuAction, 'source' | 'priority']> = [
       ['play', 'source'],
       ['insert-next', 'source'],
@@ -102,7 +108,7 @@ describe('useNativeTrackContextMenu', () => {
 
   it('打开目录和歌曲信息应该作用于捕获歌曲', async () => {
     const options = createOptions()
-    const { result } = renderHook(() => useNativeTrackContextMenu(options))
+    const { result } = renderHook(() => useMiniTrackContextMenu(options))
     invokeMock.mockResolvedValueOnce('open-location').mockResolvedValueOnce(null)
 
     await act(async () => result.current.open(contextEvent(), trackB, 'source'))
@@ -119,7 +125,7 @@ describe('useNativeTrackContextMenu', () => {
     const pending = deferred<NativeTrackMenuAction | null>()
     invokeMock.mockReturnValueOnce(pending.promise)
     const options = createOptions()
-    const { result } = renderHook(() => useNativeTrackContextMenu(options))
+    const { result } = renderHook(() => useMiniTrackContextMenu(options))
 
     let first!: Promise<void>
     act(() => { first = result.current.open(contextEvent(), trackA, 'source') })
@@ -134,7 +140,7 @@ describe('useNativeTrackContextMenu', () => {
   it('null、未知 action 和 reject 都不应该执行陈旧动作', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const options = createOptions()
-    const { result } = renderHook(() => useNativeTrackContextMenu(options))
+    const { result } = renderHook(() => useMiniTrackContextMenu(options))
     invokeMock.mockResolvedValueOnce(null)
       .mockResolvedValueOnce('unknown')
       .mockRejectedValueOnce(new Error('invoke failed'))
@@ -152,7 +158,7 @@ describe('useNativeTrackContextMenu', () => {
     const pending = deferred<NativeTrackMenuAction | null>()
     invokeMock.mockReturnValueOnce(pending.promise)
     const options = createOptions()
-    const { result, unmount } = renderHook(() => useNativeTrackContextMenu(options))
+    const { result, unmount } = renderHook(() => useMiniTrackContextMenu(options))
     let request!: Promise<void>
 
     act(() => { request = result.current.open(contextEvent(), trackB, 'source') })
@@ -161,5 +167,19 @@ describe('useNativeTrackContextMenu', () => {
     await act(async () => request)
 
     expect(options.onPlay).not.toHaveBeenCalled()
+  })
+
+  it('非法或缺失主题时应该按 dark 快照发送', async () => {
+    document.documentElement.dataset.theme = 'system'
+    document.documentElement.dataset.reducedMotion = 'false'
+    const options = createOptions()
+    const { result } = renderHook(() => useMiniTrackContextMenu(options))
+
+    await act(async () => result.current.open(contextEvent(), trackA, 'source'))
+
+    expect(invokeMock).toHaveBeenCalledWith('context-menu:show-track', expect.objectContaining({
+      theme: 'dark',
+      reducedMotion: false,
+    }))
   })
 })

@@ -96,7 +96,6 @@ function PlaylistPanel({ onClose }: PlaylistPanelProps) {
       <header className="queue-panel__header">
         <div className="queue-panel__heading">
           <h2 className="queue-panel__title">播放队列</h2>
-          <span className="queue-panel__count">{playlist.length} 首</span>
         </div>
         <button className="queue-panel__close" onClick={requestExit} disabled={isExiting} title="关闭播放队列">
           ×
@@ -107,13 +106,34 @@ function PlaylistPanel({ onClose }: PlaylistPanelProps) {
         {playlist.length + priorityQueue.length > 0 ? (
           <div className="queue-panel__list">
             {priorityQueue.length > 0 && <div className="queue-panel__section">接下来 {priorityQueue.length} 首</div>}
-            {priorityQueue.map((track) => (
-              <div key={`priority:${track.id}`} className="queue-panel__item" onContextMenu={(event) => !isExiting && trackMenu.open(event, track, 'priority')}>
-                <button type="button" className="queue-panel__item-main" onClick={() => handlePlayTrack(track)} disabled={isExiting}>{track.title} - {track.artist}</button>
+            {priorityQueue.map((track) => {
+              const hasCover = track.coverPath && !brokenCoverIds.has(track.id)
+
+              return (
+              <div key={`priority:${track.id}`} className={`queue-panel__item queue-panel__item--priority ${currentTrack?.id === track.id ? 'queue-panel__item--active' : ''}`} onContextMenu={(event) => !isExiting && trackMenu.open(event, track, 'priority')}>
+                <button type="button" className="queue-panel__item-main" onClick={() => handlePlayTrack(track)} disabled={isExiting} title={`${track.title} - ${track.artist}`}>
+                  {hasCover ? (
+                    <img
+                      className="queue-panel__cover"
+                      src={window.electronAPI.getCoverUrl(track.coverPath)}
+                      alt=""
+                      onError={() => handleCoverError(track.id)}
+                    />
+                  ) : (
+                    <span className="queue-panel__cover queue-panel__cover--placeholder">
+                      <IconMusic width={18} height={18} />
+                    </span>
+                  )}
+                  <span className="queue-panel__info">
+                    <span className="queue-panel__track-title">{track.title}</span>
+                    <span className="queue-panel__artist">{track.artist}</span>
+                  </span>
+                  <span className="queue-panel__duration">{formatTime(track.duration)}</span>
+                </button>
                 <button type="button" className="queue-panel__remove" title="从接下来移除" disabled={isExiting} onClick={() => removeFromPriorityQueue(track.id)}><IconClose width={14} height={14} /></button>
               </div>
-            ))}
-            {playlist.length > 0 && <div className="queue-panel__section">播放列表 {playlist.length} 首</div>}
+              )
+            })}
             {playlist.map((track) => {
               const hasCover = track.coverPath && !brokenCoverIds.has(track.id)
 

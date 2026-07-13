@@ -195,6 +195,7 @@ export function registerWindowIPC(
         mainWindow.unmaximize()
       }
       mainWindow.setAlwaysOnTop(true, 'screen-saver')
+      mainWindow.setResizable(false)
       mainWindow.setMinimumSize(MINI_PLAYER_WIDTH, MINI_PLAYER_HEIGHT)
       mainWindow.hide()
       mainWindow.setSize(MINI_PLAYER_WIDTH, MINI_PLAYER_HEIGHT)
@@ -203,6 +204,7 @@ export function registerWindowIPC(
       // 退出迷你模式时按 feature flag 恢复正常窗口 bounds。
       setMiniMode(false)
       mainWindow.setAlwaysOnTop(false)
+      mainWindow.setResizable(true)
       mainWindow.setMinimumSize(800, 600)
       mainWindow.hide()
 

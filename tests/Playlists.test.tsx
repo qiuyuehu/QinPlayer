@@ -5,8 +5,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import Playlists from '../src/pages/Playlists'
-import type { Playlist } from '../src/types'
-
+import { usePlayerStore } from '../src/stores/playerStore'
+import { useUIStore } from '../src/stores/uiStore'
+import { DEFAULT_FEATURE_FLAGS } from '../src/utils/featureFlags'
+import type { Playlist, Track } from '../src/types'
 const playlists: Playlist[] = [
   {
     id: 1,
@@ -24,6 +26,11 @@ const playlists: Playlist[] = [
   },
 ]
 
+const playlistTracks: Track[] = [
+  { id: 10, title: '第一首', artist: '歌手', playCount: 0, filePath: '10', fileName: '10', album: '', duration: 120, coverPath: null, mtime: 0, createdAt: '2026-07-13' },
+  { id: 11, title: '第二首', artist: '歌手', playCount: 0, filePath: '11', fileName: '11', album: '', duration: 120, coverPath: null, mtime: 0, createdAt: '2026-07-13' },
+]
+
 describe('Playlists', () => {
   let invokeMock: ReturnType<typeof vi.fn>
 
@@ -38,6 +45,8 @@ describe('Playlists', () => {
       ...window.electronAPI,
       invoke: invokeMock,
     }
+    useUIStore.setState({ featureFlags: { ...DEFAULT_FEATURE_FLAGS } })
+    usePlayerStore.setState({ playlist: [], currentTrack: null, isPlaying: false })
   })
 
   it('应该渲染第一首歌封面', async () => {
@@ -141,5 +150,85 @@ describe('Playlists', () => {
       ).length
       expect(totalCalls).toBe(initialCallCount + 1)
     })
+  })
+
+  it('播放全部应该按当前加载顺序设置播放列表并只播放首曲', async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'playlists:getAll') return playlists
+      if (channel === 'playlists:getSongs') return playlistTracks
+      return null
+    })
+    render(<Playlists />)
+
+    fireEvent.click(await screen.findByText('有封面歌单'))
+    const playAll = await screen.findByRole('button', { name: '播放全部' })
+    expect(playAll).toBeEnabled()
+    fireEvent.click(playAll)
+
+    expect(usePlayerStore.getState().playlist).toEqual(playlistTracks)
+    expect(usePlayerStore.getState().currentTrack).toEqual(playlistTracks[0])
+    expect(invokeMock.mock.calls.filter(([channel]) => channel === 'songs:recordPlay' || channel === 'songs:updatePlayCount')).toHaveLength(2)
+  })
+
+  it('播放全部应该位于排序栏末尾，并保留既有禁用条件', async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'playlists:getAll') return playlists
+      if (channel === 'playlists:getSongs') return playlistTracks
+      return null
+    })
+    render(<Playlists />)
+
+    fireEvent.click(await screen.findByText('有封面歌单'))
+    const playAll = await screen.findByRole('button', { name: '播放全部' })
+    const sort = playAll.closest('.playlists__sort')
+    expect(sort).toBeInTheDocument()
+    expect(sort?.lastElementChild).toBe(playAll)
+    expect(playAll).toHaveClass('playlists__sort-btn', 'playlists__play-all')
+    expect(playAll.closest('.playlists__header--detail')).toBeNull()
+  })
+
+  it('加载中、空列表和 playback 关闭时播放全部应该禁用', async () => {
+    let resolveSongs!: (tracks: Track[]) => void
+    const pendingSongs = new Promise<Track[]>((resolvePromise) => { resolveSongs = resolvePromise })
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'playlists:getAll') return playlists
+      if (channel === 'playlists:getSongs') return pendingSongs
+      return null
+    })
+    render(<Playlists />)
+
+    fireEvent.click(await screen.findByText('有封面歌单'))
+    expect(await screen.findByRole('button', { name: '播放全部' })).toBeDisabled()
+    resolveSongs([])
+    await waitFor(() => expect(screen.getByRole('button', { name: '播放全部' })).toBeDisabled())
+
+    useUIStore.setState({ featureFlags: { ...DEFAULT_FEATURE_FLAGS, playback: false } })
+    expect(screen.getByRole('button', { name: '播放全部' })).toBeDisabled()
+  })
+
+  it('旧歌单请求不应该覆盖最新歌单歌曲或 loading', async () => {
+    let resolveFirst!: (tracks: Track[]) => void
+    let resolveSecond!: (tracks: Track[]) => void
+    const first = new Promise<Track[]>((resolvePromise) => { resolveFirst = resolvePromise })
+    const second = new Promise<Track[]>((resolvePromise) => { resolveSecond = resolvePromise })
+    let requestCount = 0
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'playlists:getAll') return playlists
+      if (channel === 'playlists:getSongs') return requestCount++ === 0 ? first : second
+      return null
+    })
+    render(<Playlists />)
+
+    fireEvent.click(await screen.findByText('有封面歌单'))
+    fireEvent.click(screen.getByText('← 返回'))
+    fireEvent.click(await screen.findByText('无封面歌单'))
+    resolveSecond([playlistTracks[1]])
+    const playAll = await screen.findByRole('button', { name: '播放全部' })
+    expect(playAll).toBeEnabled()
+
+    resolveFirst([playlistTracks[0]])
+    await waitFor(() => expect(screen.getByRole('button', { name: '播放全部' })).toBeEnabled())
+    fireEvent.click(playAll)
+    expect(usePlayerStore.getState().playlist).toEqual([playlistTracks[1]])
   })
 })
