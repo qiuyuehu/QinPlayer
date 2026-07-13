@@ -20,6 +20,9 @@ interface PlayerState {
   isPlaying: boolean              // 是否正在播放
   currentTrack: Track | null      // 当前播放的歌曲
   playlist: Track[]               // 当前播放列表
+  priorityQueue: Track[]          // 尚未消费的优先待播 FIFO
+  priorityResumeTrackId: number | null
+  priorityConsumedTrackIds: number[]
   volume: number                  // 音量 (0-1)
   playMode: PlayMode              // 播放模式
   fadeEnabled: boolean            // 淡入淡出开关
@@ -34,6 +37,10 @@ interface PlayerState {
   setCurrentTrack: (t: Track | null) => void
   playTrack: (track: Track) => void
   setPlaylist: (list: Track[]) => void
+  addToPriorityQueue: (track: Track) => void
+  removeFromPriorityQueue: (trackId: number) => void
+  clearPriorityQueue: () => void
+  clearUpcoming: () => void
   setVolume: (v: number) => void
   setPlayMode: (m: PlayMode) => void
   setFadeEnabled: (v: boolean) => void
@@ -62,11 +69,33 @@ function resetTrackProgress(): void {
 // Store 创建
 // ---------------------------------------------------------------------------
 
-export const usePlayerStore = create<PlayerState>((set, get) => ({
+export const usePlayerStore = create<PlayerState>((set, get) => {
+  const commitTrack = (track: Track, extraState: Partial<PlayerState> = {}): void => {
+    const flags = useUIStore.getState().featureFlags
+    if (!flags.playback) return
+
+    resetTrackProgress()
+    set({
+      ...extraState,
+      currentTrack: track,
+      duration: getTrackDuration(track),
+      isPlaying: true,
+    })
+
+    if (flags.recent) {
+      void window.electronAPI.invoke('songs:recordPlay', { songId: track.id })
+    }
+    void window.electronAPI.invoke('songs:updatePlayCount', { songId: track.id })
+  }
+
+  return {
   // 初始状态
   isPlaying: false,
   currentTrack: null,
   playlist: [],
+  priorityQueue: [],
+  priorityResumeTrackId: null,
+  priorityConsumedTrackIds: [],
   volume: 0.8,                    // 默认音量 80%
   playMode: 'sequential',         // 默认顺序播放
   fadeEnabled: true,              // 默认开启淡入淡出
@@ -83,25 +112,42 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     set({ currentTrack: t, duration: getTrackDuration(t) })
   },
 
-  // 用户主动播放歌曲的统一入口：原子更新状态并完成一次播放记账。
+  // 用户主动播放代表新意图，必须取消尚未消费的插队状态。
   playTrack: (track) => {
-    const flags = useUIStore.getState().featureFlags
-    if (!flags.playback) return
-
-    resetTrackProgress()
-    set({
-      currentTrack: track,
-      duration: getTrackDuration(track),
-      isPlaying: true,
+    commitTrack(track, {
+      priorityQueue: [],
+      priorityResumeTrackId: null,
+      priorityConsumedTrackIds: [],
     })
-
-    if (flags.recent) {
-      void window.electronAPI.invoke('songs:recordPlay', { songId: track.id })
-    }
-    void window.electronAPI.invoke('songs:updatePlayCount', { songId: track.id })
   },
 
-  setPlaylist: (list) => set({ playlist: list }),
+  setPlaylist: (list) => set({
+    playlist: list,
+    priorityQueue: [],
+    priorityResumeTrackId: null,
+    priorityConsumedTrackIds: [],
+  }),
+
+  addToPriorityQueue: (track) => {
+    const { currentTrack, priorityQueue } = get()
+    if (currentTrack?.id === track.id || priorityQueue.some((item) => item.id === track.id)) return
+    set({ priorityQueue: [...priorityQueue, track] })
+  },
+
+  removeFromPriorityQueue: (trackId) => {
+    set((state) => ({ priorityQueue: state.priorityQueue.filter((track) => track.id !== trackId) }))
+  },
+
+  clearPriorityQueue: () => set({ priorityQueue: [] }),
+
+  clearUpcoming: () => {
+    const { playlist, currentTrack } = get()
+    const currentIndex = currentTrack ? playlist.findIndex((track) => track.id === currentTrack.id) : -1
+    set({
+      playlist: currentIndex >= 0 ? playlist.slice(0, currentIndex + 1) : playlist,
+      priorityQueue: [],
+    })
+  },
 
   setVolume: (v) => {
     const volume = Math.max(0, Math.min(1, v))
@@ -124,10 +170,52 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const flags = useUIStore.getState().featureFlags
     if (!flags.playback) return
 
-    const { playlist, currentTrack, playMode } = get()
-    if (playlist.length === 0 || !currentTrack) return
+    const state = get()
+    const { playlist, currentTrack, playMode, priorityQueue, priorityResumeTrackId, priorityConsumedTrackIds } = state
 
-    const currentIndex = playlist.findIndex((t) => t.id === currentTrack.id)
+    if (priorityQueue.length > 0) {
+      const [nextPriorityTrack, ...remainingPriorityQueue] = priorityQueue
+      commitTrack(nextPriorityTrack, {
+        priorityQueue: remainingPriorityQueue,
+        priorityResumeTrackId: priorityResumeTrackId ?? currentTrack?.id ?? null,
+        priorityConsumedTrackIds: [...priorityConsumedTrackIds, nextPriorityTrack.id],
+      })
+      return
+    }
+
+    if (priorityResumeTrackId !== null) {
+      const resumeIndex = playlist.findIndex((track) => track.id === priorityResumeTrackId)
+      if (resumeIndex >= 0) {
+        let restoredTrack: Track | undefined
+        if (playMode === 'loop') {
+          restoredTrack = playlist[resumeIndex]
+        } else if (playMode === 'shuffle') {
+          const candidates = playlist.filter((track) => track.id !== priorityResumeTrackId && !priorityConsumedTrackIds.includes(track.id))
+          restoredTrack = candidates.length > 0
+            ? candidates[Math.floor(Math.random() * candidates.length)]
+            : playlist.find((track) => track.id !== priorityResumeTrackId)
+        } else {
+          for (let offset = 1; offset <= playlist.length; offset++) {
+            const candidate = playlist[(resumeIndex + offset) % playlist.length]
+            if (!priorityConsumedTrackIds.includes(candidate.id)) {
+              restoredTrack = candidate
+              break
+            }
+          }
+        }
+        commitTrack(restoredTrack ?? playlist[resumeIndex], {
+          priorityResumeTrackId: null,
+          priorityConsumedTrackIds: [],
+        })
+        return
+      }
+
+      set({ priorityResumeTrackId: null, priorityConsumedTrackIds: [] })
+    }
+
+    if (playlist.length === 0 || !currentTrack) return
+    const currentIndex = playlist.findIndex((track) => track.id === currentTrack.id)
+    if (currentIndex < 0) return
 
     if (playMode === 'shuffle') {
       if (playlist.length === 1) return
@@ -135,13 +223,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       do {
         randomIndex = Math.floor(Math.random() * playlist.length)
       } while (randomIndex === currentIndex)
-      const nextTrack = playlist[randomIndex]
-      get().playTrack(nextTrack)
+      commitTrack(playlist[randomIndex])
     } else {
       // 顺序/单曲循环：取下一首索引，到末尾则回到第一首
       const nextIndex = (currentIndex + 1) % playlist.length
-      const nextTrack = playlist[nextIndex]
-      get().playTrack(nextTrack)
+      commitTrack(playlist[nextIndex])
     }
   },
 
@@ -149,10 +235,17 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const flags = useUIStore.getState().featureFlags
     if (!flags.playback) return
 
-    const { playlist, currentTrack, playMode } = get()
+    const { playlist, currentTrack, playMode, priorityResumeTrackId } = get()
+    if (priorityResumeTrackId !== null) {
+      const resumeTrack = playlist.find((track) => track.id === priorityResumeTrackId)
+      set({ priorityResumeTrackId: null, priorityConsumedTrackIds: [] })
+      if (resumeTrack) commitTrack(resumeTrack)
+      return
+    }
     if (playlist.length === 0 || !currentTrack) return
 
     const currentIndex = playlist.findIndex((t) => t.id === currentTrack.id)
+    if (currentIndex < 0) return
 
     if (playMode === 'shuffle') {
       if (playlist.length === 1) return
@@ -160,16 +253,15 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       do {
         randomIndex = Math.floor(Math.random() * playlist.length)
       } while (randomIndex === currentIndex)
-      const prevTrack = playlist[randomIndex]
-      get().playTrack(prevTrack)
+      commitTrack(playlist[randomIndex])
     } else {
       // 顺序/单曲循环：取上一首索引，到开头则回到最后一首
       const prevIndex = (currentIndex - 1 + playlist.length) % playlist.length
-      const prevTrack = playlist[prevIndex]
-      get().playTrack(prevTrack)
+      commitTrack(playlist[prevIndex])
     }
   },
-}))
+  }
+})
 
 // ---------------------------------------------------------------------------
 // 辅助函数：切换播放模式

@@ -92,8 +92,11 @@ export function useAudioSync() {
       if (liveFlags.profile) void listeningTracker.flush()
       listeningTracker.resetSample()
 
-      const mode = usePlayerStore.getState().playMode
-      if (mode === 'loop') {
+      const livePlayer = usePlayerStore.getState()
+      if (livePlayer.priorityQueue.length > 0 || livePlayer.priorityResumeTrackId !== null) {
+        setIsPlaying(false)
+        nextTrack()
+      } else if (livePlayer.playMode === 'loop') {
         engine.currentTime = 0
         engine.play().catch(() => {})
       } else {

@@ -7,9 +7,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { usePlayerStore } from '../stores/playerStore'
 import { formatTime } from '../utils/formatTime'
-import { IconMusic } from './Icons'
+import { IconClose, IconMusic } from './Icons'
 import type { Track } from '../types'
 import { useExitTransition } from '../hooks/useExitTransition'
+import { useTrackContextMenu } from '../hooks/useTrackContextMenu'
+import ContextMenu from './ContextMenu'
+import SongInfoDialog from './SongInfoDialog'
+import { useUIStore } from '../stores/uiStore'
 
 interface PlaylistPanelProps {
   onClose: () => void
@@ -17,9 +21,13 @@ interface PlaylistPanelProps {
 
 function PlaylistPanel({ onClose }: PlaylistPanelProps) {
   const playlist = usePlayerStore((s) => s.playlist)
+  const priorityQueue = usePlayerStore((s) => s.priorityQueue)
   const currentTrack = usePlayerStore((s) => s.currentTrack)
-  const setPlaylist = usePlayerStore((s) => s.setPlaylist)
+  const clearUpcoming = usePlayerStore((s) => s.clearUpcoming)
+  const removeFromPriorityQueue = usePlayerStore((s) => s.removeFromPriorityQueue)
   const playTrack = usePlayerStore((s) => s.playTrack)
+  const addToPriorityQueue = usePlayerStore((s) => s.addToPriorityQueue)
+  const featureFlags = useUIStore((s) => s.featureFlags)
   const itemRefs = useRef<Map<number, HTMLButtonElement>>(new Map())
   const [brokenCoverIds, setBrokenCoverIds] = useState<Set<number>>(new Set())
   const { isExiting, requestExit, handleAnimationEnd } = useExitTransition(onClose, 300)
@@ -38,19 +46,12 @@ function PlaylistPanel({ onClose }: PlaylistPanelProps) {
       block: 'nearest',
       behavior: 'smooth'
     })
-  }, [currentTrack, playlist])
+  }, [currentTrack, playlist, priorityQueue])
 
   const handleClearQueue = useCallback(() => {
     if (isExiting) return
-    if (!currentTrack) {
-      setPlaylist([])
-      return
-    }
-
-    const currentIndex = playlist.findIndex((track) => track.id === currentTrack.id)
-    // ★ 清空队列只删除当前歌曲之后的条目，保留已听过的队列上下文。
-    setPlaylist(currentIndex === -1 ? [] : playlist.slice(0, currentIndex + 1))
-  }, [currentTrack, isExiting, playlist, setPlaylist])
+    clearUpcoming()
+  }, [clearUpcoming, isExiting])
 
   const handleCoverError = useCallback((trackId: number) => {
     setBrokenCoverIds((prev) => {
@@ -64,6 +65,14 @@ function PlaylistPanel({ onClose }: PlaylistPanelProps) {
     if (isExiting) return
     playTrack(track)
   }, [isExiting, playTrack])
+  const trackMenu = useTrackContextMenu({
+    onPlay: handlePlayTrack,
+    onAddToPriorityQueue: addToPriorityQueue,
+    onRemoveFromPriorityQueue: removeFromPriorityQueue,
+    canAddToPriorityQueue: (track) => currentTrack?.id !== track.id && !priorityQueue.some((item) => item.id === track.id),
+    playbackEnabled: !isExiting,
+    playlistsEnabled: featureFlags.playlists,
+  })
 
   const setItemRef = useCallback((trackId: number, element: HTMLButtonElement | null) => {
     if (element) {
@@ -91,8 +100,16 @@ function PlaylistPanel({ onClose }: PlaylistPanelProps) {
       </header>
 
       <div className="queue-panel__content">
-        {playlist.length > 0 ? (
+        {playlist.length + priorityQueue.length > 0 ? (
           <div className="queue-panel__list">
+            {priorityQueue.length > 0 && <div className="queue-panel__section">接下来 {priorityQueue.length} 首</div>}
+            {priorityQueue.map((track) => (
+              <div key={`priority:${track.id}`} className="queue-panel__item" onContextMenu={(event) => !isExiting && trackMenu.open(event, track, 'priority')}>
+                <button type="button" className="queue-panel__item-main" onClick={() => handlePlayTrack(track)} disabled={isExiting}>{track.title} - {track.artist}</button>
+                <button type="button" className="queue-panel__remove" title="从接下来移除" disabled={isExiting} onClick={() => removeFromPriorityQueue(track.id)}><IconClose width={14} height={14} /></button>
+              </div>
+            ))}
+            {playlist.length > 0 && <div className="queue-panel__section">播放列表 {playlist.length} 首</div>}
             {playlist.map((track) => {
               const hasCover = track.coverPath && !brokenCoverIds.has(track.id)
 
@@ -102,6 +119,7 @@ function PlaylistPanel({ onClose }: PlaylistPanelProps) {
                   ref={(element) => setItemRef(track.id, element)}
                   className={`queue-panel__item ${currentTrack?.id === track.id ? 'queue-panel__item--active' : ''}`}
                   onClick={() => handlePlayTrack(track)}
+                  onContextMenu={(event) => !isExiting && trackMenu.open(event, track, 'source')}
                   disabled={isExiting}
                   title={`${track.title} - ${track.artist}`}
                 >
@@ -131,7 +149,7 @@ function PlaylistPanel({ onClose }: PlaylistPanelProps) {
         )}
       </div>
 
-      {playlist.length > 0 && (
+      {playlist.length + priorityQueue.length > 0 && (
         <footer className="queue-panel__footer">
           <button className="queue-panel__clear" onClick={handleClearQueue} disabled={isExiting}>
             清空后续队列
@@ -141,6 +159,8 @@ function PlaylistPanel({ onClose }: PlaylistPanelProps) {
           </button>
         </footer>
       )}
+      {trackMenu.target && <ContextMenu items={trackMenu.getItems(trackMenu.target.track, trackMenu.target.kind)} x={trackMenu.target.x} y={trackMenu.target.y} onClose={trackMenu.close} />}
+      {trackMenu.songInfoTrack && <SongInfoDialog track={trackMenu.songInfoTrack} onClose={trackMenu.closeSongInfo} />}
     </aside>
   )
 }

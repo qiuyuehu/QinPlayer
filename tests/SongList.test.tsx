@@ -237,11 +237,11 @@ describe('SongList', () => {
 
     fireEvent.contextMenu(screen.getByText('七里香'))
     await waitFor(() => {
-      expect(screen.getByText('添加到播放队列')).toBeInTheDocument()
+      expect(screen.getByText('添加到接下来播放')).toBeInTheDocument()
     })
-    fireEvent.click(screen.getByText('添加到播放队列'))
+    fireEvent.click(screen.getByText('添加到接下来播放'))
 
-    expect(usePlayerStore.getState().playlist.map((track) => track.id)).toEqual([1, 2, 3])
+    expect(usePlayerStore.getState().priorityQueue.map((track) => track.id)).toEqual([2])
   })
 
   it('右键添加到播放队列遇到重复歌曲应跳过', async () => {
@@ -253,10 +253,10 @@ describe('SongList', () => {
 
     fireEvent.contextMenu(screen.getByText('七里香'))
     await waitFor(() => {
-      expect(screen.getByText('添加到播放队列')).toBeInTheDocument()
+      expect(screen.getByText('添加到接下来播放')).toBeInTheDocument()
     })
-    fireEvent.click(screen.getByText('添加到播放队列'))
+    fireEvent.click(screen.getByText('添加到接下来播放'))
 
-    expect(usePlayerStore.getState().playlist.map((track) => track.id)).toEqual([1, 2])
+    expect(usePlayerStore.getState().priorityQueue.map((track) => track.id)).toEqual([2])
   })
 })

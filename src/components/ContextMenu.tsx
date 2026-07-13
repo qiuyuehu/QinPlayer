@@ -73,6 +73,9 @@ function ContextMenu({ items, x, y, onClose }: ContextMenuProps) {
   // 监听全局 click 和 contextmenu 事件，点击菜单外任意位置关闭
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
+      // 打开菜单的触发源已消费右键事件；迷你窗口可能延后把该事件送到 document。
+      if (e.type === 'contextmenu' && e.defaultPrevented) return
+
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         // contains 判断点击目标是否在菜单内部，不在则关闭
         onClose()

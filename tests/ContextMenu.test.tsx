@@ -3,6 +3,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import ContextMenu from '../src/components/ContextMenu'
 
+function renderMenu(onClose = vi.fn()) {
+  render(<ContextMenu items={[{ label: '播放' }]} x={24} y={24} onClose={onClose} />)
+  return onClose
+}
+
+function dispatchContextMenu({ prevented }: { prevented: boolean }) {
+  const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+  if (prevented) event.preventDefault()
+  document.body.dispatchEvent(event)
+}
+
 describe('ContextMenu listener lifecycle', () => {
   const addSpy = vi.spyOn(document, 'addEventListener')
   const removeSpy = vi.spyOn(document, 'removeEventListener')
@@ -54,5 +65,34 @@ describe('ContextMenu listener lifecycle', () => {
     expect(removeSpy.mock.calls.filter(([type]) => type === 'click')).toHaveLength(50)
     expect(removeSpy.mock.calls.filter(([type]) => type === 'contextmenu')).toHaveLength(50)
     expect(vi.getTimerCount()).toBe(0)
+  })
+})
+
+describe('ContextMenu outside contextmenu handling', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.runOnlyPendingTimers()
+    vi.useRealTimers()
+  })
+
+  it('不会被已经由触发源消费的右键事件立即关闭', () => {
+    const onClose = renderMenu()
+
+    act(() => vi.runAllTimers())
+    dispatchContextMenu({ prevented: true })
+
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('会由菜单外新的未消费右键事件关闭', () => {
+    const onClose = renderMenu()
+
+    act(() => vi.runAllTimers())
+    dispatchContextMenu({ prevented: false })
+
+    expect(onClose).toHaveBeenCalledTimes(1)
   })
 })

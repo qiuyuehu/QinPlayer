@@ -13,9 +13,9 @@ import { usePlayerStore } from '../stores/playerStore'        // 全局播放状
 import { useUIStore } from '../stores/uiStore'
 import ContextMenu from './ContextMenu'                       // 通用右键菜单组件
 import SongInfoDialog from './SongInfoDialog'                 // 歌曲详情弹窗
-import { IconPlay, IconList, IconClose, IconFolder, IconInfo, IconStar } from './Icons'
-import type { MenuItem } from './ContextMenu'
-import type { Track, Playlist } from '../types'
+import { useTrackContextMenu } from '../hooks/useTrackContextMenu'
+import { IconClose, IconStar } from './Icons'
+import type { Track } from '../types'
 
 // 组件 Props
 export interface SongListHandle {
@@ -44,6 +44,8 @@ const SongList = forwardRef<SongListHandle, SongListProps>(function SongList(
   const currentTrack = usePlayerStore((s) => s.currentTrack)
   const playTrack = usePlayerStore((s) => s.playTrack)
   const setPlaylist = usePlayerStore((s) => s.setPlaylist)
+  const addToPriorityQueue = usePlayerStore((s) => s.addToPriorityQueue)
+  const priorityQueue = usePlayerStore((s) => s.priorityQueue)
   const featureFlags = useUIStore((s) => s.featureFlags)
 
   // --- 虚拟列表滚动容器 ref ---
@@ -52,20 +54,6 @@ const SongList = forwardRef<SongListHandle, SongListProps>(function SongList(
 
   // --- 右键菜单状态 ---
   // 记录右键点击位置和目标歌曲，非 null 时渲染 ContextMenu
-  const [contextMenu, setContextMenu] = useState<{
-    x: number
-    y: number
-    track: Track
-  } | null>(null)
-
-  // --- 歌曲信息弹窗 ---
-  // 非 null 时显示歌曲详情弹窗，传递当前右键点击的歌曲
-  const [songInfoTrack, setSongInfoTrack] = useState<Track | null>(null)
-
-  // --- 歌单列表（用于"添加到歌单"子菜单）---
-  // 从数据库加载所有歌单，构建右键菜单的"添加到歌单"子菜单
-  const [playlists, setPlaylists] = useState<Playlist[]>([])
-
   // --- 收藏歌曲 ID 集合（快速查找）---
   // 用 Set 存储，O(1) 判断某首歌是否已收藏，避免每次遍历数组
   const [likedIds, setLikedIds] = useState<Set<number>>(new Set())
@@ -77,10 +65,6 @@ const SongList = forwardRef<SongListHandle, SongListProps>(function SongList(
   useEffect(() => {
     async function loadData() {
       try {
-        if (featureFlags.playlists) {
-          const list = await window.electronAPI.invoke('playlists:getAll') as Playlist[]
-          setPlaylists(list)
-        }
         if (featureFlags.liked) {
           const likedSongs = await window.electronAPI.invoke('songs:getLiked') as Track[]
           setLikedIds(new Set(likedSongs.map(s => s.id)))
@@ -90,7 +74,7 @@ const SongList = forwardRef<SongListHandle, SongListProps>(function SongList(
       }
     }
     loadData()
-  }, [featureFlags.playlists, featureFlags.liked])
+  }, [featureFlags.liked])
 
   // ★ 只让当前列表首次可见批次做淡入；滚动产生的新虚拟行不重新动画。
   useEffect(() => {
@@ -128,23 +112,19 @@ const SongList = forwardRef<SongListHandle, SongListProps>(function SongList(
   }, [tracks, featureFlags.playback, playTrack, setPlaylist])
 
   const handleAddToQueue = useCallback((track: Track) => {
-    const { playlist, currentTrack, setPlaylist: updatePlaylist } = usePlayerStore.getState()
-    if (playlist.some((item) => item.id === track.id)) return
+    addToPriorityQueue(track)
+  }, [addToPriorityQueue])
 
-    const nextPlaylist = [...playlist]
-    if (!currentTrack) {
-      nextPlaylist.push(track)
-    } else {
-      const currentIndex = nextPlaylist.findIndex((item) => item.id === currentTrack.id)
-      if (currentIndex === -1) {
-        nextPlaylist.push(track)
-      } else {
-        nextPlaylist.splice(currentIndex + 1, 0, track)
-      }
-    }
-
-    updatePlaylist(nextPlaylist)
-  }, [])
+  const trackMenu = useTrackContextMenu({
+    onPlay: handlePlay,
+    onAddToPriorityQueue: handleAddToQueue,
+    canAddToPriorityQueue: (track) => currentTrack?.id !== track.id && !priorityQueue.some((item) => item.id === track.id),
+    getExtraItems: (track) => featureFlags.playlists && playlistId && onRemoveFromPlaylist
+      ? [{ label: '从歌单移除', icon: <IconClose width={14} height={14} />, action: () => onRemoveFromPlaylist(track.id) }]
+      : [],
+    playbackEnabled: featureFlags.playback,
+    playlistsEnabled: featureFlags.playlists,
+  })
 
   // --- 切换收藏状态 ---
   // 点击爱心按钮时切换收藏，需要阻止事件冒泡避免触发整行播放
@@ -170,73 +150,8 @@ const SongList = forwardRef<SongListHandle, SongListProps>(function SongList(
   // 记录鼠标坐标和目标歌曲，传给 ContextMenu 组件定位菜单
   const handleContextMenu = useCallback((e: React.MouseEvent, track: Track) => {
     e.preventDefault()   // 阻止浏览器默认右键菜单
-    setContextMenu({ x: e.clientX, y: e.clientY, track })
-  }, [])
-
-  // --- 构建菜单项 ---
-  // 动态构建菜单：根据是否有歌单决定显示哪些选项
-  const getMenuItems = useCallback((track: Track): MenuItem[] => {
-    const items: MenuItem[] = []
-
-    if (featureFlags.playback) {
-      items.push({
-        label: '播放',
-        icon: <IconPlay width={14} height={14} />,
-        action: () => handlePlay(track)
-      }, {
-        label: '添加到播放队列',
-        icon: <IconList width={14} height={14} />,
-        action: () => handleAddToQueue(track)
-      })
-    }
-
-    if (featureFlags.playlists) {
-      items.push({
-        label: '添加到歌单',               // 有子菜单的项，hover 时展开歌单列表
-        icon: <IconList width={14} height={14} />,
-        children: playlists.length > 0     // 空歌单时显示"暂无歌单"占位
-          ? playlists.map(pl => ({
-              label: pl.name,
-              action: async () => {
-                await window.electronAPI.invoke('playlists:addSong', {
-                  playlistId: pl.id,
-                  songId: track.id
-                })
-              }
-            }))
-          : [{ label: '暂无歌单', disabled: true }]
-      })
-    }
-
-    // 从歌单移除（仅在歌单详情页显示）
-    // 只有从歌单详情页进入时才传入 playlistId，其他页面不显示此选项
-    if (featureFlags.playlists && playlistId && onRemoveFromPlaylist) {
-      items.push({
-        label: '从歌单移除',
-        icon: <IconClose width={14} height={14} />,
-        action: () => onRemoveFromPlaylist(track.id)
-      })
-    }
-
-    items.push(
-      {
-        label: '打开文件所在目录',
-        icon: <IconFolder width={14} height={14} />,
-        action: () => {
-          // 通过最后一个反斜杠截取目录路径（Windows 路径格式）
-          const dir = track.filePath.substring(0, track.filePath.lastIndexOf('\\'))
-          window.electronAPI.invoke('open-folder', dir)
-        }
-      },
-      {
-        label: '歌曲信息',
-        icon: <IconInfo width={14} height={14} />,
-        action: () => setSongInfoTrack(track)
-      }
-    )
-
-    return items
-  }, [featureFlags.playback, featureFlags.playlists, playlists, playlistId, onRemoveFromPlaylist, handlePlay, handleAddToQueue])
+    trackMenu.open(e, track)
+  }, [trackMenu])
 
   // --- 格式化时长 ---
   // 将秒数转为 "m:ss" 格式，无效值显示 "--:--" 占位
@@ -342,20 +257,20 @@ const SongList = forwardRef<SongListHandle, SongListProps>(function SongList(
       </div>
 
       {/* 右键菜单 —— 仅在 contextMenu 非 null 时渲染，关闭时置 null */}
-      {contextMenu && (
+      {trackMenu.target && (
         <ContextMenu
-          items={getMenuItems(contextMenu.track)}
-          x={contextMenu.x}
-          y={contextMenu.y}
-          onClose={() => setContextMenu(null)}
+          items={trackMenu.getItems(trackMenu.target.track, trackMenu.target.kind)}
+          x={trackMenu.target.x}
+          y={trackMenu.target.y}
+          onClose={trackMenu.close}
         />
       )}
 
       {/* 歌曲信息弹窗 —— 由菜单"歌曲信息"项触发，关闭时置 null */}
-      {songInfoTrack && (
+      {trackMenu.songInfoTrack && (
         <SongInfoDialog
-          track={songInfoTrack}
-          onClose={() => setSongInfoTrack(null)}
+          track={trackMenu.songInfoTrack}
+          onClose={trackMenu.closeSongInfo}
         />
       )}
     </div>

@@ -109,6 +109,9 @@ describe('useAudioSync', () => {
         isPlaying: true,
         currentTrack: track,
         playlist: [track],
+        priorityQueue: [],
+        priorityResumeTrackId: null,
+        priorityConsumedTrackIds: [],
         volume: 0.8,
         playMode: 'sequential',
         fadeEnabled: true,
@@ -199,6 +202,73 @@ describe('useAudioSync', () => {
       expect(usePlayerStore.getState().currentTrack?.id).toBe(secondTrack.id)
     })
     expect(usePlayerStore.getState().isPlaying).toBe(true)
+  })
+
+  it('loop 且没有插队时应该重播当前歌曲', async () => {
+    act(() => usePlayerStore.setState({ playMode: 'loop' }))
+    render(<HookHost />)
+    await waitFor(() => expect(loadedMetadataHandler).toBeDefined())
+    act(() => loadedMetadataHandler!(track.duration))
+
+    act(() => endedHandler!())
+
+    expect(usePlayerStore.getState().currentTrack).toEqual(track)
+    expect(playMock).toHaveBeenCalled()
+  })
+
+  it('loop 有待播歌曲时 ended 应该优先进入待播', async () => {
+    act(() => usePlayerStore.setState({ playlist: [track, secondTrack], playMode: 'loop', priorityQueue: [secondTrack] }))
+    render(<HookHost />)
+    await waitFor(() => expect(loadedMetadataHandler).toBeDefined())
+    act(() => loadedMetadataHandler!(secondTrack.duration))
+
+    act(() => endedHandler!())
+
+    expect(usePlayerStore.getState().currentTrack).toEqual(secondTrack)
+    expect(usePlayerStore.getState().priorityResumeTrackId).toBe(track.id)
+  })
+
+  it('loop 在待播已空但存在恢复锚点时应该恢复锚点', async () => {
+    act(() => usePlayerStore.setState({
+      playlist: [track, secondTrack],
+      currentTrack: secondTrack,
+      playMode: 'loop',
+      priorityResumeTrackId: track.id,
+      priorityConsumedTrackIds: [secondTrack.id],
+    }))
+    render(<HookHost />)
+    await waitFor(() => expect(loadedMetadataHandler).toBeDefined())
+    act(() => loadedMetadataHandler!(track.duration))
+
+    act(() => endedHandler!())
+
+    expect(usePlayerStore.getState().currentTrack).toEqual(track)
+    expect(usePlayerStore.getState().priorityResumeTrackId).toBeNull()
+  })
+
+  it('顺序模式有待播歌曲时 ended 只前进一次', async () => {
+    act(() => usePlayerStore.setState({ playlist: [track, secondTrack, thirdTrack], priorityQueue: [thirdTrack] }))
+    render(<HookHost />)
+    await waitFor(() => expect(loadedMetadataHandler).toBeDefined())
+    act(() => loadedMetadataHandler!(track.duration))
+
+    act(() => endedHandler!())
+
+    expect(usePlayerStore.getState().currentTrack).toEqual(thirdTrack)
+    expect(usePlayerStore.getState().priorityQueue).toEqual([])
+  })
+
+  it('playback 关闭或旧 ended 时不应该推进优先队列', async () => {
+    act(() => usePlayerStore.setState({ priorityQueue: [secondTrack] }))
+    render(<HookHost />)
+    await waitFor(() => expect(loadedMetadataHandler).toBeDefined())
+    act(() => loadedMetadataHandler!(track.duration))
+    act(() => useUIStore.setState({ featureFlags: { ...DEFAULT_FEATURE_FLAGS, playback: false } }))
+
+    act(() => endedHandler!())
+
+    expect(usePlayerStore.getState().currentTrack).toEqual(track)
+    expect(usePlayerStore.getState().priorityQueue).toEqual([secondTrack])
   })
 
   it('快速 A→B→C 时应该持续忽略旧 timeupdate', async () => {
