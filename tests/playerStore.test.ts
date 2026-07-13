@@ -756,5 +756,44 @@ describe('playerStore', () => {
       expect(usePlayerStore.getState()).toMatchObject({ currentTrack: songs[1], detachedPlaylistIndex: 1 })
       expect(invokeMock).not.toHaveBeenCalled()
     })
+
+    it('移除当前歌曲后 nextTrack 从 detachedPlaylistIndex 恢复', () => {
+      // 设置场景：播放歌曲B，歌曲B被移出playlist，detachedPlaylistIndex指向successor
+      usePlayerStore.setState({
+        playlist: [songs[0], songs[2]],
+        currentTrack: songs[1],
+        detachedPlaylistIndex: 1,
+      })
+
+      usePlayerStore.getState().nextTrack()
+
+      // 应该从detachedPlaylistIndex=1恢复，即songs[2]
+      expect(usePlayerStore.getState().currentTrack).toEqual(songs[2])
+      expect(usePlayerStore.getState().detachedPlaylistIndex).toBeNull()
+    })
+
+    it('移除当前歌曲且 playlist 为空时 nextTrack 不执行', () => {
+      usePlayerStore.setState({
+        playlist: [],
+        currentTrack: songs[1],
+        detachedPlaylistIndex: null,
+      })
+
+      usePlayerStore.getState().nextTrack()
+
+      expect(usePlayerStore.getState().currentTrack).toEqual(songs[1])
+    })
+
+    it('移除当前歌曲且 detachedPlaylistIndex 为 null 时 nextTrack 不执行', () => {
+      usePlayerStore.setState({
+        playlist: [songs[0], songs[2]],
+        currentTrack: songs[1],
+        detachedPlaylistIndex: null,
+      })
+
+      usePlayerStore.getState().nextTrack()
+
+      expect(usePlayerStore.getState().currentTrack).toEqual(songs[1])
+    })
   })
 })

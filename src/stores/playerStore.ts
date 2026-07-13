@@ -295,7 +295,18 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
     if (playlist.length === 0 || !currentTrack) return
     const currentIndex = playlist.findIndex((track) => track.id === currentTrack.id)
-    if (currentIndex < 0) return
+    if (currentIndex < 0) {
+      // currentTrack 已被移出 playlist，尝试从 detached 恢复
+      if (detachedPlaylistIndex !== null && playlist.length > 0) {
+        const successorIndex = normalizePlaylistIndex(detachedPlaylistIndex, playlist.length)
+        commitTrack(playlist[successorIndex], {
+          priorityResumeTrackId: null,
+          priorityConsumedTrackIds: [],
+          detachedPlaylistIndex: null,
+        })
+      }
+      return
+    }
 
     if (playMode === 'shuffle') {
       if (playlist.length === 1) return
