@@ -20,9 +20,10 @@ interface PlayerState {
   isPlaying: boolean              // 是否正在播放
   currentTrack: Track | null      // 当前播放的歌曲
   playlist: Track[]               // 当前播放列表
-  priorityQueue: Track[]          // 尚未消费的优先待播 FIFO
+  priorityQueue: Track[]          // 尚未消费的优先待播，队首为真正的“下一首”
   priorityResumeTrackId: number | null
   priorityConsumedTrackIds: number[]
+  detachedPlaylistIndex: number | null // 当前曲/恢复锚点移出来源后，下次导航的 successor
   volume: number                  // 音量 (0-1)
   playMode: PlayMode              // 播放模式
   fadeEnabled: boolean            // 淡入淡出开关
@@ -37,7 +38,8 @@ interface PlayerState {
   setCurrentTrack: (t: Track | null) => void
   playTrack: (track: Track) => void
   setPlaylist: (list: Track[]) => void
-  addToPriorityQueue: (track: Track) => void
+  insertNext: (track: Track) => void
+  removeFromPlaylist: (trackId: number) => void
   removeFromPriorityQueue: (trackId: number) => void
   clearPriorityQueue: () => void
   clearUpcoming: () => void
@@ -65,6 +67,10 @@ function resetTrackProgress(): void {
   currentTimeRef.current = 0
 }
 
+function normalizePlaylistIndex(index: number, length: number): number {
+  return ((index % length) + length) % length
+}
+
 // ---------------------------------------------------------------------------
 // Store 创建
 // ---------------------------------------------------------------------------
@@ -88,6 +94,15 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     void window.electronAPI.invoke('songs:updatePlayCount', { songId: track.id })
   }
 
+  const insertNext = (track: Track): void => {
+    const { currentTrack, priorityQueue } = get()
+    if (currentTrack?.id === track.id || priorityQueue[0]?.id === track.id) return
+
+    set({
+      priorityQueue: [track, ...priorityQueue.filter((item) => item.id !== track.id)],
+    })
+  }
+
   return {
   // 初始状态
   isPlaying: false,
@@ -96,6 +111,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   priorityQueue: [],
   priorityResumeTrackId: null,
   priorityConsumedTrackIds: [],
+  detachedPlaylistIndex: null,
   volume: 0.8,                    // 默认音量 80%
   playMode: 'sequential',         // 默认顺序播放
   fadeEnabled: true,              // 默认开启淡入淡出
@@ -109,7 +125,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
   setCurrentTrack: (t) => {
     resetTrackProgress()
-    set({ currentTrack: t, duration: getTrackDuration(t) })
+    set({ currentTrack: t, duration: getTrackDuration(t), detachedPlaylistIndex: null })
   },
 
   // 用户主动播放代表新意图，必须取消尚未消费的插队状态。
@@ -118,6 +134,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       priorityQueue: [],
       priorityResumeTrackId: null,
       priorityConsumedTrackIds: [],
+      detachedPlaylistIndex: null,
     })
   },
 
@@ -126,12 +143,36 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     priorityQueue: [],
     priorityResumeTrackId: null,
     priorityConsumedTrackIds: [],
+    detachedPlaylistIndex: null,
   }),
 
-  addToPriorityQueue: (track) => {
-    const { currentTrack, priorityQueue } = get()
-    if (currentTrack?.id === track.id || priorityQueue.some((item) => item.id === track.id)) return
-    set({ priorityQueue: [...priorityQueue, track] })
+  insertNext,
+
+  removeFromPlaylist: (trackId) => {
+    set((state) => {
+      const removedIndex = state.playlist.findIndex((track) => track.id === trackId)
+      if (removedIndex < 0) return state
+
+      const playlist = state.playlist.filter((track) => track.id !== trackId)
+      if (playlist.length === 0) {
+        return { playlist, detachedPlaylistIndex: null }
+      }
+
+      const removesResumeAnchor = state.priorityResumeTrackId === trackId
+      const removesCurrentSource = state.priorityResumeTrackId === null && state.currentTrack?.id === trackId
+      let detachedPlaylistIndex = state.detachedPlaylistIndex
+
+      if (removesResumeAnchor || removesCurrentSource) {
+        detachedPlaylistIndex = removedIndex % playlist.length
+      } else if (detachedPlaylistIndex !== null) {
+        if (removedIndex < detachedPlaylistIndex) {
+          detachedPlaylistIndex -= 1
+        }
+        detachedPlaylistIndex = normalizePlaylistIndex(detachedPlaylistIndex, playlist.length)
+      }
+
+      return { playlist, detachedPlaylistIndex }
+    })
   },
 
   removeFromPriorityQueue: (trackId) => {
@@ -141,11 +182,25 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   clearPriorityQueue: () => set({ priorityQueue: [] }),
 
   clearUpcoming: () => {
-    const { playlist, currentTrack } = get()
+    const { playlist, currentTrack, detachedPlaylistIndex } = get()
     const currentIndex = currentTrack ? playlist.findIndex((track) => track.id === currentTrack.id) : -1
+    if (currentTrack && (detachedPlaylistIndex !== null || currentIndex < 0)) {
+      set({
+        playlist: [],
+        priorityQueue: [],
+        priorityResumeTrackId: null,
+        priorityConsumedTrackIds: [],
+        detachedPlaylistIndex: null,
+      })
+      return
+    }
+
     set({
       playlist: currentIndex >= 0 ? playlist.slice(0, currentIndex + 1) : playlist,
       priorityQueue: [],
+      priorityResumeTrackId: null,
+      priorityConsumedTrackIds: [],
+      detachedPlaylistIndex: null,
     })
   },
 
@@ -171,7 +226,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     if (!flags.playback) return
 
     const state = get()
-    const { playlist, currentTrack, playMode, priorityQueue, priorityResumeTrackId, priorityConsumedTrackIds } = state
+    const { playlist, currentTrack, playMode, priorityQueue, priorityResumeTrackId, priorityConsumedTrackIds, detachedPlaylistIndex } = state
 
     if (priorityQueue.length > 0) {
       const [nextPriorityTrack, ...remainingPriorityQueue] = priorityQueue
@@ -206,10 +261,35 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         commitTrack(restoredTrack ?? playlist[resumeIndex], {
           priorityResumeTrackId: null,
           priorityConsumedTrackIds: [],
+          detachedPlaylistIndex: null,
         })
         return
       }
+    }
 
+    if (detachedPlaylistIndex !== null) {
+      if (playlist.length === 0) {
+        set({ priorityResumeTrackId: null, priorityConsumedTrackIds: [], detachedPlaylistIndex: null })
+        return
+      }
+
+      let detachedTrack: Track
+      if (playMode === 'shuffle') {
+        const candidates = playlist.filter((track) => !priorityConsumedTrackIds.includes(track.id))
+        const pool = candidates.length > 0 ? candidates : playlist
+        detachedTrack = pool[Math.floor(Math.random() * pool.length)]
+      } else {
+        detachedTrack = playlist[normalizePlaylistIndex(detachedPlaylistIndex, playlist.length)]
+      }
+      commitTrack(detachedTrack, {
+        priorityResumeTrackId: null,
+        priorityConsumedTrackIds: [],
+        detachedPlaylistIndex: null,
+      })
+      return
+    }
+
+    if (priorityResumeTrackId !== null) {
       set({ priorityResumeTrackId: null, priorityConsumedTrackIds: [] })
     }
 
@@ -235,12 +315,36 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     const flags = useUIStore.getState().featureFlags
     if (!flags.playback) return
 
-    const { playlist, currentTrack, playMode, priorityResumeTrackId } = get()
+    const { playlist, currentTrack, playMode, priorityResumeTrackId, detachedPlaylistIndex } = get()
     if (priorityResumeTrackId !== null) {
       const resumeTrack = playlist.find((track) => track.id === priorityResumeTrackId)
-      set({ priorityResumeTrackId: null, priorityConsumedTrackIds: [] })
-      if (resumeTrack) commitTrack(resumeTrack)
+      if (resumeTrack) {
+        commitTrack(resumeTrack, {
+          priorityResumeTrackId: null,
+          priorityConsumedTrackIds: [],
+          detachedPlaylistIndex: null,
+        })
+        return
+      }
+    }
+
+    if (detachedPlaylistIndex !== null) {
+      if (playlist.length === 0) {
+        set({ priorityResumeTrackId: null, priorityConsumedTrackIds: [], detachedPlaylistIndex: null })
+        return
+      }
+      const successorIndex = normalizePlaylistIndex(detachedPlaylistIndex, playlist.length)
+      const previousIndex = (successorIndex - 1 + playlist.length) % playlist.length
+      commitTrack(playlist[previousIndex], {
+        priorityResumeTrackId: null,
+        priorityConsumedTrackIds: [],
+        detachedPlaylistIndex: null,
+      })
       return
+    }
+
+    if (priorityResumeTrackId !== null) {
+      set({ priorityResumeTrackId: null, priorityConsumedTrackIds: [] })
     }
     if (playlist.length === 0 || !currentTrack) return
 

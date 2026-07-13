@@ -59,6 +59,19 @@ export interface CloseResponse {
   remember: boolean
 }
 
+export type NativeTrackMenuAction =
+  | 'play'
+  | 'insert-next'
+  | 'remove-priority'
+  | 'remove-playlist'
+  | 'open-location'
+  | 'show-info'
+
+export interface NativeTrackMenuEntry {
+  action: NativeTrackMenuAction
+  enabled: boolean
+}
+
 export function normalizeCloseBehavior(value: unknown): CloseBehavior {
   return value === 'exit' || value === 'ask' ? value : 'minimize'
 }
@@ -89,6 +102,12 @@ export interface IpcChannels {
   'listening:getRanking': {
     args: { limit: number }
     return: ListeningRankingEntry[]
+  }
+
+  // --- 原生歌曲菜单 ---
+  'context-menu:show-track': {
+    args: { entries: NativeTrackMenuEntry[] }
+    return: NativeTrackMenuAction | null
   }
 
   // --- 文件夹管理 ---

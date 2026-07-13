@@ -2,7 +2,7 @@
  * MiniQueueView 测试
  * 覆盖空队列、行信息、当前项、点击、定位和封面降级
  */
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import MiniQueueView from '../src/components/MiniQueueView'
 import type { Track } from '../src/types'
@@ -54,6 +54,10 @@ afterAll(() => {
 describe('MiniQueueView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    window.electronAPI = {
+      ...window.electronAPI,
+      invoke: vi.fn(async () => null),
+    }
   })
 
   it('空队列时应该显示空状态', () => {
@@ -124,5 +128,46 @@ describe('MiniQueueView', () => {
 
     expect(screen.queryByAltText('歌曲 B 封面')).not.toBeInTheDocument()
     expect(container.querySelector('.mini-queue-view__cover--placeholder')).toBeInTheDocument()
+  })
+
+  it('source 右键应该调用原生菜单且不渲染 HTML ContextMenu', async () => {
+    const { container } = render(
+      <MiniQueueView tracks={[trackA, trackB]} currentTrackId={1} onPlay={vi.fn()} />,
+    )
+
+    fireEvent.contextMenu(screen.getByRole('button', { name: /歌曲 A - 歌手 A/ }))
+
+    await waitFor(() => expect(window.electronAPI.invoke).toHaveBeenCalledWith('context-menu:show-track', {
+      entries: expect.arrayContaining([
+        { action: 'insert-next', enabled: false },
+        { action: 'remove-playlist', enabled: true },
+      ]),
+    }))
+    expect(container.querySelector('.context-menu')).not.toBeInTheDocument()
+  })
+
+  it('priority 右键应该只提供 priority 移除动作', async () => {
+    render(
+      <MiniQueueView tracks={[trackA]} priorityQueue={[trackB]} currentTrackId={1} onPlay={vi.fn()} />,
+    )
+    const priorityRow = screen.getByText('歌曲 B').closest('.mini-queue-view__item')!
+
+    fireEvent.contextMenu(priorityRow)
+
+    await waitFor(() => {
+      const payload = vi.mocked(window.electronAPI.invoke).mock.calls.find(([channel]) => channel === 'context-menu:show-track')?.[1] as { entries: Array<{ action: string }> }
+      expect(payload.entries.map((entry) => entry.action)).toContain('remove-priority')
+      expect(payload.entries.map((entry) => entry.action)).not.toContain('remove-playlist')
+    })
+  })
+
+  it('原生菜单选择歌曲信息后仍应该显示 renderer Dialog', async () => {
+    vi.mocked(window.electronAPI.invoke).mockResolvedValueOnce('show-info')
+    render(<MiniQueueView tracks={[trackA]} currentTrackId={null} onPlay={vi.fn()} />)
+
+    fireEvent.contextMenu(screen.getByRole('button', { name: /歌曲 A - 歌手 A/ }))
+
+    expect(await screen.findByText('歌曲信息')).toBeInTheDocument()
+    expect(screen.getByText('a.mp3')).toBeInTheDocument()
   })
 })

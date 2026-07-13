@@ -83,6 +83,10 @@ describe('MiniPlayer', () => {
         isPlaying: true,
         currentTrack: trackA,
         playlist: [trackA, trackB],
+        priorityQueue: [],
+        priorityResumeTrackId: null,
+        priorityConsumedTrackIds: [],
+        detachedPlaylistIndex: null,
         volume: 0.8,
         playMode: 'sequential',
         fadeEnabled: true,
@@ -231,6 +235,19 @@ describe('MiniPlayer', () => {
     expect(usePlayerStore.getState().currentTrack).toEqual(trackB)
     expect(invokeMock.mock.calls.filter(([channel]) => channel === 'songs:recordPlay')).toHaveLength(1)
     expect(invokeMock.mock.calls.filter(([channel]) => channel === 'songs:updatePlayCount')).toHaveLength(1)
+  })
+
+  it('迷你 source 原生菜单应该能从会话播放列表移除歌曲', async () => {
+    invokeMock.mockImplementation((channel: string) => {
+      if (channel === 'context-menu:show-track') return Promise.resolve('remove-playlist')
+      return Promise.resolve(null)
+    })
+    render(<MiniPlayer />)
+    fireEvent.click(screen.getByRole('button', { name: '队列视图' }))
+
+    fireEvent.contextMenu(screen.getByRole('button', { name: /歌曲 B - 歌手 B/ }))
+
+    await waitFor(() => expect(usePlayerStore.getState().playlist).toEqual([trackA]))
   })
 
   it('只有队列视图应订阅 playlist 变化', async () => {

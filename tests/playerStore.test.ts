@@ -38,6 +38,7 @@ describe('playerStore', () => {
       priorityQueue: [],
       priorityResumeTrackId: null,
       priorityConsumedTrackIds: [],
+      detachedPlaylistIndex: null,
       volume: 0.8,
       playMode: 'sequential',
       fadeEnabled: true,
@@ -399,30 +400,55 @@ describe('playerStore', () => {
   })
 
   describe('优先待播队列', () => {
-    it('应该以 FIFO 追加待播歌曲', () => {
-      usePlayerStore.getState().addToPriorityQueue(songs[1])
-      usePlayerStore.getState().addToPriorityQueue(songs[2])
+    it('应该以 LIFO 语义把最后选择的歌曲提升到队首', () => {
+      usePlayerStore.getState().insertNext(songs[1])
+      usePlayerStore.getState().insertNext(songs[2])
 
-      expect(usePlayerStore.getState().priorityQueue).toEqual([songs[1], songs[2]])
+      expect(usePlayerStore.getState().priorityQueue).toEqual([songs[2], songs[1]])
     })
 
     it('允许把来源播放列表中的非当前歌曲加入待播', () => {
       usePlayerStore.setState({ playlist: songs, currentTrack: songs[0] })
-      usePlayerStore.getState().addToPriorityQueue(songs[1])
+      usePlayerStore.getState().insertNext(songs[1])
 
       expect(usePlayerStore.getState().priorityQueue).toEqual([songs[1]])
     })
 
-    it('不应该重复加入当前歌曲或已有待播歌曲', () => {
+    it('当前歌曲应该保持 no-op', () => {
       usePlayerStore.setState({ currentTrack: songs[0] })
-      usePlayerStore.getState().addToPriorityQueue(songs[0])
-      usePlayerStore.getState().addToPriorityQueue(songs[1])
-      usePlayerStore.getState().addToPriorityQueue(songs[1])
+      const originalQueue = usePlayerStore.getState().priorityQueue
 
-      expect(usePlayerStore.getState().priorityQueue).toEqual([songs[1]])
+      usePlayerStore.getState().insertNext(songs[0])
+
+      expect(usePlayerStore.getState().priorityQueue).toBe(originalQueue)
     })
 
-    it('下一首应该优先消费 FIFO 并记录来源锚点', () => {
+    it('已有待播歌曲应该去重后提升到队首', () => {
+      usePlayerStore.setState({ priorityQueue: [songs[1], songs[2]] })
+
+      usePlayerStore.getState().insertNext(songs[2])
+
+      expect(usePlayerStore.getState().priorityQueue).toEqual([songs[2], songs[1]])
+    })
+
+    it('已在待播队首时应该保持数组引用', () => {
+      const originalQueue = [songs[1], songs[2]]
+      usePlayerStore.setState({ priorityQueue: originalQueue })
+
+      usePlayerStore.getState().insertNext(songs[1])
+
+      expect(usePlayerStore.getState().priorityQueue).toBe(originalQueue)
+    })
+
+    it('没有当前歌曲时只应该入队而不自动播放', () => {
+      usePlayerStore.getState().insertNext(songs[1])
+
+      expect(usePlayerStore.getState().priorityQueue).toEqual([songs[1]])
+      expect(usePlayerStore.getState().currentTrack).toBeNull()
+      expect(usePlayerStore.getState().isPlaying).toBe(false)
+    })
+
+    it('下一首应该优先消费队首并记录来源锚点', () => {
       usePlayerStore.setState({ playlist: songs, currentTrack: songs[0], priorityQueue: [songs[2]] })
 
       usePlayerStore.getState().nextTrack()
@@ -515,12 +541,28 @@ describe('playerStore', () => {
       expect(usePlayerStore.getState()).toMatchObject({ priorityQueue: [], priorityResumeTrackId: songs[0].id })
     })
 
-    it('清空后续应该截断来源列表并清空待播', () => {
-      usePlayerStore.setState({ playlist: songs, currentTrack: songs[1], priorityQueue: [songs[2]] })
+    it('清空后续应该截断来源列表并清除插队恢复状态', () => {
+      usePlayerStore.setState({
+        playlist: songs,
+        currentTrack: songs[1],
+        priorityQueue: [songs[2]],
+        priorityResumeTrackId: songs[0].id,
+        priorityConsumedTrackIds: [songs[1].id],
+      })
 
       usePlayerStore.getState().clearUpcoming()
 
-      expect(usePlayerStore.getState()).toMatchObject({ playlist: [songs[0], songs[1]], priorityQueue: [] })
+      expect(usePlayerStore.getState()).toMatchObject({
+        playlist: [songs[0], songs[1]],
+        priorityQueue: [],
+        priorityResumeTrackId: null,
+        priorityConsumedTrackIds: [],
+        detachedPlaylistIndex: null,
+      })
+
+      usePlayerStore.getState().nextTrack()
+
+      expect(usePlayerStore.getState().currentTrack).toEqual(songs[0])
     })
 
     it('插队期间上一首应该回锚点且保留待播', () => {
@@ -537,6 +579,182 @@ describe('playerStore', () => {
       usePlayerStore.getState().nextTrack()
 
       expect(usePlayerStore.getState()).toMatchObject({ currentTrack: songs[0], priorityResumeTrackId: null, priorityConsumedTrackIds: [] })
+    })
+  })
+
+  describe('从播放列表移除与 detached 导航', () => {
+    it('移除普通歌曲只修改来源列表并保持当前播放', () => {
+      usePlayerStore.setState({ playlist: songs, currentTrack: songs[0], isPlaying: true })
+
+      usePlayerStore.getState().removeFromPlaylist(songs[1].id)
+
+      expect(usePlayerStore.getState()).toMatchObject({
+        playlist: [songs[0], songs[2]],
+        currentTrack: songs[0],
+        isPlaying: true,
+        detachedPlaylistIndex: null,
+      })
+    })
+
+    it('移除不存在歌曲应该保持 playlist 引用', () => {
+      usePlayerStore.setState({ playlist: songs })
+      const originalPlaylist = usePlayerStore.getState().playlist
+
+      usePlayerStore.getState().removeFromPlaylist(999)
+
+      expect(usePlayerStore.getState().playlist).toBe(originalPlaylist)
+    })
+
+    it('移除当前歌曲后继续播放并记录 successor 索引', () => {
+      usePlayerStore.setState({ playlist: songs, currentTrack: songs[1], isPlaying: true, duration: songs[1].duration })
+      currentTimeRef.current = 77
+
+      usePlayerStore.getState().removeFromPlaylist(songs[1].id)
+
+      expect(usePlayerStore.getState()).toMatchObject({
+        playlist: [songs[0], songs[2]],
+        currentTrack: songs[1],
+        isPlaying: true,
+        duration: songs[1].duration,
+        detachedPlaylistIndex: 1,
+      })
+      expect(currentTimeRef.current).toBe(77)
+    })
+
+    it('移除最后一首来源歌曲后 detached 应该清空', () => {
+      usePlayerStore.setState({ playlist: [songs[0]], currentTrack: songs[0], isPlaying: true })
+
+      usePlayerStore.getState().removeFromPlaylist(songs[0].id)
+
+      expect(usePlayerStore.getState()).toMatchObject({ playlist: [], currentTrack: songs[0], isPlaying: true, detachedPlaylistIndex: null })
+    })
+
+    it('detached 前方和当前位置继续删除时应该保持指向同一 successor', () => {
+      usePlayerStore.setState({ playlist: [songs[0], songs[2]], currentTrack: songs[1], detachedPlaylistIndex: 1 })
+
+      usePlayerStore.getState().removeFromPlaylist(songs[0].id)
+      expect(usePlayerStore.getState()).toMatchObject({ playlist: [songs[2]], detachedPlaylistIndex: 0 })
+
+      usePlayerStore.setState({ playlist: [songs[0], songs[2]], detachedPlaylistIndex: 1 })
+      usePlayerStore.getState().removeFromPlaylist(songs[2].id)
+      expect(usePlayerStore.getState()).toMatchObject({ playlist: [songs[0]], detachedPlaylistIndex: 0 })
+    })
+
+    it('priority 播放时移除 resume 锚点应该从 detached successor 恢复', () => {
+      usePlayerStore.setState({
+        playlist: songs,
+        currentTrack: songs[2],
+        priorityResumeTrackId: songs[0].id,
+        priorityConsumedTrackIds: [songs[2].id],
+      })
+
+      usePlayerStore.getState().removeFromPlaylist(songs[0].id)
+      usePlayerStore.getState().nextTrack()
+
+      expect(usePlayerStore.getState()).toMatchObject({
+        playlist: [songs[1], songs[2]],
+        currentTrack: songs[1],
+        priorityResumeTrackId: null,
+        priorityConsumedTrackIds: [],
+        detachedPlaylistIndex: null,
+      })
+    })
+
+    it('priority 当前歌曲的同 ID source 副本移除不应该覆盖 resume', () => {
+      usePlayerStore.setState({
+        playlist: songs,
+        currentTrack: songs[2],
+        priorityResumeTrackId: songs[0].id,
+      })
+
+      usePlayerStore.getState().removeFromPlaylist(songs[2].id)
+
+      expect(usePlayerStore.getState()).toMatchObject({
+        playlist: [songs[0], songs[1]],
+        priorityResumeTrackId: songs[0].id,
+        detachedPlaylistIndex: null,
+      })
+    })
+
+    it.each(['sequential', 'loop'] as const)('%s 模式应该从 detached successor 继续', (playMode) => {
+      usePlayerStore.setState({ playlist: [songs[0], songs[2]], currentTrack: songs[1], detachedPlaylistIndex: 1, playMode })
+
+      usePlayerStore.getState().nextTrack()
+
+      expect(usePlayerStore.getState()).toMatchObject({ currentTrack: songs[2], detachedPlaylistIndex: null })
+    })
+
+    it('shuffle 模式应该从 detached 来源列表随机继续', () => {
+      const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0)
+      usePlayerStore.setState({ playlist: [songs[0], songs[2]], currentTrack: songs[1], detachedPlaylistIndex: 1, playMode: 'shuffle' })
+
+      usePlayerStore.getState().nextTrack()
+
+      expect(usePlayerStore.getState()).toMatchObject({ currentTrack: songs[0], detachedPlaylistIndex: null })
+      randomSpy.mockRestore()
+    })
+
+    it('上一首应该从 detached successor 的前一项继续', () => {
+      usePlayerStore.setState({ playlist: [songs[0], songs[2]], currentTrack: songs[1], detachedPlaylistIndex: 1 })
+
+      usePlayerStore.getState().prevTrack()
+
+      expect(usePlayerStore.getState()).toMatchObject({ currentTrack: songs[0], detachedPlaylistIndex: null })
+    })
+
+    it('手动播放、设置当前歌曲和切换来源都应该清 detached', () => {
+      usePlayerStore.setState({ detachedPlaylistIndex: 1 })
+      usePlayerStore.getState().playTrack(songs[0])
+      expect(usePlayerStore.getState().detachedPlaylistIndex).toBeNull()
+
+      usePlayerStore.setState({ detachedPlaylistIndex: 1 })
+      usePlayerStore.getState().setCurrentTrack(songs[1])
+      expect(usePlayerStore.getState().detachedPlaylistIndex).toBeNull()
+
+      usePlayerStore.setState({ detachedPlaylistIndex: 1 })
+      usePlayerStore.getState().setPlaylist(songs)
+      expect(usePlayerStore.getState().detachedPlaylistIndex).toBeNull()
+    })
+
+    it('当前歌曲 detached 时清空后续应该清除全部导航状态', () => {
+      usePlayerStore.setState({
+        playlist: [songs[0], songs[2]],
+        currentTrack: songs[1],
+        priorityQueue: [songs[2]],
+        priorityResumeTrackId: songs[0].id,
+        priorityConsumedTrackIds: [songs[1].id],
+        detachedPlaylistIndex: 1,
+      })
+
+      usePlayerStore.getState().clearUpcoming()
+
+      expect(usePlayerStore.getState()).toMatchObject({
+        playlist: [],
+        priorityQueue: [],
+        priorityResumeTrackId: null,
+        priorityConsumedTrackIds: [],
+        detachedPlaylistIndex: null,
+      })
+    })
+
+    it('detached 自动切歌仍应该只记录一次播放', () => {
+      usePlayerStore.setState({ playlist: [songs[0], songs[2]], currentTrack: songs[1], detachedPlaylistIndex: 1 })
+
+      usePlayerStore.getState().nextTrack()
+
+      expect(invokeMock.mock.calls.filter(([channel]) => channel === 'songs:recordPlay')).toHaveLength(1)
+      expect(invokeMock.mock.calls.filter(([channel]) => channel === 'songs:updatePlayCount')).toHaveLength(1)
+    })
+
+    it('playback=false 时 next/prev 不应该消费 detached', () => {
+      useUIStore.setState({ featureFlags: { ...DEFAULT_FEATURE_FLAGS, playback: false } })
+      usePlayerStore.setState({ playlist: [songs[0], songs[2]], currentTrack: songs[1], detachedPlaylistIndex: 1 })
+
+      usePlayerStore.getState().nextTrack()
+      usePlayerStore.getState().prevTrack()
+
+      expect(usePlayerStore.getState()).toMatchObject({ currentTrack: songs[1], detachedPlaylistIndex: 1 })
+      expect(invokeMock).not.toHaveBeenCalled()
     })
   })
 })

@@ -7,10 +7,10 @@ export type TrackMenuKind = 'source' | 'priority'
 
 interface Options {
   onPlay: (track: Track) => void
-  onAddToPriorityQueue: (track: Track) => void
+  onInsertNext: (track: Track) => void
   onRemoveFromPriorityQueue?: (trackId: number) => void
-  canAddToPriorityQueue: (track: Track) => boolean
-  getExtraItems?: (track: Track) => MenuItem[]
+  canInsertNext: (track: Track) => boolean
+  getExtraItems?: (track: Track, kind: TrackMenuKind) => MenuItem[]
   playbackEnabled: boolean
   playlistsEnabled: boolean
 }
@@ -38,7 +38,7 @@ export function useTrackContextMenu(options: Options) {
       if (kind === 'priority') {
         items.push({ label: '从接下来移除', icon: <IconClose width={14} height={14} />, action: () => options.onRemoveFromPriorityQueue?.(track.id) })
       } else {
-        items.push({ label: '添加到接下来播放', icon: <IconList width={14} height={14} />, disabled: !options.canAddToPriorityQueue(track), action: () => options.onAddToPriorityQueue(track) })
+        items.push({ label: '下一首播放', icon: <IconList width={14} height={14} />, disabled: !options.canInsertNext(track), action: () => options.onInsertNext(track) })
       }
     }
     if (options.playlistsEnabled) {
@@ -47,7 +47,7 @@ export function useTrackContextMenu(options: Options) {
         children: playlists && playlists.length > 0 ? playlists.map((playlist) => ({ label: playlist.name, action: () => void window.electronAPI.invoke('playlists:addSong', { playlistId: playlist.id, songId: track.id }) })) : [{ label: '暂无歌单', disabled: true }],
       })
     }
-    items.push(...(options.getExtraItems?.(track) ?? []), {
+    items.push(...(options.getExtraItems?.(track, kind) ?? []), {
       label: '打开文件所在目录', icon: <IconFolder width={14} height={14} />,
       action: () => void window.electronAPI.invoke('open-file-location', track.filePath),
     }, { label: '歌曲信息', icon: <IconInfo width={14} height={14} />, action: () => setSongInfoTrack(track) })

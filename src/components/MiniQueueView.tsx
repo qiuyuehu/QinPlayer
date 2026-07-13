@@ -8,8 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { formatTime } from '../utils/formatTime'
 import { IconMusic } from './Icons'
 import type { Track } from '../types'
-import { useTrackContextMenu } from '../hooks/useTrackContextMenu'
-import ContextMenu from './ContextMenu'
+import { useNativeTrackContextMenu } from '../hooks/useNativeTrackContextMenu'
 import SongInfoDialog from './SongInfoDialog'
 
 interface MiniQueueViewProps {
@@ -17,15 +16,22 @@ interface MiniQueueViewProps {
   priorityQueue: Track[]
   currentTrackId: number | null
   onPlay: (track: Track) => void
-  onRemovePriority: (trackId: number) => void
-  onAddToPriorityQueue?: (track: Track) => void
-  canAddToPriorityQueue?: (track: Track) => boolean
+  onRemovePriority?: (trackId: number) => void
+  onInsertNext?: (track: Track) => void
+  onRemoveFromPlaylist?: (trackId: number) => void
+  canInsertNext?: (track: Track) => boolean
 }
 
-function MiniQueueView({ tracks, priorityQueue = [], currentTrackId, onPlay, onRemovePriority = () => {}, onAddToPriorityQueue = () => {}, canAddToPriorityQueue = () => false }: MiniQueueViewProps) {
+function MiniQueueView({ tracks, priorityQueue = [], currentTrackId, onPlay, onRemovePriority = () => {}, onInsertNext = () => {}, onRemoveFromPlaylist = () => {}, canInsertNext = () => false }: MiniQueueViewProps) {
   const itemRefs = useRef<Map<number, HTMLButtonElement>>(new Map())
   const [brokenCoverIds, setBrokenCoverIds] = useState<Set<number>>(new Set())
-  const trackMenu = useTrackContextMenu({ onPlay, onAddToPriorityQueue, onRemoveFromPriorityQueue: onRemovePriority, canAddToPriorityQueue, playbackEnabled: true, playlistsEnabled: false })
+  const trackMenu = useNativeTrackContextMenu({
+    onPlay,
+    onInsertNext,
+    onRemovePriority,
+    onRemovePlaylist: onRemoveFromPlaylist,
+    canInsertNext,
+  })
 
   useEffect(() => {
     if (currentTrackId === null) return
@@ -101,7 +107,6 @@ function MiniQueueView({ tracks, priorityQueue = [], currentTrackId, onPlay, onR
           </button>
         )
       })}
-      {trackMenu.target && <ContextMenu items={trackMenu.getItems(trackMenu.target.track, trackMenu.target.kind)} x={trackMenu.target.x} y={trackMenu.target.y} onClose={trackMenu.close} />}
       {trackMenu.songInfoTrack && <SongInfoDialog track={trackMenu.songInfoTrack} onClose={trackMenu.closeSongInfo} />}
     </div>
   )

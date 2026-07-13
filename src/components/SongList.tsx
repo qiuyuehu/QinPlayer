@@ -44,8 +44,7 @@ const SongList = forwardRef<SongListHandle, SongListProps>(function SongList(
   const currentTrack = usePlayerStore((s) => s.currentTrack)
   const playTrack = usePlayerStore((s) => s.playTrack)
   const setPlaylist = usePlayerStore((s) => s.setPlaylist)
-  const addToPriorityQueue = usePlayerStore((s) => s.addToPriorityQueue)
-  const priorityQueue = usePlayerStore((s) => s.priorityQueue)
+  const insertNext = usePlayerStore((s) => s.insertNext)
   const featureFlags = useUIStore((s) => s.featureFlags)
 
   // --- 虚拟列表滚动容器 ref ---
@@ -111,14 +110,14 @@ const SongList = forwardRef<SongListHandle, SongListProps>(function SongList(
     playTrack(track)
   }, [tracks, featureFlags.playback, playTrack, setPlaylist])
 
-  const handleAddToQueue = useCallback((track: Track) => {
-    addToPriorityQueue(track)
-  }, [addToPriorityQueue])
+  const handleInsertNext = useCallback((track: Track) => {
+    insertNext(track)
+  }, [insertNext])
 
   const trackMenu = useTrackContextMenu({
     onPlay: handlePlay,
-    onAddToPriorityQueue: handleAddToQueue,
-    canAddToPriorityQueue: (track) => currentTrack?.id !== track.id && !priorityQueue.some((item) => item.id === track.id),
+    onInsertNext: handleInsertNext,
+    canInsertNext: (track) => currentTrack?.id !== track.id,
     getExtraItems: (track) => featureFlags.playlists && playlistId && onRemoveFromPlaylist
       ? [{ label: '从歌单移除', icon: <IconClose width={14} height={14} />, action: () => onRemoveFromPlaylist(track.id) }]
       : [],

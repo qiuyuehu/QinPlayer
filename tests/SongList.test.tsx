@@ -77,6 +77,10 @@ describe('SongList', () => {
       isPlaying: false,
       currentTrack: null,
       playlist: [],
+      priorityQueue: [],
+      priorityResumeTrackId: null,
+      priorityConsumedTrackIds: [],
+      detachedPlaylistIndex: null,
       volume: 0.8,
       playMode: 'sequential',
       fadeEnabled: true,
@@ -228,7 +232,7 @@ describe('SongList', () => {
     expect(scrollToIndexMock).toHaveBeenCalledWith(1, { align: 'center' })
   })
 
-  it('右键添加到播放队列应插入当前歌曲后一位', async () => {
+  it('右键下一首播放应该插入 priority 队首', async () => {
     usePlayerStore.setState({
       currentTrack: tracks[0],
       playlist: [tracks[0], tracks[2]],
@@ -237,26 +241,37 @@ describe('SongList', () => {
 
     fireEvent.contextMenu(screen.getByText('七里香'))
     await waitFor(() => {
-      expect(screen.getByText('添加到接下来播放')).toBeInTheDocument()
+      expect(screen.getByText('下一首播放')).toBeInTheDocument()
     })
-    fireEvent.click(screen.getByText('添加到接下来播放'))
+    fireEvent.click(screen.getByText('下一首播放'))
 
     expect(usePlayerStore.getState().priorityQueue.map((track) => track.id)).toEqual([2])
   })
 
-  it('右键添加到播放队列遇到重复歌曲应跳过', async () => {
+  it('右键下一首播放应该把已有待播歌曲提升到队首', async () => {
     usePlayerStore.setState({
       currentTrack: tracks[0],
       playlist: [tracks[0], tracks[1]],
+      priorityQueue: [tracks[2], tracks[1]],
     })
     render(<SongList tracks={tracks} />)
 
     fireEvent.contextMenu(screen.getByText('七里香'))
     await waitFor(() => {
-      expect(screen.getByText('添加到接下来播放')).toBeInTheDocument()
+      expect(screen.getByText('下一首播放')).toBeInTheDocument()
     })
-    fireEvent.click(screen.getByText('添加到接下来播放'))
+    fireEvent.click(screen.getByText('下一首播放'))
 
-    expect(usePlayerStore.getState().priorityQueue.map((track) => track.id)).toEqual([2])
+    expect(usePlayerStore.getState().priorityQueue.map((track) => track.id)).toEqual([2, 3])
+  })
+
+  it('当前歌曲的下一首播放应该禁用', async () => {
+    usePlayerStore.setState({ currentTrack: tracks[0], playlist: tracks })
+    render(<SongList tracks={tracks} />)
+
+    fireEvent.contextMenu(screen.getByText('晴天'))
+    const item = await screen.findByText('下一首播放')
+
+    expect(item.closest('.context-menu__item')).toHaveClass('context-menu__item--disabled')
   })
 })

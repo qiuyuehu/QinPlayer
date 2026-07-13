@@ -3,7 +3,7 @@
  * 覆盖：空队列、ESC 关闭、封面缩略图、清空后续队列
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import PlaylistPanel from '../src/components/PlaylistPanel'
 import { usePlayerStore } from '../src/stores/playerStore'
 import { useUIStore } from '../src/stores/uiStore'
@@ -56,6 +56,10 @@ describe('PlaylistPanel', () => {
       isPlaying: false,
       currentTrack: null,
       playlist: [],
+      priorityQueue: [],
+      priorityResumeTrackId: null,
+      priorityConsumedTrackIds: [],
+      detachedPlaylistIndex: null,
       volume: 0.8,
       playMode: 'sequential',
       fadeEnabled: true,
@@ -143,6 +147,62 @@ describe('PlaylistPanel', () => {
     expect(vi.mocked(window.electronAPI.invoke).mock.calls.filter(
       ([channel]) => channel === 'songs:recordPlay' || channel === 'songs:updatePlayCount',
     )).toHaveLength(2)
+  })
+
+  it('source 行菜单应该允许移除当前歌曲且只禁用下一首播放', async () => {
+    usePlayerStore.setState({ currentTrack: trackB, playlist: [trackA, trackB, trackC] })
+    render(<PlaylistPanel onClose={vi.fn()} />)
+
+    fireEvent.contextMenu(screen.getByTitle('七里香 - 周杰伦'))
+    const insertItem = await screen.findByText('下一首播放')
+    expect(insertItem.closest('.context-menu__item')).toHaveClass('context-menu__item--disabled')
+
+    fireEvent.click(screen.getByText('从播放列表移除'))
+
+    expect(usePlayerStore.getState()).toMatchObject({
+      playlist: [trackA, trackC],
+      currentTrack: trackB,
+      detachedPlaylistIndex: 1,
+    })
+  })
+
+  it('priority 行菜单只应该移除待播项，不修改来源列表', async () => {
+    const playlist = [trackA, trackB]
+    usePlayerStore.setState({ currentTrack: trackA, playlist, priorityQueue: [trackC] })
+    render(<PlaylistPanel onClose={vi.fn()} />)
+
+    fireEvent.contextMenu(screen.getByText('搁浅 - 周杰伦'))
+    await screen.findByText('从接下来移除')
+    expect(screen.queryByText('从播放列表移除')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByText('从接下来移除'))
+
+    expect(usePlayerStore.getState().priorityQueue).toEqual([])
+    expect(usePlayerStore.getState().playlist).toBe(playlist)
+  })
+
+  it('source 行应该把已有待播歌曲提升为下一首', async () => {
+    usePlayerStore.setState({
+      currentTrack: trackA,
+      playlist: [trackA, trackB, trackC],
+      priorityQueue: [trackC, trackB],
+    })
+    render(<PlaylistPanel onClose={vi.fn()} />)
+
+    fireEvent.contextMenu(screen.getByTitle('七里香 - 周杰伦'))
+    fireEvent.click(await screen.findByText('下一首播放'))
+
+    expect(usePlayerStore.getState().priorityQueue).toEqual([trackB, trackC])
+  })
+
+  it('退场期间应该阻止右键菜单和移除动作', async () => {
+    usePlayerStore.setState({ currentTrack: trackA, playlist: [trackA, trackB] })
+    render(<PlaylistPanel onClose={vi.fn()} />)
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+    fireEvent.contextMenu(screen.getByTitle('七里香 - 周杰伦'))
+
+    await waitFor(() => expect(screen.queryByText('下一首播放')).not.toBeInTheDocument())
+    expect(usePlayerStore.getState().playlist).toEqual([trackA, trackB])
   })
 
   afterEach(() => {

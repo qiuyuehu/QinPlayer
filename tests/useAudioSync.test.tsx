@@ -20,6 +20,7 @@ let timeUpdateHandler: ((time: number, duration: number) => void) | undefined
 let loadedMetadataHandler: ((duration: number) => void) | undefined
 let endedHandler: (() => void) | undefined
 let enginePlaying = true
+let engineCurrentTime = 0
 
 const trackerMocks = vi.hoisted(() => ({
   observe: vi.fn(),
@@ -44,7 +45,9 @@ const onEndedMock = vi.fn((callback: () => void) => {
 
 vi.mock('../src/utils/AudioEngine', () => ({
   getAudioEngine: vi.fn(() => ({
-    get playing() { return enginePlaying },
+  get playing() { return enginePlaying },
+    get currentTime() { return engineCurrentTime },
+    set currentTime(value: number) { engineCurrentTime = value },
     load: loadMock,
     loadWithFade: loadWithFadeMock,
     play: playMock,
@@ -95,6 +98,7 @@ describe('useAudioSync', () => {
     loadedMetadataHandler = undefined
     endedHandler = undefined
     enginePlaying = true
+    engineCurrentTime = 0
     currentTimeRef.current = 0
     act(() => {
       useUIStore.setState({
@@ -112,6 +116,7 @@ describe('useAudioSync', () => {
         priorityQueue: [],
         priorityResumeTrackId: null,
         priorityConsumedTrackIds: [],
+        detachedPlaylistIndex: null,
         volume: 0.8,
         playMode: 'sequential',
         fadeEnabled: true,
@@ -244,6 +249,107 @@ describe('useAudioSync', () => {
 
     expect(usePlayerStore.getState().currentTrack).toEqual(track)
     expect(usePlayerStore.getState().priorityResumeTrackId).toBeNull()
+  })
+
+  it('清空后续后 loop 自然结束不应该按旧插队锚点跳转', async () => {
+    act(() => {
+      usePlayerStore.setState({
+        playlist: [track, secondTrack, thirdTrack],
+        currentTrack: secondTrack,
+        playMode: 'loop',
+        priorityResumeTrackId: track.id,
+        priorityConsumedTrackIds: [secondTrack.id],
+      })
+      usePlayerStore.getState().clearUpcoming()
+    })
+    render(<HookHost />)
+    await waitFor(() => expect(loadedMetadataHandler).toBeDefined())
+    act(() => loadedMetadataHandler!(secondTrack.duration))
+
+    act(() => endedHandler!())
+
+    expect(usePlayerStore.getState()).toMatchObject({
+      currentTrack: secondTrack,
+      playlist: [track, secondTrack],
+      priorityResumeTrackId: null,
+      priorityConsumedTrackIds: [],
+    })
+    expect(engineCurrentTime).toBe(0)
+  })
+
+  it('loop 且当前歌曲已移出来源时应该从 detached successor 继续', async () => {
+    act(() => {
+      usePlayerStore.setState({ playlist: [track, secondTrack], currentTrack: track, playMode: 'loop' })
+      usePlayerStore.getState().removeFromPlaylist(track.id)
+    })
+    render(<HookHost />)
+    await waitFor(() => expect(loadedMetadataHandler).toBeDefined())
+    act(() => loadedMetadataHandler!(track.duration))
+
+    act(() => endedHandler!())
+
+    expect(usePlayerStore.getState()).toMatchObject({
+      currentTrack: secondTrack,
+      detachedPlaylistIndex: null,
+      isPlaying: true,
+    })
+  })
+
+  it('loop 且最后一首来源被移除时应该停止而不是重播', async () => {
+    act(() => {
+      usePlayerStore.setState({ playlist: [track], currentTrack: track, playMode: 'loop' })
+      usePlayerStore.getState().removeFromPlaylist(track.id)
+    })
+    render(<HookHost />)
+    await waitFor(() => expect(loadedMetadataHandler).toBeDefined())
+    act(() => loadedMetadataHandler!(track.duration))
+    playMock.mockClear()
+
+    act(() => endedHandler!())
+
+    expect(usePlayerStore.getState()).toMatchObject({ currentTrack: track, playlist: [], isPlaying: false })
+    expect(playMock).not.toHaveBeenCalled()
+  })
+
+  it('priority 播放期间 resume 被移除后应该从 detached successor 恢复', async () => {
+    act(() => usePlayerStore.setState({
+      playlist: [secondTrack, thirdTrack],
+      currentTrack: thirdTrack,
+      playMode: 'sequential',
+      priorityResumeTrackId: track.id,
+      priorityConsumedTrackIds: [thirdTrack.id],
+      detachedPlaylistIndex: 0,
+    }))
+    render(<HookHost />)
+    await waitFor(() => expect(loadedMetadataHandler).toBeDefined())
+    act(() => loadedMetadataHandler!(thirdTrack.duration))
+
+    act(() => endedHandler!())
+
+    expect(usePlayerStore.getState()).toMatchObject({
+      currentTrack: secondTrack,
+      priorityResumeTrackId: null,
+      priorityConsumedTrackIds: [],
+      detachedPlaylistIndex: null,
+    })
+  })
+
+  it.each(['sequential', 'shuffle'] as const)('%s + detached 的 ended 只应该前进一次', async (playMode) => {
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0)
+    act(() => usePlayerStore.setState({
+      playlist: [secondTrack, thirdTrack],
+      currentTrack: track,
+      playMode,
+      detachedPlaylistIndex: 0,
+    }))
+    render(<HookHost />)
+    await waitFor(() => expect(loadedMetadataHandler).toBeDefined())
+    act(() => loadedMetadataHandler!(track.duration))
+
+    act(() => endedHandler!())
+
+    expect(usePlayerStore.getState()).toMatchObject({ currentTrack: secondTrack, detachedPlaylistIndex: null })
+    randomSpy.mockRestore()
   })
 
   it('顺序模式有待播歌曲时 ended 只前进一次', async () => {

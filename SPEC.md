@@ -171,7 +171,8 @@ QinPlayer/
 - 播放/暂停/上一首/下一首/进度条/音量
 - 播放模式：顺序播放、单曲循环、随机播放
 - 切歌淡入淡出（独立 `fadeGain` 实现，不覆盖用户 `volumeGain`）
-- 支持会话内“接下来播放”FIFO；不持久化，优先于正常 next 与自然结束的 loop，并在完成后按来源锚点恢复
+- 支持会话内“下一首播放”：去重后提升到 `priorityQueue` 队首，连续选择采用 LIFO；不持久化，优先于正常 next 与自然结束的 loop，并在完成后按来源锚点恢复
+- 播放列表 source 项可从当前会话移除；移除当前曲或恢复锚点时音频不中断，由短生命周期 `detachedPlaylistIndex` 在下次 next/prev/ended 时衔接来源列表
 
 ### 均衡器
 - 10 段参数均衡器（32Hz ~ 16kHz，BiquadFilterNode 实现）
@@ -294,7 +295,8 @@ Apple Music 风，精致克制。
 | 歌词来源 | 同目录同名 .lrc 文件 |
 | 无封面 | 显示默认占位图 |
 | 新建歌单 | 导航栏"歌单"旁 + 按钮 |
-| 右键菜单 | 播放、添加到歌单、从歌单移除、打开文件所在目录、歌曲信息 |
+| 主窗口歌曲右键菜单 | 播放、下一首播放、添加到歌单、按宿主移除、打开文件所在目录、歌曲信息；继续使用主题化 HTML 菜单 |
+| Mini 队列右键菜单 | 使用 Electron 原生菜单越过 `400×150` 窗口边界；source 与 priority 使用受限 action ID 区分移除语义 |
 | 关闭窗口 | 按设置最小化到托盘、直接退出或每次询问；无托盘时直接退出 |
 | 迷你模式 | 主窗口按钮触发 |
 
@@ -513,8 +515,8 @@ Main Process ✓ 负责 SQLite、文件系统、窗口、IPC
 ## 测试覆盖
 
 - 框架：Vitest + @testing-library/react
-- 用例数：404 个（44 个测试文件）
-- 覆盖范围：formatTime、lrcParser、albumSort、trackSort、playerStore、uiStore、PlayerBar、LyricsPanel、LyricsFullscreen、MiniPlayer、MiniLyricsView、MiniQueueView、SortMenu、CloseCoordinator、CloseConfirmDialog、Albums、LocalMusic、Liked、Settings、SongList、PlaylistPanel、featureFlags、Sidebar、useAudioSync、useTrackLyrics、windowBounds、Harness checks
+- 用例数：505 个（51 个测试文件）
+- 覆盖范围：formatTime、lrcParser、albumSort、trackSort、playerStore、uiStore、PlayerBar、LyricsPanel、LyricsFullscreen、MiniPlayer、MiniLyricsView、MiniQueueView、SortMenu、ContextMenu、原生歌曲菜单 IPC/Hook、CloseCoordinator、CloseConfirmDialog、Albums、LocalMusic、Liked、Settings、SongList、PlaylistPanel、featureFlags、Sidebar、useAudioSync、useTrackContextMenu、useTrackLyrics、windowBounds、Harness checks
 - Feature Flags 消融验证：16 个 flag 逐个关闭不影响其他 flag
 
 ---

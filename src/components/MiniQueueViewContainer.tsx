@@ -7,7 +7,8 @@ function MiniQueueViewContainer() {
   const currentTrackId = usePlayerStore((state) => state.currentTrack?.id ?? null)
   const playTrack = usePlayerStore((state) => state.playTrack)
   const removeFromPriorityQueue = usePlayerStore((state) => state.removeFromPriorityQueue)
-  const addToPriorityQueue = usePlayerStore((state) => state.addToPriorityQueue)
+  const insertNext = usePlayerStore((state) => state.insertNext)
+  const removeFromPlaylist = usePlayerStore((state) => state.removeFromPlaylist)
 
   return (
     <MiniQueueView
@@ -16,8 +17,9 @@ function MiniQueueViewContainer() {
       currentTrackId={currentTrackId}
       onPlay={playTrack}
       onRemovePriority={removeFromPriorityQueue}
-      onAddToPriorityQueue={addToPriorityQueue}
-      canAddToPriorityQueue={(track) => currentTrackId !== track.id && !priorityQueue.some((item) => item.id === track.id)}
+      onInsertNext={insertNext}
+      onRemoveFromPlaylist={removeFromPlaylist}
+      canInsertNext={(track) => currentTrackId !== track.id}
     />
   )
 }

@@ -26,6 +26,7 @@ import { registerProtocol } from './ipc/protocol'
 import { registerScanIPC, startIncrementalScan } from './ipc/scan'
 import { registerEqIPC } from './ipc/eq'
 import { registerListeningIPC } from './ipc/listening'
+import { registerContextMenuIPC } from './ipc/contextMenu'
 import { createTray, updateMenu, destroyTray } from './tray'
 import { loadWindowBounds, loadWindowState, normalizeWindowBounds, saveWindowBounds, saveWindowState } from './windowBounds'
 import { createCloseCoordinator } from './closeBehavior'
@@ -281,6 +282,7 @@ app.whenReady().then(async () => {
   registerSettingsIPC(getMainWindow)
   registerEqIPC()
   registerListeningIPC(() => currentFeatureFlags)
+  registerContextMenuIPC(getMainWindow)
 
   ipcMain.on('close:ready', (event) => {
     closeCoordinator.markRendererReady(event.sender)

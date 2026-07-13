@@ -93,7 +93,14 @@ export function useAudioSync() {
       listeningTracker.resetSample()
 
       const livePlayer = usePlayerStore.getState()
-      if (livePlayer.priorityQueue.length > 0 || livePlayer.priorityResumeTrackId !== null) {
+      const currentIsDetached = livePlayer.currentTrack !== null
+        && !livePlayer.playlist.some((track) => track.id === livePlayer.currentTrack?.id)
+      if (
+        livePlayer.priorityQueue.length > 0
+        || livePlayer.priorityResumeTrackId !== null
+        || livePlayer.detachedPlaylistIndex !== null
+        || currentIsDetached
+      ) {
         setIsPlaying(false)
         nextTrack()
       } else if (livePlayer.playMode === 'loop') {

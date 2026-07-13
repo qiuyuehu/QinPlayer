@@ -4,6 +4,14 @@
 
 ---
 
+## 2026-07-13 下一首提升、detached 游标与 Mini 原生菜单
+
+- **下一首语义**：保留 `priorityQueue`、恢复锚点、已消费 ID 与内部 `commitTrack`；`insertNext` 对歌曲去重后提升到队首，连续选择采用 LIFO。本决策只替代 2026-07-12 决策中的 FIFO 排序，不替代其恢复状态机。
+- **来源移除**：从播放列表移除只修改会话内 playlist，不删除曲库或数据库歌单关系；移除当前曲或恢复锚点后，以非持久化 `detachedPlaylistIndex` 保存 successor，消费后立即清理。
+- **自然结束**：待播、恢复锚点、detached 或当前曲已不在来源列表时先走 `nextTrack()`；loop 只在这些状态都不存在时重播原曲。
+- **Mini 菜单**：主窗口保留 HTML `ContextMenu`；Mini 队列使用单一 `context-menu:show-track` invoke，主进程校验当前 sender、受限 action/enabled、固定中文 label 与单 pending，并以 `action | null` 单次返回。
+- **状态**：类型检查、分批测试、Harness、生产构建和全量测试通过；真实 Electron 原生菜单越界与连续右键体验待主人验证。
+
 ## 2026-07-12 待播队列使用 FIFO 与恢复锚点
 
 - **决策**：只保存未消费的 `priorityQueue`，不引入 queueIndex；首次插队记录来源歌曲 ID，自动播放使用内部提交函数，用户手动播放或切换来源才清空待播状态。

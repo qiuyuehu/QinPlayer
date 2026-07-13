@@ -25,8 +25,9 @@ function PlaylistPanel({ onClose }: PlaylistPanelProps) {
   const currentTrack = usePlayerStore((s) => s.currentTrack)
   const clearUpcoming = usePlayerStore((s) => s.clearUpcoming)
   const removeFromPriorityQueue = usePlayerStore((s) => s.removeFromPriorityQueue)
+  const removeFromPlaylist = usePlayerStore((s) => s.removeFromPlaylist)
   const playTrack = usePlayerStore((s) => s.playTrack)
-  const addToPriorityQueue = usePlayerStore((s) => s.addToPriorityQueue)
+  const insertNext = usePlayerStore((s) => s.insertNext)
   const featureFlags = useUIStore((s) => s.featureFlags)
   const itemRefs = useRef<Map<number, HTMLButtonElement>>(new Map())
   const [brokenCoverIds, setBrokenCoverIds] = useState<Set<number>>(new Set())
@@ -67,9 +68,12 @@ function PlaylistPanel({ onClose }: PlaylistPanelProps) {
   }, [isExiting, playTrack])
   const trackMenu = useTrackContextMenu({
     onPlay: handlePlayTrack,
-    onAddToPriorityQueue: addToPriorityQueue,
+    onInsertNext: insertNext,
     onRemoveFromPriorityQueue: removeFromPriorityQueue,
-    canAddToPriorityQueue: (track) => currentTrack?.id !== track.id && !priorityQueue.some((item) => item.id === track.id),
+    canInsertNext: (track) => currentTrack?.id !== track.id,
+    getExtraItems: (track, kind) => !isExiting && kind === 'source'
+      ? [{ label: '从播放列表移除', icon: <IconClose width={14} height={14} />, action: () => removeFromPlaylist(track.id) }]
+      : [],
     playbackEnabled: !isExiting,
     playlistsEnabled: featureFlags.playlists,
   })

@@ -37,6 +37,8 @@ const INVOKE_CHANNELS = new Set([
   'db:export', 'db:import-select', 'db:import-apply',
   // 均衡器
   'eq:get', 'eq:save',
+  // 原生歌曲菜单
+  'context-menu:show-track',
   // 其他
   'get-auto-launch',
 ])
