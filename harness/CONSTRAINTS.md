@@ -1,8 +1,8 @@
 # QinPlayer 约束条件
 
-> 版本：v1.1
+> 版本：v1.2
 > 创建：2026-07-01
-> 更新：2026-07-01（补充 ARCHITECTURE.md 技术约束）
+> 更新：2026-07-15（校准 EQ、关闭行为、SongList 表头与协议安全目标）
 > 说明：永久性约束规范，所有改动必须遵守
 
 ---
@@ -26,7 +26,7 @@
 - **不联网**，纯本地播放器
 - **不做全局快捷键**（暂时）
 - **不导入 .m3u 歌单**，只手动建
-- **不做均衡器**（SPEC 原始约束，但代码中已有 eq.ts / Equalizer.tsx，如需删除请确认）
+- **均衡器是正式能力**：保持 10 段有限增益、独立 headroom/fade/volume 职责和持久化校验
 - **单实例锁**：不允许重复打开多个窗口
 
 ---
@@ -69,8 +69,8 @@
 - `currentTime`（播放秒数）不放入 Zustand 全局 Store（高频 ~4次/秒，会导致全量 re-render）
 - `scanProgress` 也不放 Zustand（临时状态，扫描结束就不需要了，用组件内部 useState）
 - 歌词滚动使用 `scrollTo()` + `behavior: 'smooth'`（普通滚动）或 `behavior: 'auto'`（切歌跳转），隐藏原生滚动条
-- 表头放在滚动容器内部，用 `position: sticky; top: 0`
-- 窗口关闭最小化到托盘，不退出应用
+- SongList 表头放在虚拟列表滚动容器外，表头本身不参与歌曲行滚动
+- 托盘开启时，关闭行为支持最小化、退出、每次询问；托盘关闭时必须直接退出
 
 ---
 
@@ -116,6 +116,7 @@
 - Worker 只负责读取文件系统、解析 ID3 标签
 - 解析完成后通过 `parentPort.postMessage()` 发纯 JSON 给主进程
 - 主进程接收后开启事务批量 INSERT
+- 当前实现仍按每条 `song` 消息逐条 upsert；批量事务继续作为待整改约束
 
 ### 增量扫描
 - SQLite 记录文件绝对路径 + `mtime`
@@ -123,8 +124,9 @@
 
 ### 自定义协议
 - 注册 `qinplayer://` 协议
-- 前端请求 `qinplayer://audio?id=1024` → 主进程拦截 → 查询 SQLite 获取路径 → 返回文件流
-- 支持 Range Requests（拖动进度条缓冲）
+- Renderer 不得通过协议直接授权任意绝对路径；资源必须通过歌曲 ID 或主进程维护的受控映射解析，并在返回文件流前校验资源类型和允许范围
+- 支持经过边界校验的 Range Requests（拖动进度条缓冲），非法或越界范围必须拒绝
+- 当前 `?path=` 实现尚未达到上述安全目标；`SPEC.md` 记录现状，本条继续作为待整改约束
 
 ---
 
@@ -152,8 +154,8 @@
 
 ### 改动前
 1. 阅读 SPEC.md 了解项目架构
-2. 阅读 docs/ARCHITECTURE.md 了解模块职责和数据流
-3. 阅读最近的 devlog 了解当前状态
+2. 阅读 `harness/CONSTRAINTS.md`、`harness/DECISIONS.md` 和 `harness/TEST_CONVENTIONS.md`
+3. 阅读与任务相关的最新 devlog 和已确认计划
 4. 写执行方案，主人确认后再动手
 
 ### 改动中
