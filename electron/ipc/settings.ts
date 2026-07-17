@@ -4,12 +4,13 @@
 // 职责：设置键值对读写、音乐文件夹管理
 // =============================================================================
 
-import { app, ipcMain, dialog, BrowserWindow } from 'electron'
+import { app, dialog, BrowserWindow } from 'electron'
 import { readFile, copyFile, mkdir } from 'fs/promises'
 import { getDatabase } from '../db/database'
 import { join, sep, extname } from 'path'
 import type { FeatureFlags } from '../../src/types/ipc'
 import { DEFAULT_FEATURE_FLAGS, parseFeatureFlagsText } from '../../src/utils/featureFlags'
+import { handleIpc } from './typedIpc'
 
 let featureFlags: FeatureFlags = { ...DEFAULT_FEATURE_FLAGS }
 
@@ -37,30 +38,30 @@ export function getFeatureFlags(): FeatureFlags {
 
 export function registerSettingsIPC(getMainWindow: () => BrowserWindow | null): void {
   // --- config:getFeatureFlags — 获取启动时读取的功能开关快照 ---
-  ipcMain.handle('config:getFeatureFlags', () => getFeatureFlags())
+  handleIpc('config:getFeatureFlags', () => getFeatureFlags())
 
   // --- settings:get — 读取单个设置 ---
-  ipcMain.handle('settings:get', (_event, { key }: { key: string }) => {
+  handleIpc('settings:get', (_event, { key }: { key: string }) => {
     const db = getDatabase()
     const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined
     return row?.value || null
   })
 
   // --- settings:set — 写入单个设置 ---
-  ipcMain.handle('settings:set', (_event, { key, value }: { key: string; value: string }) => {
+  handleIpc('settings:set', (_event, { key, value }: { key: string; value: string }) => {
     const db = getDatabase()
     db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(key, value)
   })
 
   // --- settings:getFolders — 获取所有音乐文件夹 ---
-  ipcMain.handle('settings:getFolders', () => {
+  handleIpc('settings:getFolders', () => {
     const db = getDatabase()
     const rows = db.prepare('SELECT path FROM music_folders ORDER BY id').all() as { path: string }[]
     return rows.map(r => r.path)
   })
 
   // --- settings:addFolder — 添加音乐文件夹（打开文件夹选择对话框） ---
-  ipcMain.handle('settings:addFolder', async () => {
+  handleIpc('settings:addFolder', async () => {
     const win = getMainWindow()
     if (!win) return null
 
@@ -77,7 +78,7 @@ export function registerSettingsIPC(getMainWindow: () => BrowserWindow | null): 
   })
 
   // --- settings:removeFolder — 移除音乐文件夹 ---
-  ipcMain.handle('settings:removeFolder', (_event, { path }: { path: string }) => {
+  handleIpc('settings:removeFolder', (_event, { path }: { path: string }) => {
     const db = getDatabase()
 
     // 构建 LIKE 模式：确保文件夹路径以路径分隔符结尾，再加通配符
@@ -100,7 +101,7 @@ export function registerSettingsIPC(getMainWindow: () => BrowserWindow | null): 
   })
 
   // --- settings:pickAvatar — 选择头像图片并复制到 userData ---
-  ipcMain.handle('settings:pickAvatar', async () => {
+  handleIpc('settings:pickAvatar', async () => {
     const win = getMainWindow()
     if (!win) return null
 

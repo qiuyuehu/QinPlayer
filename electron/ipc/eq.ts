@@ -5,8 +5,8 @@
 // 数据格式：eq_gains 为 JSON 数组字符串，如 "[0,2,4,0,0,0,0,0,0,0]"
 // =============================================================================
 
-import { ipcMain } from 'electron'
 import { getDatabase } from '../db/database'
+import { handleIpc } from './typedIpc'
 
 // 均衡器默认增益（10段全部为 0dB，平直响应）
 const DEFAULT_EQ_GAINS = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
@@ -25,7 +25,7 @@ function isValidEqGains(gains: unknown): gains is number[] {
 
 export function registerEqIPC(): void {
   // --- eq:get — 读取均衡器增益设置 ---
-  ipcMain.handle('eq:get', () => {
+  handleIpc('eq:get', () => {
     const db = getDatabase()
     const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('eq_gains') as { value: string } | undefined
     // 返回 JSON 数组字符串，未设置则返回 null
@@ -33,7 +33,7 @@ export function registerEqIPC(): void {
   })
 
   // --- eq:save — 保存均衡器增益设置 ---
-  ipcMain.handle('eq:save', (_event, payload: unknown) => {
+  handleIpc('eq:save', (_event, payload: unknown) => {
     const gains = typeof payload === 'object' && payload !== null
       ? (payload as { gains?: unknown }).gains
       : undefined

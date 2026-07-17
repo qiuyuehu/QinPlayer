@@ -4,12 +4,13 @@
 // 职责：窗口最小化/最大化/关闭、数据库导入导出、歌词读取、迷你模式、主题
 // =============================================================================
 
-import { ipcMain, dialog, shell, BrowserWindow } from 'electron'
-import { join } from 'path'
+import { dialog, shell, BrowserWindow } from 'electron'
 import { app } from 'electron'
-import { initDatabase, closeDatabase, getDatabase } from '../db/database'
+import { getDatabase, getDatabasePath } from '../db/database'
+import { importDatabaseBackup } from '../db/databaseImport'
 import { loadWindowBounds, loadWindowState, normalizeWindowBounds } from '../windowBounds'
 import type { FeatureFlags } from '../../src/types/ipc'
+import { handleIpc, isBooleanIpcPayload, onIpc } from './typedIpc'
 
 const MINI_PLAYER_WIDTH = 400
 const MINI_PLAYER_HEIGHT = 150
@@ -27,12 +28,12 @@ export function registerWindowIPC(
   // --- 窗口控制 ---
 
   // 最小化窗口
-  ipcMain.on('window:minimize', () => {
+  onIpc('window:minimize', () => {
     getMainWindow()?.minimize()
   })
 
   // 最大化/还原切换
-  ipcMain.on('window:maximize', () => {
+  onIpc('window:maximize', () => {
     const win = getMainWindow()
     if (win?.isMaximized()) {
       win.unmaximize()
@@ -42,12 +43,12 @@ export function registerWindowIPC(
   })
 
   // 关闭窗口（最小化到托盘）
-  ipcMain.on('window:close', () => {
+  onIpc('window:close', () => {
     getMainWindow()?.close()
   })
 
   // 设置窗口置顶（歌词页使用；迷你模式仍走自己的逻辑）
-  ipcMain.on('window:set-always-on-top', (_event, flag: boolean) => {
+  onIpc('window:set-always-on-top', (_event, flag: boolean) => {
     if (typeof flag !== 'boolean') return
     const mainWindow = getMainWindow()
     if (!mainWindow) return
@@ -62,12 +63,12 @@ export function registerWindowIPC(
   // --- 文件操作 ---
 
   // 打开文件夹（用系统资源管理器）
-  ipcMain.handle('open-folder', async (_event, folderPath: string) => {
+  handleIpc('open-folder', async (_event, folderPath: string) => {
     await shell.openPath(folderPath)
   })
 
   // 打开文件所在目录并选中文件（歌曲信息弹窗用）
-  ipcMain.handle('open-file-location', (_event, filePath: string) => {
+  handleIpc('open-file-location', (_event, filePath: string) => {
     shell.showItemInFolder(filePath)
   })
 
@@ -77,7 +78,7 @@ export function registerWindowIPC(
   // 1. 弹出保存对话框让用户选择路径
   // 2. WAL checkpoint 确保所有数据落盘（⚠️ 暗礁 3）
   // 3. 复制 .db 文件到目标路径
-  ipcMain.handle('db:export', async () => {
+  handleIpc('db:export', async () => {
     const mainWindow = getMainWindow()
     try {
       const result = await dialog.showSaveDialog(mainWindow!, {
@@ -92,19 +93,18 @@ export function registerWindowIPC(
       db.pragma('wal_checkpoint(TRUNCATE)')
 
       const fs = require('fs') as typeof import('fs')
-      const dbPath = join(app.getPath('userData'), 'qinplayer.db')
-      await fs.promises.copyFile(dbPath, result.filePath)
+      await fs.promises.copyFile(getDatabasePath(), result.filePath)
 
       console.log('[备份] 导出成功:', result.filePath)
       return { success: true, path: result.filePath }
     } catch (err) {
       console.error('[备份] 导出失败:', err)
-      return { success: false, error: String(err) }
+      return { success: false, error: '数据库导出失败，请重试' }
     }
   })
 
   // 导入数据库备份（第一步：选择文件）
-  ipcMain.handle('db:import-select', async () => {
+  handleIpc('db:import-select', async () => {
     const mainWindow = getMainWindow()
     const result = await dialog.showOpenDialog(mainWindow!, {
       title: '导入备份',
@@ -115,30 +115,20 @@ export function registerWindowIPC(
     return result.filePaths[0]
   })
 
-  // 导入数据库备份（第二步：替换并重启）
-  // 关闭当前数据库 → 替换 .db 文件 → 重启应用
-  ipcMain.handle('db:import-apply', async (_event, backupPath: string) => {
+  // 导入数据库备份（第二步：验证、可恢复发布并在成功后重启）
+  handleIpc('db:import-apply', async (_event, backupPath: string) => {
     const mainWindow = getMainWindow()
+    if (typeof backupPath !== 'string' || backupPath.trim().length === 0) {
+      return { success: false, error: '数据库导入路径无效' }
+    }
     try {
-      const fs = require('fs') as typeof import('fs')
-      const dbPath = join(app.getPath('userData'), 'qinplayer.db')
-
-      // 关闭当前数据库连接
-      closeDatabase()
-
-      // 用备份文件替换当前数据库
-      await fs.promises.copyFile(backupPath, dbPath)
-
-      // 删除 WAL 和 SHM 残留文件（旧数据库的，防止恢复后数据混乱）
-      const walPath = dbPath + '-wal'
-      const shmPath = dbPath + '-shm'
-      try { if (fs.existsSync(walPath)) fs.unlinkSync(walPath) } catch { /* 忽略 */ }
-      try { if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath) } catch { /* 忽略 */ }
-
-      // 重新初始化数据库连接
-      await initDatabase()
-
-      console.log('[备份] 导入成功，正在重启...')
+      const result = await importDatabaseBackup(backupPath)
+      if (!result.success) {
+        console.error('[备份] 导入未完成:', result.error)
+        return result.fatal
+          ? { success: false, error: '数据库导入失败，请完全退出应用后重试', fatal: true }
+          : { success: false, error: '数据库导入失败，请检查备份文件后重试' }
+      }
 
       // 开发模式：重新加载页面（不杀 Vite dev server）
       // 打包后：真正重启应用
@@ -150,18 +140,18 @@ export function registerWindowIPC(
       }
 
       return { success: true }
-    } catch (err) {
-      console.error('[备份] 导入失败:', err)
-      return { success: false, error: String(err) }
+    } catch (error) {
+      console.error('[备份] 导入失败:', error)
+      return { success: false, error: '数据库导入失败，请重试' }
     }
   })
 
   // --- 歌词文件读取 ---
 
-  ipcMain.handle('read-lrc-file', async (_event, lrcPath: string): Promise<string | null> => {
+  handleIpc('read-lrc-file', async (_event, lrcPath: string): Promise<string | null> => {
     const fs = require('fs') as typeof import('fs')
     try {
-      // 异步检查文件是否存在（替代 existsSync）
+      // 异步检查文件是否可读。
       await fs.promises.access(lrcPath, fs.constants.R_OK)
       // 异步读取文件内容（替代 readFileSync）
       return await fs.promises.readFile(lrcPath, 'utf-8')
@@ -175,14 +165,22 @@ export function registerWindowIPC(
 
   // --- 主题切换 ---
 
-  ipcMain.on('theme-changed', (_event, theme: 'dark' | 'light') => {
+  onIpc('theme-changed', (_event, theme: 'dark' | 'light') => {
+    if (theme !== 'dark' && theme !== 'light') {
+      console.warn('[IPC] theme-changed 参数无效:', theme)
+      return
+    }
     // frame: false 模式下没有原生按钮，不需要 setTitleBarOverlay
     console.log('[Main] 主题切换:', theme)
   })
 
   // --- 迷你模式 ---
 
-  ipcMain.on('window:set-mini-mode', (_event, isMini: boolean) => {
+  onIpc('window:set-mini-mode', (_event, isMini: boolean) => {
+    if (!isBooleanIpcPayload(isMini)) {
+      console.warn('[IPC] window:set-mini-mode 参数无效:', isMini)
+      return
+    }
     const mainWindow = getMainWindow()
     if (!mainWindow) return
     const flags = getFeatureFlags()

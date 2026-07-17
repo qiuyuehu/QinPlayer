@@ -20,9 +20,12 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../electron/db/database', () => ({
-  initDatabase: vi.fn(),
-  closeDatabase: vi.fn(),
   getDatabase: vi.fn(),
+  getDatabasePath: vi.fn(() => 'C:\\profile\\qinplayer.db'),
+}))
+
+vi.mock('../electron/db/databaseImport', () => ({
+  importDatabaseBackup: vi.fn(),
 }))
 
 vi.mock('../electron/windowBounds', () => boundsMock)
@@ -78,7 +81,7 @@ describe('Mini 窗口 IPC', () => {
     )
   }
 
-  function setMiniModeFromRenderer(isMini: boolean) {
+  function setMiniModeFromRenderer(isMini: unknown) {
     handlers.get('window:set-mini-mode')?.({}, isMini)
   }
 
@@ -94,6 +97,18 @@ describe('Mini 窗口 IPC', () => {
     expect(windowMock.setResizable.mock.invocationCallOrder[0]).toBeLessThan(
       windowMock.setSize.mock.invocationCallOrder[0],
     )
+  })
+
+  it.each(['true', 1, null, undefined])('非法 Mini payload %s 应该记录并忽略', (value) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    register()
+
+    setMiniModeFromRenderer(value)
+
+    expect(setMiniMode).not.toHaveBeenCalled()
+    expect(windowMock.setSize).not.toHaveBeenCalled()
+    expect(warn).toHaveBeenCalledWith('[IPC] window:set-mini-mode 参数无效:', value)
+    warn.mockRestore()
   })
 
   it('退出 Mini 应该先恢复拉伸，再按保存的 bounds 恢复窗口', () => {

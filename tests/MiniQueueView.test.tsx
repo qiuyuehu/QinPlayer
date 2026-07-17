@@ -77,7 +77,7 @@ describe('MiniQueueView', () => {
     expect(screen.getByText('3:05')).toBeInTheDocument()
     expect(screen.getByAltText('歌曲 B 封面')).toHaveAttribute(
       'src',
-      'qinplayer://cover?path=C%3A%5Ccovers%5Cb.jpg',
+      'qinplayer://cover?id=2&v=0',
     )
   })
 

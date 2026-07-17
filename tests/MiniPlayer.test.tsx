@@ -59,6 +59,18 @@ function expectCommonControls(): void {
   expect(screen.getByTitle('关闭')).toBeInTheDocument()
 }
 
+async function renderMiniPlayerWithLyrics() {
+  act(() => {
+    useUIStore.getState().setFeatureFlags({ ...DEFAULT_FEATURE_FLAGS })
+  })
+  const view = render(<MiniPlayer />)
+  await waitFor(() => {
+    expect(invokeMock.mock.calls.some(([channel]) => channel === 'read-lrc-file')).toBe(true)
+  })
+  await act(async () => {})
+  return view
+}
+
 describe('MiniPlayer', () => {
   beforeEach(() => {
     invokeMock.mockReset()
@@ -77,7 +89,7 @@ describe('MiniPlayer', () => {
         theme: 'dark',
         sidebarCollapsed: false,
         searchQuery: '',
-        featureFlags: { ...DEFAULT_FEATURE_FLAGS },
+        featureFlags: { ...DEFAULT_FEATURE_FLAGS, lyrics: false },
       })
       usePlayerStore.setState({
         isPlaying: true,
@@ -114,7 +126,7 @@ describe('MiniPlayer', () => {
   })
 
   it('点击视图入口应该直接切换且重复点击保持当前视图', async () => {
-    render(<MiniPlayer />)
+    await renderMiniPlayerWithLyrics()
 
     fireEvent.click(screen.getByRole('button', { name: '歌词视图' }))
     expect(await screen.findByText('第一句')).toBeInTheDocument()
@@ -129,7 +141,7 @@ describe('MiniPlayer', () => {
   })
 
   it('所有视图都应该保留共同播放控制、展开和关闭', async () => {
-    render(<MiniPlayer />)
+    await renderMiniPlayerWithLyrics()
     expectCommonControls()
 
     fireEvent.click(screen.getByRole('button', { name: '歌词视图' }))
@@ -175,7 +187,7 @@ describe('MiniPlayer', () => {
   })
 
   it('当前视图对应 flag 关闭时应该自动回到歌曲视图', async () => {
-    render(<MiniPlayer />)
+    await renderMiniPlayerWithLyrics()
     fireEvent.click(screen.getByRole('button', { name: '歌词视图' }))
     await screen.findByText('第一句')
 
@@ -252,6 +264,9 @@ describe('MiniPlayer', () => {
 
   it('只有队列视图应订阅 playlist 变化', async () => {
     const commits: string[] = []
+    act(() => {
+      useUIStore.getState().setFeatureFlags({ ...DEFAULT_FEATURE_FLAGS })
+    })
     render(
       <Profiler id="mini-player" onRender={(_id, phase) => commits.push(phase)}>
         <MiniPlayer />
@@ -301,7 +316,7 @@ describe('MiniPlayer', () => {
       return 1
     })
     globalThis.cancelAnimationFrame = vi.fn()
-    const view = render(<MiniPlayer />)
+    const view = await renderMiniPlayerWithLyrics()
 
     fireEvent.click(screen.getByRole('button', { name: '歌词视图' }))
     await screen.findByText('第一句')
@@ -336,7 +351,7 @@ describe('MiniPlayer', () => {
       )
     })
     const sameDurationTrackB = { ...trackB, duration: trackA.duration }
-    const view = render(<MiniPlayer />)
+    const view = await renderMiniPlayerWithLyrics()
 
     fireEvent.click(screen.getByRole('button', { name: '歌词视图' }))
     await screen.findByText('甲一')

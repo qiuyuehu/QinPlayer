@@ -10,6 +10,13 @@ const ts = require('typescript')
 
 const FS_MODULES = new Set(['fs', 'node:fs'])
 const TYPESCRIPT_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts'])
+const TYPED_IPC_PATH = 'electron/ipc/typedIpc.ts'
+const IPC_CONTRACT_NAMES = {
+  MAIN_WINDOW_INVOKE_CHANNELS: 'mainInvoke',
+  CONTEXT_MENU_INVOKE_CHANNELS: 'contextInvoke',
+  MAIN_WINDOW_SEND_CHANNELS: 'send',
+  MAIN_WINDOW_EVENT_CHANNELS: 'event',
+}
 
 // 将路径统一为仓库相对路径，保证 Windows 与测试临时目录下结果一致。
 function normalizeRelativePath(projectRoot, filePath) {
@@ -266,6 +273,469 @@ function checkWorkerDatabaseImports(sourceFile, relativePath, projectRoot) {
   return violations
 }
 
+function getObjectPropertyName(name) {
+  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) {
+    return name.text
+  }
+  return null
+}
+
+function collectRuntimeIdentifierUsage(sourceFile, identifierName) {
+  let found = false
+
+  function visit(node) {
+    if (found) return
+    if (ts.isImportDeclaration(node) || ts.isImportEqualsDeclaration(node)) return
+    if (ts.isIdentifier(node) && node.text === identifierName) {
+      found = true
+      return
+    }
+    ts.forEachChild(node, visit)
+  }
+
+  visit(sourceFile)
+  return found
+}
+
+function collectNamedCalls(sourceFile, callName) {
+  const calls = []
+
+  function visit(node) {
+    if (ts.isCallExpression(node)) {
+      const expression = unwrapExpression(node.expression)
+      if (ts.isIdentifier(expression) && expression.text === callName) calls.push(node)
+    }
+    ts.forEachChild(node, visit)
+  }
+
+  visit(sourceFile)
+  return calls
+}
+
+function collectIpcBindings(sourceFile) {
+  const ipcMainBindings = new Set()
+  const electronNamespaces = new Set()
+  const typedFunctionBindings = new Map()
+  const typedNamespaces = new Set()
+  const webContentsBindings = new Set()
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement) || !statement.importClause) continue
+    const moduleName = getStringLiteralValue(statement.moduleSpecifier)?.replace(/\\/g, '/')
+    const namedBindings = statement.importClause.namedBindings
+    if (moduleName === 'electron') {
+      if (namedBindings && ts.isNamespaceImport(namedBindings)) {
+        electronNamespaces.add(namedBindings.name.text)
+      } else if (namedBindings && ts.isNamedImports(namedBindings)) {
+        for (const element of namedBindings.elements) {
+          const importedName = element.propertyName?.text || element.name.text
+          if (importedName === 'ipcMain') ipcMainBindings.add(element.name.text)
+        }
+      }
+    }
+
+    if (moduleName && /(^|\/)typedIpc$/.test(moduleName)) {
+      if (namedBindings && ts.isNamespaceImport(namedBindings)) {
+        typedNamespaces.add(namedBindings.name.text)
+      } else if (namedBindings && ts.isNamedImports(namedBindings)) {
+        for (const element of namedBindings.elements) {
+          const importedName = element.propertyName?.text || element.name.text
+          if (importedName === 'handleIpc' || importedName === 'onIpc' || importedName === 'sendIpc') {
+            typedFunctionBindings.set(element.name.text, importedName)
+          }
+        }
+      }
+    }
+  }
+
+  function visitAliases(node) {
+    if (ts.isVariableDeclaration(node)) {
+      if (ts.isIdentifier(node.name) && node.initializer) {
+        const initializer = unwrapExpression(node.initializer)
+        if (ts.isIdentifier(initializer)) {
+          if (ipcMainBindings.has(initializer.text)) ipcMainBindings.add(node.name.text)
+          if (electronNamespaces.has(initializer.text)) electronNamespaces.add(node.name.text)
+          if (typedNamespaces.has(initializer.text)) typedNamespaces.add(node.name.text)
+          const typedFunction = typedFunctionBindings.get(initializer.text)
+          if (typedFunction) typedFunctionBindings.set(node.name.text, typedFunction)
+        } else if (ts.isPropertyAccessExpression(initializer) || ts.isElementAccessExpression(initializer)) {
+          const owner = unwrapExpression(initializer.expression)
+          const propertyName = getAccessedPropertyName(initializer)
+          if (ts.isIdentifier(owner) && electronNamespaces.has(owner.text) && propertyName === 'ipcMain') {
+            ipcMainBindings.add(node.name.text)
+          }
+          if (
+            ts.isIdentifier(owner)
+            && typedNamespaces.has(owner.text)
+            && (propertyName === 'handleIpc' || propertyName === 'onIpc' || propertyName === 'sendIpc')
+          ) {
+            typedFunctionBindings.set(node.name.text, propertyName)
+          }
+        }
+        const aliasesWebContents = (
+          (ts.isPropertyAccessExpression(initializer) || ts.isElementAccessExpression(initializer))
+          && getAccessedPropertyName(initializer) === 'webContents'
+        ) || (ts.isIdentifier(initializer) && webContentsBindings.has(initializer.text))
+        if (aliasesWebContents) webContentsBindings.add(node.name.text)
+      } else if (ts.isObjectBindingPattern(node.name)) {
+        const initializer = node.initializer ? unwrapExpression(node.initializer) : null
+        for (const element of node.name.elements) {
+          if (!ts.isIdentifier(element.name)) continue
+          const propertyName = element.propertyName
+            ? getObjectPropertyName(element.propertyName)
+            : element.name.text
+          if (propertyName === 'webContents') webContentsBindings.add(element.name.text)
+          if (initializer && ts.isIdentifier(initializer)) {
+            if (electronNamespaces.has(initializer.text) && propertyName === 'ipcMain') {
+              ipcMainBindings.add(element.name.text)
+            }
+            if (
+              typedNamespaces.has(initializer.text)
+              && (propertyName === 'handleIpc' || propertyName === 'onIpc' || propertyName === 'sendIpc')
+            ) {
+              typedFunctionBindings.set(element.name.text, propertyName)
+            }
+          }
+        }
+      }
+    }
+    ts.forEachChild(node, visitAliases)
+  }
+  visitAliases(sourceFile)
+
+  return {
+    ipcMainBindings,
+    electronNamespaces,
+    typedFunctionBindings,
+    typedNamespaces,
+    webContentsBindings,
+  }
+}
+
+function getTypedIpcCallName(expression, bindings) {
+  if (ts.isIdentifier(expression)) {
+    return bindings.typedFunctionBindings.get(expression.text) || null
+  }
+  if (!ts.isPropertyAccessExpression(expression) && !ts.isElementAccessExpression(expression)) {
+    return null
+  }
+  const owner = unwrapExpression(expression.expression)
+  if (!ts.isIdentifier(owner) || !bindings.typedNamespaces.has(owner.text)) return null
+  const method = getAccessedPropertyName(expression)
+  return method === 'handleIpc' || method === 'onIpc' || method === 'sendIpc' ? method : null
+}
+
+function getDirectIpcCallKind(call, bindings) {
+  const expression = unwrapExpression(call.expression)
+  if (!ts.isPropertyAccessExpression(expression) && !ts.isElementAccessExpression(expression)) {
+    return null
+  }
+
+  const method = getAccessedPropertyName(expression)
+  const owner = unwrapExpression(expression.expression)
+  const directIpcMain = ts.isIdentifier(owner) && bindings.ipcMainBindings.has(owner.text)
+  const namespacedIpcMain = (
+    (ts.isPropertyAccessExpression(owner) || ts.isElementAccessExpression(owner))
+    && getAccessedPropertyName(owner) === 'ipcMain'
+    && ts.isIdentifier(unwrapExpression(owner.expression))
+    && bindings.electronNamespaces.has(unwrapExpression(owner.expression).text)
+  )
+  if (
+    (method === 'handle' || method === 'on')
+    && (directIpcMain || namespacedIpcMain)
+  ) {
+    return `ipcMain.${method}`
+  }
+
+  if (method !== 'send') return null
+  if (ts.isIdentifier(owner) && bindings.webContentsBindings.has(owner.text)) return 'webContents.send'
+  if (!ts.isPropertyAccessExpression(owner) && !ts.isElementAccessExpression(owner)) return null
+  return getAccessedPropertyName(owner) === 'webContents' ? 'webContents.send' : null
+}
+
+function checkIpcContracts(sourceFiles) {
+  const violations = []
+  const contracts = {
+    mainInvoke: new Map(),
+    contextInvoke: new Map(),
+    send: new Map(),
+    event: new Map(),
+  }
+  const calls = { invoke: [], send: [], event: [] }
+  let contractEnabled = false
+
+  function report(rule, record, message, patternNode = record.node) {
+    violations.push(createViolation(
+      rule,
+      record.relativePath,
+      record.sourceFile,
+      record.node,
+      message,
+      patternNode
+    ))
+  }
+
+  for (const [relativePath, sourceFile] of sourceFiles) {
+    const ipcBindings = collectIpcBindings(sourceFile)
+    function visit(node) {
+      if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+        const groupName = IPC_CONTRACT_NAMES[node.name.text]
+        if (groupName && node.initializer) {
+          contractEnabled = true
+          const initializer = unwrapExpression(node.initializer)
+          if (ts.isObjectLiteralExpression(initializer)) {
+            for (const property of initializer.properties) {
+              if (!ts.isPropertyAssignment(property) && !ts.isShorthandPropertyAssignment(property)) {
+                report('ipc-static-channel', {
+                  relativePath,
+                  sourceFile,
+                  node: property,
+                }, `${node.name.text} 只能包含静态 channel 属性`)
+                continue
+              }
+              const channel = getObjectPropertyName(property.name)
+              if (!channel) {
+                report('ipc-static-channel', {
+                  relativePath,
+                  sourceFile,
+                  node: property,
+                }, `${node.name.text} 包含动态 channel`)
+                continue
+              }
+              const record = { channel, relativePath, sourceFile, node: property }
+              if (contracts[groupName].has(channel)) {
+                report('ipc-duplicate-channel', record, `${node.name.text} 重复声明 ${channel}`)
+              } else {
+                contracts[groupName].set(channel, record)
+              }
+            }
+          }
+        }
+      }
+
+      if (ts.isCallExpression(node)) {
+        const directKind = getDirectIpcCallKind(node, ipcBindings)
+        if (directKind && relativePath !== TYPED_IPC_PATH) {
+          report('ipc-boundary', {
+            relativePath,
+            sourceFile,
+            node,
+          }, `${directKind} 只能在 ${TYPED_IPC_PATH} 中使用`)
+        }
+
+        const expression = unwrapExpression(node.expression)
+        const callName = getTypedIpcCallName(expression, ipcBindings)
+        const callConfig = callName === 'handleIpc'
+          ? { direction: 'invoke', argumentIndex: 0 }
+          : callName === 'onIpc'
+            ? { direction: 'send', argumentIndex: 0 }
+            : callName === 'sendIpc'
+              ? { direction: 'event', argumentIndex: 1 }
+              : null
+        if (callConfig && relativePath !== TYPED_IPC_PATH) {
+          const channelNode = node.arguments[callConfig.argumentIndex]
+          const channel = channelNode ? getStringLiteralValue(unwrapExpression(channelNode)) : null
+          const record = { channel, relativePath, sourceFile, node }
+          if (!channel) {
+            report('ipc-static-channel', record, `${callName} 必须使用字符串字面量 channel`, channelNode || node)
+          } else {
+            calls[callConfig.direction].push(record)
+          }
+        }
+      }
+
+      ts.forEachChild(node, visit)
+    }
+
+    visit(sourceFile)
+  }
+
+  if (!contractEnabled) return violations
+
+  const contractSource = sourceFiles.get('src/types/ipc.ts')
+  for (const contractName of Object.keys(IPC_CONTRACT_NAMES)) {
+    if (contracts[IPC_CONTRACT_NAMES[contractName]].size === 0 && contractSource) {
+      report('ipc-contract-consistency', {
+        relativePath: 'src/types/ipc.ts',
+        sourceFile: contractSource,
+        node: contractSource,
+      }, `缺少或清空了 ${contractName}`, contractSource)
+    }
+  }
+
+  const expected = {
+    invoke: new Map([...contracts.mainInvoke, ...contracts.contextInvoke]),
+    send: contracts.send,
+    event: contracts.event,
+  }
+  const directionLabels = { invoke: 'handleIpc', send: 'onIpc', event: 'sendIpc' }
+
+  for (const direction of Object.keys(calls)) {
+    const seen = new Map()
+    for (const record of calls[direction]) {
+      const previous = seen.get(record.channel)
+      if (previous && direction !== 'event') {
+        report('ipc-duplicate-channel', record, `${directionLabels[direction]} 重复注册或发送 ${record.channel}`)
+      } else if (!previous) {
+        seen.set(record.channel, record)
+      }
+    }
+
+    for (const [channel, contractRecord] of expected[direction]) {
+      if (!seen.has(channel)) {
+        report(
+          'ipc-contract-consistency',
+          contractRecord,
+          `合同 channel ${channel} 缺少 ${directionLabels[direction]}`
+        )
+      }
+    }
+
+    for (const [channel, record] of seen) {
+      if (expected[direction].has(channel)) continue
+      const declaredDirection = Object.keys(expected).find((candidate) => expected[candidate].has(channel))
+      const suffix = declaredDirection
+        ? `，合同方向应为 ${directionLabels[declaredDirection]}`
+        : '，合同中没有该 channel'
+      report(
+        'ipc-contract-consistency',
+        record,
+        `${directionLabels[direction]} 使用了 ${channel}${suffix}`
+      )
+    }
+  }
+
+  const mainPreload = sourceFiles.get('electron/preload.ts')
+  if (mainPreload) {
+    const expectedAllowlistBindings = new Map([
+      ['INVOKE_CHANNELS', 'MAIN_WINDOW_INVOKE_CHANNELS'],
+      ['SEND_CHANNELS', 'MAIN_WINDOW_SEND_CHANNELS'],
+      ['ON_CHANNELS', 'MAIN_WINDOW_EVENT_CHANNELS'],
+    ])
+    const allowlistDeclarations = new Map()
+    function collectAllowlistDeclaration(node) {
+      if (
+        ts.isVariableDeclaration(node)
+        && ts.isIdentifier(node.name)
+        && expectedAllowlistBindings.has(node.name.text)
+      ) {
+        allowlistDeclarations.set(node.name.text, node)
+      }
+      ts.forEachChild(node, collectAllowlistDeclaration)
+    }
+    collectAllowlistDeclaration(mainPreload)
+
+    for (const [binding, contractName] of expectedAllowlistBindings) {
+      const declaration = allowlistDeclarations.get(binding)
+      const initializer = declaration?.initializer ? unwrapExpression(declaration.initializer) : null
+      const setArgument = initializer && ts.isNewExpression(initializer)
+        && ts.isIdentifier(initializer.expression)
+        && initializer.expression.text === 'Set'
+        && initializer.arguments?.length === 1
+        ? unwrapExpression(initializer.arguments[0])
+        : null
+      const keysExpression = setArgument && ts.isCallExpression(setArgument)
+        ? unwrapExpression(setArgument.expression)
+        : null
+      const objectKeysCall = keysExpression
+        && ts.isPropertyAccessExpression(keysExpression)
+        && ts.isIdentifier(keysExpression.expression)
+        && keysExpression.expression.text === 'Object'
+        && keysExpression.name.text === 'keys'
+        && setArgument.arguments.length === 1
+        && ts.isIdentifier(unwrapExpression(setArgument.arguments[0]))
+        && unwrapExpression(setArgument.arguments[0]).text === contractName
+      if (!objectKeysCall) {
+        report('ipc-preload-contract', {
+          relativePath: 'electron/preload.ts',
+          sourceFile: mainPreload,
+          node: declaration || mainPreload,
+        }, `${binding} 必须精确由 Object.keys(${contractName}) 构造`)
+      }
+    }
+
+    for (const name of [
+      'MAIN_WINDOW_INVOKE_CHANNELS',
+      'MAIN_WINDOW_SEND_CHANNELS',
+      'MAIN_WINDOW_EVENT_CHANNELS',
+    ]) {
+      if (!collectRuntimeIdentifierUsage(mainPreload, name)) {
+        report('ipc-preload-contract', {
+          relativePath: 'electron/preload.ts',
+          sourceFile: mainPreload,
+          node: mainPreload,
+        }, `main preload 没有在运行时使用共享 allowlist ${name}`, mainPreload)
+      }
+    }
+    if (collectRuntimeIdentifierUsage(mainPreload, 'CONTEXT_MENU_INVOKE_CHANNELS')) {
+      report('ipc-preload-contract', {
+        relativePath: 'electron/preload.ts',
+        sourceFile: mainPreload,
+        node: mainPreload,
+      }, 'main preload 不得暴露 context menu invoke allowlist', mainPreload)
+    }
+
+    const allowlistBindings = new Set(expectedAllowlistBindings.keys())
+    function visitAllowlistMutation(node) {
+      if (ts.isCallExpression(node)) {
+        const expression = unwrapExpression(node.expression)
+        if (ts.isPropertyAccessExpression(expression) || ts.isElementAccessExpression(expression)) {
+          const method = getAccessedPropertyName(expression)
+          const owner = unwrapExpression(expression.expression)
+          if (
+            (method === 'add' || method === 'delete' || method === 'clear')
+            && ts.isIdentifier(owner)
+            && allowlistBindings.has(owner.text)
+          ) {
+            report('ipc-preload-contract', {
+              relativePath: 'electron/preload.ts',
+              sourceFile: mainPreload,
+              node,
+            }, `main preload 不得运行时修改共享 allowlist：${owner.text}.${method}`)
+          }
+        }
+      }
+      ts.forEachChild(node, visitAllowlistMutation)
+    }
+    visitAllowlistMutation(mainPreload)
+  }
+
+  const contextPreload = sourceFiles.get('electron/contextMenuPreload.ts')
+  if (contextPreload) {
+    const exposedCalls = collectNamedCalls(contextPreload, 'invokeContextMenu')
+    const exposedChannels = new Map()
+    for (const call of exposedCalls) {
+      const channelNode = call.arguments[0]
+      const channel = channelNode ? getStringLiteralValue(unwrapExpression(channelNode)) : null
+      const record = {
+        channel,
+        relativePath: 'electron/contextMenuPreload.ts',
+        sourceFile: contextPreload,
+        node: call,
+      }
+      if (!channel) {
+        report('ipc-static-channel', record, 'context menu preload 必须使用字符串字面量 channel')
+      } else if (exposedChannels.has(channel)) {
+        report('ipc-duplicate-channel', record, `context menu preload 重复暴露 ${channel}`)
+      } else {
+        exposedChannels.set(channel, record)
+      }
+    }
+    for (const [channel, contractRecord] of contracts.contextInvoke) {
+      if (!exposedChannels.has(channel)) {
+        report('ipc-preload-contract', contractRecord, `context menu preload 未暴露 ${channel}`)
+      }
+    }
+    for (const [channel, record] of exposedChannels) {
+      if (!contracts.contextInvoke.has(channel)) {
+        report('ipc-preload-contract', record, `context menu preload 暴露了合同外 channel ${channel}`)
+      }
+    }
+  }
+
+  return violations
+}
+
 // 将 TypeScript 配置中的源文件合并并按绝对路径去重。
 function collectSourcePaths(projectRoot, configPaths, violations) {
   const sourcePaths = new Map()
@@ -430,6 +900,7 @@ function runChecks(options) {
   const rawViolations = []
   const sourcePaths = collectSourcePaths(projectRoot, options.configPaths, rawViolations)
   const scannedFiles = { electron: 0, workers: 0, src: 0 }
+  const sourceFiles = new Map()
 
   for (const sourcePath of sourcePaths) {
     const relativePath = normalizeRelativePath(projectRoot, sourcePath)
@@ -445,6 +916,7 @@ function runChecks(options) {
     const content = fs.readFileSync(sourcePath, 'utf8')
     const scriptKind = sourcePath.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS
     const sourceFile = ts.createSourceFile(sourcePath, content, ts.ScriptTarget.Latest, true, scriptKind)
+    sourceFiles.set(relativePath, sourceFile)
 
     if (isElectron) {
       rawViolations.push(...checkSyncIo(sourceFile, relativePath))
@@ -453,6 +925,8 @@ function runChecks(options) {
       rawViolations.push(...checkWorkerDatabaseImports(sourceFile, relativePath, projectRoot))
     }
   }
+
+  rawViolations.push(...checkIpcContracts(sourceFiles))
 
   for (const [scope, count] of Object.entries(scannedFiles)) {
     if (count === 0) {

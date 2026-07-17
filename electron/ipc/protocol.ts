@@ -1,102 +1,153 @@
-// =============================================================================
-// QinPlayer — 自定义协议处理
-// =============================================================================
-// 职责：拦截 qinplayer:// 协议请求，返回本地音频/封面文件流
-// 支持 Range Requests（拖动进度条需要 206 响应）
-// =============================================================================
-
 import { protocol } from 'electron'
-import * as fs from 'fs'
+import { createReadStream as createNodeReadStream } from 'fs'
+import { stat } from 'fs/promises'
 import { Readable } from 'stream'
 
-/**
- * 注册 qinplayer:// 协议拦截器
- * 在 app.whenReady() 之后调用
- *
- * 用法：
- *   qinplayer://audio?path=xxx  → 返回音频流
- *   qinplayer://cover?path=xxx  → 返回封面图片
- *
- * ⚠️ 使用异步 I/O 避免阻塞主线程
- */
-export function registerProtocol(): void {
-  protocol.handle('qinplayer', async (request) => {
-    try {
-      const url = new URL(request.url)
-      const filePath = decodeURIComponent(url.searchParams.get('path') || '')
-      const host = url.hostname  // 'audio' 或 'cover'
+import { mediaResourceRepository, type ResolvedMediaResource } from '../db/mediaResourceRepository'
+import {
+  parseProtocolRequest,
+  resolveByteRange,
+  type ProtocolResourceRequest,
+} from './protocolPolicy'
 
-      if (!filePath) {
-        console.error('[Protocol] 缺少 path 参数:', request.url)
-        return new Response('Not Found', { status: 404 })
-      }
+export interface ProtocolHandlerDependencies {
+  resolveResource: (request: ProtocolResourceRequest) => Promise<ResolvedMediaResource | null>
+  stat: (path: string) => Promise<{ size: number; isFile(): boolean }>
+  createReadStream: (
+    path: string,
+    range: { start: number; end: number } | undefined,
+  ) => Promise<ReadableStream<Uint8Array>>
+  logError: (...args: unknown[]) => void
+}
 
-      console.log('[Protocol] 请求:', host, '→', filePath)
+function responseText(status: number): string {
+  if (status === 404) return 'Not Found'
+  if (status === 405) return 'Method Not Allowed'
+  if (status === 416) return 'Range Not Satisfiable'
+  if (status === 500) return 'Internal Error'
+  return 'Bad Request'
+}
 
-      // 异步检查文件是否存在（替代 existsSync）
+function sanitizeReadStream(
+  source: ReadableStream<Uint8Array>,
+  logError: (...args: unknown[]) => void,
+): ReadableStream<Uint8Array> {
+  const reader = source.getReader()
+  let terminal = false
+
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
       try {
-        await fs.promises.access(filePath, fs.constants.R_OK)
-      } catch (accessErr) {
-        console.error('[Protocol] 文件不可访问:', filePath, accessErr)
-        return new Response('Not Found', { status: 404 })
+        const result = await reader.read()
+        if (result.done) {
+          terminal = true
+          controller.close()
+          return
+        }
+        controller.enqueue(result.value)
+      } catch (error) {
+        if (terminal) return
+        terminal = true
+        logError('[Protocol] 文件流读取失败:', error)
+        controller.error(new Error('Resource stream failed'))
       }
-
-      // 异步获取文件信息（替代 statSync）
-      const stat = await fs.promises.stat(filePath)
-
-      // 根据类型确定 Content-Type
-      let contentType: string
-      if (host === 'cover' || host === 'avatar') {
-        // 封面图片
-        const ext = filePath.toLowerCase()
-        if (ext.endsWith('.png')) contentType = 'image/png'
-        else contentType = 'image/jpeg'
-      } else {
-        // 音频文件
-        const ext = filePath.toLowerCase()
-        if (ext.endsWith('.flac')) contentType = 'audio/flac'
-        else if (ext.endsWith('.wav')) contentType = 'audio/wav'
-        else if (ext.endsWith('.ogg')) contentType = 'audio/ogg'
-        else if (ext.endsWith('.m4a') || ext.endsWith('.aac')) contentType = 'audio/mp4'
-        else contentType = 'audio/mpeg'
+    },
+    async cancel(reason) {
+      terminal = true
+      try {
+        await reader.cancel(reason)
+      } catch (error) {
+        logError('[Protocol] 文件流取消失败:', error)
       }
-
-      const range = request.headers.get('range')
-
-      if (range) {
-        // ---- Range Request（拖动进度条 / 缓冲）----
-        const parts = range.replace(/bytes=/, '').split('-')
-        const start = parseInt(parts[0], 10)
-        const end = parts[1] ? parseInt(parts[1], 10) : stat.size - 1
-        const chunkSize = (end - start) + 1
-
-        const stream = fs.createReadStream(filePath, { start, end })
-        const webStream = Readable.toWeb(stream) as ReadableStream
-
-        return new Response(webStream, {
-          status: 206,
-          headers: {
-            'Content-Range': `bytes ${start}-${end}/${stat.size}`,
-            'Accept-Ranges': 'bytes',
-            'Content-Length': chunkSize.toString(),
-            'Content-Type': contentType
-          }
-        })
-      } else {
-        // ---- 完整文件请求 ----
-        const stream = fs.createReadStream(filePath)
-        const webStream = Readable.toWeb(stream) as ReadableStream
-
-        return new Response(webStream, {
-          headers: {
-            'Content-Length': stat.size.toString(),
-            'Content-Type': contentType
-          }
-        })
-      }
-    } catch (err) {
-      console.error('[Protocol] 处理异常:', err)
-      return new Response('Internal Error', { status: 500 })
-    }
+    },
   })
+}
+
+export function createProtocolHandler(dependencies: ProtocolHandlerDependencies) {
+  return async (request: Request): Promise<Response> => {
+    const isHead = request.method.toUpperCase() === 'HEAD'
+    const safeBody = (body: string): string | null => isHead ? null : body
+    const parsed = parseProtocolRequest(request)
+    if (!parsed.ok) return new Response(safeBody(responseText(parsed.status)), { status: parsed.status })
+
+    let resource: ResolvedMediaResource | null
+    let fileStat: { size: number; isFile(): boolean }
+    try {
+      resource = await dependencies.resolveResource(parsed.resource)
+      if (!resource) return new Response(safeBody('Not Found'), { status: 404 })
+      fileStat = await dependencies.stat(resource.filePath)
+      if (!fileStat.isFile() || !Number.isSafeInteger(fileStat.size) || fileStat.size < 0) {
+        return new Response(safeBody('Not Found'), { status: 404 })
+      }
+    } catch (error) {
+      dependencies.logError('[Protocol] 资源解析失败:', error)
+      return new Response(safeBody('Not Found'), { status: 404 })
+    }
+
+    const range = resolveByteRange(request.headers.get('range'), fileStat.size)
+    if (!range.ok) {
+      return new Response(safeBody('Range Not Satisfiable'), {
+        status: 416,
+        headers: {
+          'Accept-Ranges': 'bytes',
+          'Content-Range': `bytes */${fileStat.size}`,
+        },
+      })
+    }
+
+    const headers: Record<string, string> = {
+      'Accept-Ranges': 'bytes',
+      'Content-Length': String(range.length),
+      'Content-Type': resource.contentType,
+    }
+    if (range.partial) headers['Content-Range'] = `bytes ${range.start}-${range.end}/${fileStat.size}`
+    const status = range.partial ? 206 : 200
+    if (parsed.method === 'HEAD') return new Response(null, { status, headers })
+
+    try {
+      const body = await dependencies.createReadStream(
+        resource.filePath,
+        range.partial ? { start: range.start, end: range.end } : undefined,
+      )
+      return new Response(sanitizeReadStream(body, dependencies.logError) as BodyInit, { status, headers })
+    } catch (error) {
+      dependencies.logError('[Protocol] 文件流打开失败:', error)
+      return new Response(safeBody('Internal Error'), { status: 500 })
+    }
+  }
+}
+
+async function openWebReadStream(
+  filePath: string,
+  range: { start: number; end: number } | undefined,
+): Promise<ReadableStream<Uint8Array>> {
+  const nodeStream = createNodeReadStream(filePath, range)
+  await new Promise<void>((resolve, reject) => {
+    const handleOpen = () => {
+      nodeStream.removeListener('error', handleInitialError)
+      resolve()
+    }
+    const handleInitialError = (error: Error) => {
+      nodeStream.removeListener('open', handleOpen)
+      reject(error)
+    }
+    nodeStream.once('open', handleOpen)
+    nodeStream.once('error', handleInitialError)
+  })
+  return Readable.toWeb(nodeStream) as ReadableStream<Uint8Array>
+}
+
+const protocolHandler = createProtocolHandler({
+  resolveResource: async (request) => {
+    if (request.kind === 'audio') return mediaResourceRepository.resolveAudio(request.songId)
+    if (request.kind === 'cover') return mediaResourceRepository.resolveCover(request.songId)
+    return mediaResourceRepository.resolveAvatar()
+  },
+  stat,
+  createReadStream: openWebReadStream,
+  logError: (...args) => console.error(...args),
+})
+
+export function registerProtocol(): void {
+  protocol.handle('qinplayer', protocolHandler)
 }

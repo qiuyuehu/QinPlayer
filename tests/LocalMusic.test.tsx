@@ -45,7 +45,10 @@ describe('LocalMusic 排序', () => {
     usePlayerStore.setState({ playlist: [], currentTrack: null, isPlaying: false })
   })
 
-  afterEach(() => { window.electronAPI = originalApi })
+  afterEach(() => {
+    vi.useRealTimers()
+    window.electronAPI = originalApi
+  })
 
   it('默认按歌名升序，切换播放次数后起播队列使用当前排序', async () => {
     render(<LocalMusic />)
@@ -67,9 +70,61 @@ describe('LocalMusic 排序', () => {
     fireEvent.click(screen.getByRole('button', { name: '歌名 · 升序' }))
     fireEvent.click(screen.getByRole('menuitemradio', { name: '歌手' }))
 
-    act(() => listeners.get('scan:song-found')?.(track(4, 'A', '阿', 0)))
+    const persisted = track(4, 'A', '阿', 0)
+    invoke.mockImplementation((channel: string) => (
+      channel === 'songs:getAll' ? Promise.resolve([...tracks, persisted]) : Promise.resolve(null)
+    ))
+    const { id: _id, playCount: _playCount, createdAt: _createdAt, ...scanResult } = persisted
+    act(() => listeners.get('scan:song-found')?.(scanResult))
     await waitFor(() => expect(screen.getByTestId('song-list')).toHaveTextContent('4,3,2,1'))
     expect(screen.getByRole('button', { name: '歌手 · 升序' })).toBeInTheDocument()
+  })
+
+  it('同一批 scan:song-found 事件应该合并为一次曲库刷新', async () => {
+    render(<LocalMusic />)
+    await screen.findByTestId('song-list')
+    invoke.mockClear()
+    vi.useFakeTimers()
+
+    const scanResult = {
+      filePath: '4.mp3', fileName: '4.mp3', title: 'A', artist: '阿', album: '',
+      duration: 1, coverPath: null, mtime: 0,
+    }
+    act(() => {
+      listeners.get('scan:song-found')?.(scanResult)
+      listeners.get('scan:song-found')?.({ ...scanResult, filePath: '5.mp3', fileName: '5.mp3' })
+      listeners.get('scan:song-found')?.({ ...scanResult, filePath: '6.mp3', fileName: '6.mp3' })
+    })
+
+    expect(invoke).not.toHaveBeenCalledWith('songs:getAll')
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(150)
+    })
+    expect(invoke.mock.calls.filter(([channel]) => channel === 'songs:getAll')).toHaveLength(1)
+    vi.useRealTimers()
+  })
+
+  it('scan:song-found 后立即失败也应该刷新已入库歌曲', async () => {
+    render(<LocalMusic />)
+    await screen.findByTestId('song-list')
+    invoke.mockClear()
+    vi.useFakeTimers()
+
+    const scanResult = {
+      filePath: '4.mp3', fileName: '4.mp3', title: 'A', artist: '阿', album: '',
+      duration: 1, coverPath: null, mtime: 0,
+    }
+    act(() => {
+      listeners.get('scan:song-found')?.(scanResult)
+      listeners.get('scan:error')?.({ message: '扫描中止' })
+    })
+
+    expect(invoke.mock.calls.filter(([channel]) => channel === 'songs:getAll')).toHaveLength(1)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(150)
+    })
+    expect(invoke.mock.calls.filter(([channel]) => channel === 'songs:getAll')).toHaveLength(1)
+    vi.useRealTimers()
   })
 
   it('选择文件夹行为保持不变', async () => {

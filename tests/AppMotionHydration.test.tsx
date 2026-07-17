@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { StrictMode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -10,6 +10,7 @@ vi.mock('../src/components/Sidebar', () => ({ default: () => <div>sidebar</div> 
 vi.mock('../src/components/Content', () => ({ default: () => <div>normal content</div> }))
 vi.mock('../src/components/PlayerBar', () => ({ default: () => <div>player</div> }))
 vi.mock('../src/components/MiniPlayer', () => ({ default: () => <div>mini</div> }))
+vi.mock('../src/components/PlaybackErrorBanner', () => ({ default: () => null }))
 vi.mock('../src/hooks/useTheme', () => ({ useTheme: vi.fn() }))
 vi.mock('../src/hooks/useAudioSync', () => ({ useAudioSync: vi.fn() }))
 vi.mock('../src/utils/AudioEngine', () => ({
@@ -37,11 +38,13 @@ describe('App reduced-motion hydration', () => {
 
   beforeEach(() => {
     document.documentElement.setAttribute('data-reduced-motion', 'true')
-    useUIStore.setState({
-      activeNav: 'local',
-      isMiniMode: false,
-      reducedMotion: false,
-      featureFlags: { ...DEFAULT_FEATURE_FLAGS },
+    act(() => {
+      useUIStore.setState({
+        activeNav: 'local',
+        isMiniMode: false,
+        reducedMotion: false,
+        featureFlags: { ...DEFAULT_FEATURE_FLAGS },
+      })
     })
     getFeatureFlags.mockClear()
     invoke.mockReset()
@@ -50,8 +53,9 @@ describe('App reduced-motion hydration', () => {
   })
 
   afterEach(() => {
+    cleanup()
     document.documentElement.removeAttribute('data-reduced-motion')
-    useUIStore.setState({ reducedMotion: false })
+    act(() => useUIStore.setState({ reducedMotion: false }))
     window.electronAPI.on = originalOn
     window.electronAPI.send = originalSend
   })

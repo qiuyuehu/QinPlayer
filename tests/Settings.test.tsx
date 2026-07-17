@@ -124,4 +124,22 @@ describe('Settings reduced motion', () => {
     expect(screen.getByRole('radio', { name: '每次询问' })).toBeDisabled()
     expect(screen.getByRole('radio', { name: '直接退出' })).toHaveAttribute('aria-checked', 'true')
   })
+
+  it('头像只通过 current avatar helper 生成 URL', async () => {
+    invoke.mockImplementation(async (channel: string, args?: { key?: string }) => {
+      if (channel === 'settings:get' && args?.key === 'avatarPath') {
+        return 'C:\\UserData\\avatar\\avatar one.png'
+      }
+      if (channel === 'get-auto-launch') return false
+      if (channel === 'settings:getFolders') return []
+      return null
+    })
+
+    render(<Settings />)
+
+    expect(await screen.findByAltText('头像')).toHaveAttribute(
+      'src',
+      'qinplayer://avatar?id=current&v=avatar%20one.png',
+    )
+  })
 })

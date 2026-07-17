@@ -28,6 +28,7 @@ interface SongListProps {
   showAlbum?: boolean       // 是否显示专辑列（默认 false）
   playlistId?: number       // 当前歌单 ID（从歌单详情页传入，用于"从歌单移除"）
   onRemoveFromPlaylist?: (songId: number) => void  // 从歌单移除回调
+  onLikedChange?: (track: Track, liked: boolean) => void
   containerHeight?: number  // 外部容器高度（播放列表面板等半高场景使用）
 }
 
@@ -36,7 +37,7 @@ const ROW_HEIGHT = 44
 const ROW_ENTER_STAGGER_MS = 28
 
 const SongList = forwardRef<SongListHandle, SongListProps>(function SongList(
-  { tracks, showIndex = true, showAlbum = false, playlistId, onRemoveFromPlaylist, containerHeight },
+  { tracks, showIndex = true, showAlbum = false, playlistId, onRemoveFromPlaylist, onLikedChange, containerHeight },
   ref
 ) {
   // --- Zustand store ---
@@ -56,6 +57,8 @@ const SongList = forwardRef<SongListHandle, SongListProps>(function SongList(
   // --- 收藏歌曲 ID 集合（快速查找）---
   // 用 Set 存储，O(1) 判断某首歌是否已收藏，避免每次遍历数组
   const [likedIds, setLikedIds] = useState<Set<number>>(new Set())
+  const pendingLikeIdsRef = useRef<Set<number>>(new Set())
+  const [pendingLikeIds, setPendingLikeIds] = useState<Set<number>>(new Set())
   const [animateInitialRows, setAnimateInitialRows] = useState(true)
   const prevTracksRef = useRef<Track[] | null>(null)
 
@@ -65,7 +68,7 @@ const SongList = forwardRef<SongListHandle, SongListProps>(function SongList(
     async function loadData() {
       try {
         if (featureFlags.liked) {
-          const likedSongs = await window.electronAPI.invoke('songs:getLiked') as Track[]
+          const likedSongs = await window.electronAPI.invoke('songs:getLiked')
           setLikedIds(new Set(likedSongs.map(s => s.id)))
         }
       } catch {
@@ -130,20 +133,46 @@ const SongList = forwardRef<SongListHandle, SongListProps>(function SongList(
   const toggleLike = useCallback(async (e: React.MouseEvent, track: Track) => {
     e.stopPropagation()  // 关键：阻止冒泡到父元素的 onClick，否则会同时触发播放
     if (!featureFlags.liked) return
+    if (pendingLikeIdsRef.current.has(track.id)) return
+
+    pendingLikeIdsRef.current.add(track.id)
+    setPendingLikeIds((current) => new Set(current).add(track.id))
 
     const isLiked = likedIds.has(track.id)
-    if (isLiked) {
-      await window.electronAPI.invoke('songs:unlike', { songId: track.id })
-      setLikedIds(prev => {
-        const next = new Set(prev)
+    const nextLiked = !isLiked
+
+    try {
+      try {
+        if (isLiked) {
+          await window.electronAPI.invoke('songs:unlike', { songId: track.id })
+          setLikedIds(prev => {
+            const next = new Set(prev)
+            next.delete(track.id)
+            return next
+          })
+        } else {
+          await window.electronAPI.invoke('songs:like', { songId: track.id })
+          setLikedIds(prev => new Set(prev).add(track.id))
+        }
+      } catch (error) {
+        console.error('更新收藏状态失败:', error)
+        return
+      }
+
+      try {
+        onLikedChange?.(track, nextLiked)
+      } catch (error) {
+        console.error('通知收藏状态失败:', error)
+      }
+    } finally {
+      pendingLikeIdsRef.current.delete(track.id)
+      setPendingLikeIds((current) => {
+        const next = new Set(current)
         next.delete(track.id)
         return next
       })
-    } else {
-      await window.electronAPI.invoke('songs:like', { songId: track.id })
-      setLikedIds(prev => new Set(prev).add(track.id))
     }
-  }, [likedIds, featureFlags.liked])
+  }, [likedIds, featureFlags.liked, onLikedChange])
 
   // --- 右键菜单 ---
   // 记录鼠标坐标和目标歌曲，传给 ContextMenu 组件定位菜单
@@ -202,6 +231,7 @@ const SongList = forwardRef<SongListHandle, SongListProps>(function SongList(
           {virtualizer.getVirtualItems().map((virtualRow, visibleIndex) => {
             const track = tracks[virtualRow.index]
             const isActive = currentTrack?.id === track.id  // 当前播放歌曲高亮
+            const isLikePending = pendingLikeIds.has(track.id)
             return (
               <div
                 key={track.id}
@@ -244,6 +274,8 @@ const SongList = forwardRef<SongListHandle, SongListProps>(function SongList(
                   <button
                     className={`song-list__like ${likedIds.has(track.id) ? 'song-list__like--active' : ''}`} // 已收藏时高亮样式
                     onClick={(e) => toggleLike(e, track)}
+                    disabled={isLikePending}
+                    aria-busy={isLikePending}
                     title={likedIds.has(track.id) ? '取消收藏' : '收藏'}  // tooltip 提示当前状态
                   >
                     <IconStar width={14} height={14} filled={likedIds.has(track.id)} />

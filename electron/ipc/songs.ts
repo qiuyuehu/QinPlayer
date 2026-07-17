@@ -5,9 +5,9 @@
 // 所有数据库操作在这里封装，通过 ipcMain.handle 暴露给渲染进程
 // =============================================================================
 
-import { ipcMain } from 'electron'
 import { getDatabase } from '../db/database'
 import type { Track } from '../../src/types'
+import { handleIpc } from './typedIpc'
 
 // ---------------------------------------------------------------------------
 // 数据库行 → Track 类型映射
@@ -52,14 +52,14 @@ function rowToTrack(row: SongRow): Track {
 
 export function registerSongsIPC(): void {
   // --- songs:getAll — 获取所有歌曲 ---
-  ipcMain.handle('songs:getAll', () => {
+  handleIpc('songs:getAll', () => {
     const db = getDatabase()
     const rows = db.prepare('SELECT * FROM songs ORDER BY id DESC').all() as SongRow[]
     return rows.map(rowToTrack)
   })
 
   // --- songs:search — 按歌名/歌手搜索 ---
-  ipcMain.handle('songs:search', (_event, { keyword }: { keyword: string }) => {
+  handleIpc('songs:search', (_event, { keyword }: { keyword: string }) => {
     const db = getDatabase()
     const pattern = `%${keyword}%`
     const rows = db.prepare(
@@ -69,19 +69,19 @@ export function registerSongsIPC(): void {
   })
 
   // --- songs:like — 收藏歌曲 ---
-  ipcMain.handle('songs:like', (_event, { songId }: { songId: number }) => {
+  handleIpc('songs:like', (_event, { songId }: { songId: number }) => {
     const db = getDatabase()
     db.prepare('INSERT OR IGNORE INTO liked_songs (song_id) VALUES (?)').run(songId)
   })
 
   // --- songs:unlike — 取消收藏 ---
-  ipcMain.handle('songs:unlike', (_event, { songId }: { songId: number }) => {
+  handleIpc('songs:unlike', (_event, { songId }: { songId: number }) => {
     const db = getDatabase()
     db.prepare('DELETE FROM liked_songs WHERE song_id = ?').run(songId)
   })
 
   // --- songs:getLiked — 获取收藏列表 ---
-  ipcMain.handle('songs:getLiked', () => {
+  handleIpc('songs:getLiked', () => {
     const db = getDatabase()
     const rows = db.prepare(`
       SELECT s.* FROM songs s
@@ -92,7 +92,7 @@ export function registerSongsIPC(): void {
   })
 
   // --- songs:getRecent — 获取最近播放（50 首，song_id 已 UNIQUE 去重）---
-  ipcMain.handle('songs:getRecent', () => {
+  handleIpc('songs:getRecent', () => {
     const db = getDatabase()
     const rows = db.prepare(`
       SELECT s.* FROM songs s
@@ -104,13 +104,13 @@ export function registerSongsIPC(): void {
   })
 
   // --- songs:updatePlayCount — 播放次数 +1 ---
-  ipcMain.handle('songs:updatePlayCount', (_event, { songId }: { songId: number }) => {
+  handleIpc('songs:updatePlayCount', (_event, { songId }: { songId: number }) => {
     const db = getDatabase()
     db.prepare('UPDATE songs SET play_count = play_count + 1 WHERE id = ?').run(songId)
   })
 
   // --- songs:recordPlay — 记录最近播放（去重：同一首歌只保留一条，更新时间戳） ---
-  ipcMain.handle('songs:recordPlay', (_event, { songId }: { songId: number }) => {
+  handleIpc('songs:recordPlay', (_event, { songId }: { songId: number }) => {
     const db = getDatabase()
     // UPSERT：song_id 已存在则更新 played_at，不存在则插入
     db.prepare(`
@@ -128,14 +128,14 @@ export function registerSongsIPC(): void {
   })
 
   // --- songs:isLiked — 检查是否已收藏 ---
-  ipcMain.handle('songs:isLiked', (_event, { songId }: { songId: number }) => {
+  handleIpc('songs:isLiked', (_event, { songId }: { songId: number }) => {
     const db = getDatabase()
     const row = db.prepare('SELECT 1 FROM liked_songs WHERE song_id = ?').get(songId)
     return !!row
   })
 
   // --- songs:deleteAll — 清空所有歌曲 ---
-  ipcMain.handle('songs:deleteAll', () => {
+  handleIpc('songs:deleteAll', () => {
     const db = getDatabase()
     // 外键 CASCADE 会自动清理歌单关联、收藏、播放记录
     const result = db.prepare('DELETE FROM songs').run()

@@ -259,7 +259,7 @@ function MiniPlayer() {
 
   const ModeIcon = PLAY_MODE_ICON[playMode]
   const coverUrl = currentTrack?.coverPath
-    ? window.electronAPI.getCoverUrl(currentTrack.coverPath)
+    ? window.electronAPI.getCoverUrl(currentTrack.id, currentTrack.mtime)
     : null
 
   const defaultView = (

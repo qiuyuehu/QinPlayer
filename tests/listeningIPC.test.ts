@@ -46,7 +46,7 @@ describe('听歌统计 IPC', () => {
           ? [{}, { limit: 10 }]
           : [{}]
 
-      await expect(Promise.resolve(handlers.get(channel)?.(...args))).rejects.toThrow('个人统计功能已关闭')
+      await expect(Promise.resolve(handlers.get(channel)?.(...args))).rejects.toThrow('IPC 调用失败，请重试')
       expect(repository.increment).not.toHaveBeenCalled()
       expect(repository.getDays).not.toHaveBeenCalled()
       expect(repository.getRanking).not.toHaveBeenCalled()
@@ -59,7 +59,7 @@ describe('听歌统计 IPC', () => {
     await expect(Promise.resolve(handlers.get('listening:addSeconds')?.(
       {},
       { date: '2026-07-12', seconds: 1 },
-    ))).rejects.toThrow('播放功能已关闭')
+    ))).rejects.toThrow('IPC 调用失败，请重试')
     expect(await handlers.get('listening:getDays')?.({})).toEqual([{ date: '2026-07-12', seconds: 10 }])
     expect(repository.increment).not.toHaveBeenCalled()
   })
@@ -70,7 +70,7 @@ describe('听歌统计 IPC', () => {
       throw new Error('database failed')
     })
 
-    await expect(Promise.resolve(handlers.get('listening:getDays')?.({}))).rejects.toThrow('database failed')
+    await expect(Promise.resolve(handlers.get('listening:getDays')?.({}))).rejects.toThrow('IPC 调用失败，请重试')
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('读取听歌日统计失败'), expect.any(Error))
   })
 
@@ -80,8 +80,8 @@ describe('听歌统计 IPC', () => {
       'listening:getDays',
       'listening:getRanking',
     ]
-    const preload = readFileSync(resolve('electron/preload.ts'), 'utf8')
+    const ipcTypes = readFileSync(resolve('src/types/ipc.ts'), 'utf8')
 
-    for (const channel of channels) expect(preload).toContain(`'${channel}'`)
+    for (const channel of channels) expect(ipcTypes).toContain(`'${channel}': true`)
   })
 })

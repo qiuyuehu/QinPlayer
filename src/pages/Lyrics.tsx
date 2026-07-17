@@ -178,7 +178,7 @@ function Lyrics() {
 
     // 提取封面主色作为背景（⚠️ 暗礁 2：50x50 Canvas 采样）
     if (currentTrack.coverPath) {
-      const coverUrl = window.electronAPI.getCoverUrl(currentTrack.coverPath)
+      const coverUrl = window.electronAPI.getCoverUrl(currentTrack.id, currentTrack.mtime)
       extractMainColor(coverUrl).then((color) => {
         if (!active || requestId !== colorRequestRef.current) return
         setBgColor(color)
@@ -191,7 +191,7 @@ function Lyrics() {
       active = false
       if (colorRequestRef.current === requestId) colorRequestRef.current++
     }
-  }, [currentTrack?.id, currentTrack?.coverPath])
+  }, [currentTrack?.id, currentTrack?.coverPath, currentTrack?.mtime])
 
   // ---------------------------------------------------------------------------
   // 进度条拖拽逻辑
@@ -329,7 +329,7 @@ function Lyrics() {
 
   // 获取封面 URL
   const coverUrl = currentTrack.coverPath
-    ? window.electronAPI.getCoverUrl(currentTrack.coverPath)
+    ? window.electronAPI.getCoverUrl(currentTrack.id, currentTrack.mtime)
     : null
 
   // 进度条由 RAF 循环直接操作 DOM，不依赖 React state

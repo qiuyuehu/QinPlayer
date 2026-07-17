@@ -6,21 +6,40 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { act, render, waitFor } from '@testing-library/react'
 import { StrictMode } from 'react'
 import { useAudioSync } from '../src/hooks/useAudioSync'
-import { usePlayerStore } from '../src/stores/playerStore'
+import { getPlaybackTrackKey, usePlayerStore } from '../src/stores/playerStore'
 import { useUIStore } from '../src/stores/uiStore'
 import { currentTimeRef } from '../src/utils/currentTimeRef'
 import { DEFAULT_FEATURE_FLAGS } from '../src/utils/featureFlags'
 import type { Track } from '../src/types'
 
-const loadMock = vi.fn()
-const loadWithFadeMock = vi.fn().mockResolvedValue(undefined)
-const playMock = vi.fn().mockResolvedValue(undefined)
+interface SourceIdentity {
+  source: string
+  generation: number
+}
+
+let loadGeneration = 0
+let latestLoadIdentity: SourceIdentity | null = null
+const beginMockLoad = (source: string): SourceIdentity => {
+  latestLoadIdentity = { source, generation: ++loadGeneration }
+  return latestLoadIdentity
+}
+const loadMock = vi.fn((source: string) => beginMockLoad(source))
+const loadWithFadeMock = vi.fn(async (source: string) => beginMockLoad(source))
+const playMock = vi.fn(async () => undefined)
 const pauseMock = vi.fn()
 let timeUpdateHandler: ((time: number, duration: number) => void) | undefined
-let loadedMetadataHandler: ((duration: number) => void) | undefined
+let loadedMetadataHandler: ((duration: number, identity?: SourceIdentity | null) => void) | undefined
 let endedHandler: (() => void) | undefined
+let errorHandler: ((error: SourceIdentity & { code: number | null }) => void) | undefined
 let enginePlaying = true
 let engineCurrentTime = 0
+let engineDuration = 0
+let engineExists = true
+const currentTimeSetMock = vi.fn()
+const invalidatePendingLoadsMock = vi.fn(() => {
+  latestLoadIdentity = null
+  loadGeneration += 1
+})
 
 const trackerMocks = vi.hoisted(() => ({
   observe: vi.fn(),
@@ -36,35 +55,49 @@ vi.mock('../src/utils/listeningTracker', () => ({
 const onTimeUpdateMock = vi.fn((callback: (time: number, duration: number) => void) => {
   timeUpdateHandler = callback
 })
-const onLoadedMetadataMock = vi.fn((callback: (duration: number) => void) => {
+const onLoadedMetadataMock = vi.fn((callback: (duration: number, identity?: SourceIdentity | null) => void) => {
   loadedMetadataHandler = callback
 })
 const onEndedMock = vi.fn((callback: () => void) => {
   endedHandler = callback
 })
+const onErrorMock = vi.fn((callback: (error: SourceIdentity & { code: number | null }) => void) => {
+  errorHandler = callback
+})
 
 vi.mock('../src/utils/AudioEngine', () => ({
   getAudioEngine: vi.fn(() => ({
-  get playing() { return enginePlaying },
+    get playing() { return enginePlaying },
+    get duration() { return engineDuration },
+    get latestLoadOperationIdentity() { return latestLoadIdentity },
     get currentTime() { return engineCurrentTime },
-    set currentTime(value: number) { engineCurrentTime = value },
+    set currentTime(value: number) {
+      engineCurrentTime = value
+      currentTimeSetMock(value)
+    },
     load: loadMock,
     loadWithFade: loadWithFadeMock,
+    invalidatePendingLoads: invalidatePendingLoadsMock,
     play: playMock,
     pause: pauseMock,
     setVolume: vi.fn(),
     onTimeUpdate: onTimeUpdateMock,
     onEnded: onEndedMock,
     onLoadedMetadata: onLoadedMetadataMock,
+    onError: onErrorMock,
   })),
-  hasAudioEngine: vi.fn(() => true),
+  hasAudioEngine: vi.fn(() => engineExists),
 }))
 
-vi.mock('../src/utils/mediaSession', () => ({
+const mediaSessionMocks = vi.hoisted(() => ({
+  clearMediaSession: vi.fn(),
   registerMediaSessionActions: vi.fn(),
-  updateMediaSession: vi.fn(),
   setPlaybackState: vi.fn(),
+  unregisterMediaSessionActions: vi.fn(),
+  updateMediaSession: vi.fn(),
 }))
+
+vi.mock('../src/utils/mediaSession', () => mediaSessionMocks)
 
 function createTrack(id: number, title: string, duration: number, fileStem = String(id)): Track {
   return {
@@ -91,14 +124,35 @@ function HookHost() {
   return null
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
+
 describe('useAudioSync', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     timeUpdateHandler = undefined
     loadedMetadataHandler = undefined
     endedHandler = undefined
+    errorHandler = undefined
     enginePlaying = true
     engineCurrentTime = 0
+    engineDuration = 0
+    engineExists = true
+    loadGeneration = 0
+    latestLoadIdentity = null
+    loadMock.mockReset().mockImplementation((source: string) => beginMockLoad(source))
+    loadWithFadeMock.mockReset().mockImplementation(async (source: string) => beginMockLoad(source))
+    playMock.mockReset().mockResolvedValue(undefined)
+    mediaSessionMocks.registerMediaSessionActions.mockReturnValue(
+      mediaSessionMocks.unregisterMediaSessionActions,
+    )
     currentTimeRef.current = 0
     act(() => {
       useUIStore.setState({
@@ -123,6 +177,8 @@ describe('useAudioSync', () => {
         lyricOffset: 0,
         duration: 0,
         seekTime: null,
+        playbackFailure: null,
+        playbackRetryVersion: 0,
       })
     })
   })
@@ -131,7 +187,7 @@ describe('useAudioSync', () => {
     render(<HookHost />)
 
     await waitFor(() => {
-      expect(loadMock).toHaveBeenCalledWith('qinplayer://audio?path=C%3A%5Cmusic%5Ca.mp3')
+      expect(loadMock).toHaveBeenCalledWith('qinplayer://audio?id=1&v=0')
     })
     expect(loadWithFadeMock).not.toHaveBeenCalled()
   })
@@ -153,7 +209,7 @@ describe('useAudioSync', () => {
     act(() => usePlayerStore.getState().nextTrack())
     await waitFor(() => {
       expect(loadWithFadeMock).toHaveBeenCalledWith(
-        'qinplayer://audio?path=C%3A%5Cmusic%5C2.mp3',
+        'qinplayer://audio?id=2&v=0',
         500,
       )
     })
@@ -394,14 +450,14 @@ describe('useAudioSync', () => {
     act(() => usePlayerStore.getState().nextTrack())
     await waitFor(() => {
       expect(loadWithFadeMock).toHaveBeenCalledWith(
-        'qinplayer://audio?path=C%3A%5Cmusic%5C2.mp3',
+        'qinplayer://audio?id=2&v=0',
         500,
       )
     })
     act(() => usePlayerStore.getState().nextTrack())
     await waitFor(() => {
       expect(loadWithFadeMock).toHaveBeenCalledWith(
-        'qinplayer://audio?path=C%3A%5Cmusic%5C3.mp3',
+        'qinplayer://audio?id=3&v=0',
         500,
       )
     })
@@ -504,5 +560,361 @@ describe('useAudioSync', () => {
     expect(onLoadedMetadataMock).toHaveBeenCalledTimes(1)
     expect(onEndedMock).toHaveBeenCalledTimes(1)
     expect(trackerMocks.flush).not.toHaveBeenCalled()
+  })
+
+  describe('播放失败与 Retry', () => {
+    it('当前曲 media error 应该形成 load failure 并停止播放', async () => {
+      render(<HookHost />)
+      await waitFor(() => expect(errorHandler).toBeDefined())
+      const identity = loadMock.mock.results.at(-1)?.value as SourceIdentity
+
+      act(() => errorHandler!({ ...identity, code: 4 }))
+
+      expect(usePlayerStore.getState()).toMatchObject({
+        isPlaying: false,
+        playbackFailure: {
+          kind: 'load',
+          trackKey: getPlaybackTrackKey(track),
+          code: 'media-error',
+        },
+      })
+    })
+
+    it('直接 play rejection 应该形成 play failure，AbortError 不显示错误', async () => {
+      playMock.mockRejectedValueOnce(new Error('device failed'))
+      render(<HookHost />)
+      await waitFor(() => expect(usePlayerStore.getState().playbackFailure?.kind).toBe('play'))
+
+      act(() => usePlayerStore.setState({
+        isPlaying: true,
+        playbackFailure: null,
+      }))
+      playMock.mockRejectedValueOnce(new DOMException('aborted', 'AbortError'))
+      act(() => usePlayerStore.setState({ isPlaying: false }))
+      act(() => usePlayerStore.setState({ isPlaying: true }))
+      await act(async () => { await Promise.resolve() })
+
+      expect(usePlayerStore.getState().playbackFailure).toBeNull()
+    })
+
+    it('metadata autoplay 与 loop replay rejection 都应该形成 play failure', async () => {
+      render(<HookHost />)
+      await waitFor(() => expect(loadedMetadataHandler).toBeDefined())
+      const identity = loadMock.mock.results.at(-1)?.value as SourceIdentity
+      playMock.mockRejectedValueOnce(new Error('autoplay failed'))
+
+      await act(async () => loadedMetadataHandler!(track.duration, identity))
+      expect(usePlayerStore.getState().playbackFailure?.kind).toBe('play')
+
+      act(() => usePlayerStore.setState({
+        isPlaying: true,
+        playMode: 'loop',
+        playbackFailure: null,
+      }))
+      playMock.mockRejectedValueOnce(new Error('loop failed'))
+      await act(async () => endedHandler!())
+      expect(usePlayerStore.getState().playbackFailure?.kind).toBe('play')
+    })
+
+    it('A 的迟到 play rejection 不得污染 B', async () => {
+      const delayed = createDeferred<void>()
+      playMock.mockImplementationOnce(() => delayed.promise)
+      render(<HookHost />)
+      await waitFor(() => expect(playMock).toHaveBeenCalled())
+
+      act(() => usePlayerStore.getState().setCurrentTrack(secondTrack))
+      await waitFor(() => expect(loadMock).toHaveBeenCalledWith('qinplayer://audio?id=2&v=0'))
+      await act(async () => delayed.reject(new Error('late A failure')))
+
+      expect(usePlayerStore.getState().currentTrack).toEqual(secondTrack)
+      expect(usePlayerStore.getState().isPlaying).toBe(true)
+      expect(usePlayerStore.getState().playbackFailure).toBeNull()
+    })
+
+    it('A 的迟到 media error 不得污染 B', async () => {
+      render(<HookHost />)
+      await waitFor(() => expect(errorHandler).toBeDefined())
+      const firstIdentity = loadMock.mock.results.at(-1)?.value as SourceIdentity
+
+      act(() => usePlayerStore.getState().setCurrentTrack(secondTrack))
+      await waitFor(() => expect(loadMock).toHaveBeenCalledWith('qinplayer://audio?id=2&v=0'))
+      act(() => errorHandler!({ ...firstIdentity, code: 4 }))
+
+      expect(usePlayerStore.getState()).toMatchObject({
+        currentTrack: secondTrack,
+        isPlaying: true,
+        playbackFailure: null,
+      })
+    })
+
+    it('同 Track Retry 后旧 generation 的 play rejection 不得污染新 generation', async () => {
+      const stalePlay = createDeferred<void>()
+      playMock.mockImplementationOnce(() => stalePlay.promise)
+      render(<HookHost />)
+      await waitFor(() => expect(playMock).toHaveBeenCalledTimes(1))
+      act(() => usePlayerStore.setState({
+        isPlaying: false,
+        playbackFailure: {
+          kind: 'load',
+          trackKey: getPlaybackTrackKey(track),
+          code: 'media-error',
+        },
+      }))
+
+      act(() => usePlayerStore.getState().retryCurrentTrack())
+      await waitFor(() => expect(loadMock).toHaveBeenCalledTimes(2))
+      const retryIdentity = loadMock.mock.results.at(-1)?.value as SourceIdentity
+      await act(async () => loadedMetadataHandler!(track.duration, retryIdentity))
+      await act(async () => stalePlay.reject(new Error('stale generation failed')))
+
+      expect(usePlayerStore.getState()).toMatchObject({
+        isPlaying: true,
+        playbackFailure: null,
+      })
+    })
+
+    it('同 Track Retry 后旧 generation 的 play success 不得清除新错误', async () => {
+      const stalePlay = createDeferred<void>()
+      playMock.mockImplementationOnce(() => stalePlay.promise)
+      render(<HookHost />)
+      await waitFor(() => expect(playMock).toHaveBeenCalledTimes(1))
+      act(() => usePlayerStore.setState({
+        isPlaying: false,
+        playbackFailure: {
+          kind: 'load',
+          trackKey: getPlaybackTrackKey(track),
+          code: 'media-error',
+        },
+      }))
+
+      act(() => usePlayerStore.getState().retryCurrentTrack())
+      await waitFor(() => expect(loadMock).toHaveBeenCalledTimes(2))
+      const retryIdentity = loadMock.mock.results.at(-1)?.value as SourceIdentity
+      act(() => errorHandler!({ ...retryIdentity, code: 4 }))
+      await act(async () => stalePlay.resolve())
+
+      expect(usePlayerStore.getState().playbackFailure).toMatchObject({
+        kind: 'load',
+        trackKey: getPlaybackTrackKey(track),
+      })
+    })
+
+    it('当前 Track play 成功应该清除对应错误', async () => {
+      act(() => usePlayerStore.setState({
+        playbackFailure: {
+          kind: 'play',
+          trackKey: getPlaybackTrackKey(track),
+          code: 'play-rejected',
+        },
+      }))
+
+      render(<HookHost />)
+
+      await waitFor(() => expect(usePlayerStore.getState().playbackFailure).toBeNull())
+    })
+
+    it('Retry 应该重载同一 ID URL，并在 metadata 前恢复最后位置', async () => {
+      render(<HookHost />)
+      await waitFor(() => expect(loadMock).toHaveBeenCalledTimes(1))
+      currentTimeRef.current = 42
+      act(() => usePlayerStore.setState({
+        isPlaying: false,
+        playbackFailure: {
+          kind: 'load',
+          trackKey: getPlaybackTrackKey(track),
+          code: 'media-error',
+        },
+      }))
+
+      act(() => usePlayerStore.getState().retryCurrentTrack())
+      await waitFor(() => expect(loadMock).toHaveBeenCalledTimes(2))
+      const retryIdentity = loadMock.mock.results.at(-1)?.value as SourceIdentity
+      playMock.mockImplementationOnce(async () => {
+        expect(engineCurrentTime).toBe(42)
+      })
+      await act(async () => loadedMetadataHandler!(track.duration, retryIdentity))
+
+      expect(loadMock.mock.calls).toEqual([
+        ['qinplayer://audio?id=1&v=0'],
+        ['qinplayer://audio?id=1&v=0'],
+      ])
+      expect(currentTimeSetMock).toHaveBeenCalledWith(42)
+    })
+
+    it('无效 Retry 位置应该回到 0', async () => {
+      render(<HookHost />)
+      await waitFor(() => expect(loadMock).toHaveBeenCalledTimes(1))
+      currentTimeRef.current = Number.POSITIVE_INFINITY
+      act(() => usePlayerStore.setState({
+        isPlaying: false,
+        playbackFailure: {
+          kind: 'load',
+          trackKey: getPlaybackTrackKey(track),
+          code: 'media-error',
+        },
+      }))
+
+      act(() => usePlayerStore.getState().retryCurrentTrack())
+      await waitFor(() => expect(loadMock).toHaveBeenCalledTimes(2))
+      const retryIdentity = loadMock.mock.results.at(-1)?.value as SourceIdentity
+      act(() => loadedMetadataHandler!(track.duration, retryIdentity))
+
+      expect(engineCurrentTime).toBe(0)
+    })
+
+    it('stale loadWithFade rejection 在 Retry 后不得再触发 fallback', async () => {
+      const delayedFade = createDeferred<SourceIdentity | null>()
+      act(() => useUIStore.setState({
+        featureFlags: { ...DEFAULT_FEATURE_FLAGS, fadeEffect: true },
+      }))
+      loadWithFadeMock.mockImplementationOnce((source: string) => {
+        beginMockLoad(source)
+        return delayedFade.promise
+      })
+      render(<HookHost />)
+      await waitFor(() => expect(loadWithFadeMock).toHaveBeenCalledTimes(1))
+      act(() => usePlayerStore.setState({
+        playbackFailure: {
+          kind: 'load',
+          trackKey: getPlaybackTrackKey(track),
+          code: 'media-error',
+        },
+      }))
+
+      act(() => usePlayerStore.getState().retryCurrentTrack())
+      await waitFor(() => expect(loadMock).toHaveBeenCalledTimes(1))
+      await act(async () => delayedFade.reject(new Error('late fade failure')))
+
+      expect(loadMock).toHaveBeenCalledTimes(1)
+      expect(usePlayerStore.getState().playbackFailure).toBeNull()
+    })
+  })
+
+  describe('pending seek', () => {
+    it('引擎不存在或 metadata 未就绪时暂存，并在 autoplay 前应用', async () => {
+      engineExists = false
+      render(<HookHost />)
+      await waitFor(() => expect(loadedMetadataHandler).toBeDefined())
+      const identity = loadMock.mock.results.at(-1)?.value as SourceIdentity
+      act(() => usePlayerStore.getState().setSeekTime(30))
+      expect(currentTimeSetMock).not.toHaveBeenCalled()
+      engineExists = true
+      playMock.mockImplementationOnce(async () => {
+        expect(engineCurrentTime).toBe(30)
+      })
+
+      await act(async () => loadedMetadataHandler!(100, identity))
+
+      expect(currentTimeSetMock).toHaveBeenCalledWith(30)
+      expect(currentTimeRef.current).toBe(30)
+    })
+
+    it('同曲连续 seek 只在首次 metadata 应用最后一次并 clamp', async () => {
+      render(<HookHost />)
+      await waitFor(() => expect(loadedMetadataHandler).toBeDefined())
+      const identity = loadMock.mock.results.at(-1)?.value as SourceIdentity
+      act(() => usePlayerStore.getState().setSeekTime(20))
+      act(() => usePlayerStore.getState().setSeekTime(90))
+
+      act(() => loadedMetadataHandler!(60, identity))
+      act(() => loadedMetadataHandler!(60, identity))
+
+      expect(currentTimeSetMock).toHaveBeenCalledTimes(1)
+      expect(currentTimeSetMock).toHaveBeenCalledWith(60)
+      expect(currentTimeRef.current).toBe(60)
+    })
+
+    it('A 的 pending seek 不得应用到 B', async () => {
+      render(<HookHost />)
+      await waitFor(() => expect(loadedMetadataHandler).toBeDefined())
+      act(() => usePlayerStore.getState().setSeekTime(45))
+      act(() => usePlayerStore.getState().setCurrentTrack(secondTrack))
+      await waitFor(() => expect(loadMock).toHaveBeenCalledWith('qinplayer://audio?id=2&v=0'))
+      const secondIdentity = loadMock.mock.results.at(-1)?.value as SourceIdentity
+
+      act(() => loadedMetadataHandler!(secondTrack.duration, secondIdentity))
+
+      expect(currentTimeSetMock).not.toHaveBeenCalledWith(45)
+      expect(currentTimeRef.current).toBe(0)
+    })
+
+    it('同一批更新中的 A seek 不得被重新绑定到 B', async () => {
+      render(<HookHost />)
+      await waitFor(() => expect(loadedMetadataHandler).toBeDefined())
+
+      act(() => {
+        usePlayerStore.getState().setSeekTime(45)
+        usePlayerStore.getState().setCurrentTrack(secondTrack)
+      })
+      await waitFor(() => expect(loadMock).toHaveBeenCalledWith('qinplayer://audio?id=2&v=0'))
+      const secondIdentity = loadMock.mock.results.at(-1)?.value as SourceIdentity
+      act(() => loadedMetadataHandler!(secondTrack.duration, secondIdentity))
+
+      expect(currentTimeSetMock).not.toHaveBeenCalledWith(45)
+      expect(currentTimeRef.current).toBe(0)
+    })
+
+    it('playback 关闭后应该清理 pending seek', async () => {
+      render(<HookHost />)
+      await waitFor(() => expect(loadedMetadataHandler).toBeDefined())
+      const identity = loadMock.mock.results.at(-1)?.value as SourceIdentity
+      act(() => usePlayerStore.getState().setSeekTime(45))
+      act(() => useUIStore.setState({
+        featureFlags: { ...DEFAULT_FEATURE_FLAGS, playback: false },
+      }))
+
+      act(() => loadedMetadataHandler!(track.duration, identity))
+
+      expect(currentTimeSetMock).not.toHaveBeenCalledWith(45)
+      expect(invalidatePendingLoadsMock).toHaveBeenCalled()
+    })
+
+    it('卸载后迟到 metadata 不得消费 pending seek', async () => {
+      const view = render(<HookHost />)
+      await waitFor(() => expect(loadedMetadataHandler).toBeDefined())
+      const identity = loadMock.mock.results.at(-1)?.value as SourceIdentity
+      act(() => usePlayerStore.getState().setSeekTime(45))
+
+      view.unmount()
+      act(() => loadedMetadataHandler!(track.duration, identity))
+
+      expect(currentTimeSetMock).not.toHaveBeenCalledWith(45)
+      expect(invalidatePendingLoadsMock).toHaveBeenCalled()
+    })
+  })
+
+  describe('Media Session 生命周期', () => {
+    it('关闭 flag 应清理 metadata/actions，且不得重新加载音频', async () => {
+      render(<HookHost />)
+      await waitFor(() => {
+        expect(mediaSessionMocks.registerMediaSessionActions).toHaveBeenCalledTimes(1)
+        expect(mediaSessionMocks.updateMediaSession).toHaveBeenCalledWith(track)
+        expect(loadMock).toHaveBeenCalledTimes(1)
+      })
+
+      act(() => useUIStore.getState().setFeatureFlags({
+        ...DEFAULT_FEATURE_FLAGS,
+        fadeEffect: false,
+        mediaSession: false,
+      }))
+
+      await waitFor(() => {
+        expect(mediaSessionMocks.clearMediaSession).toHaveBeenCalled()
+        expect(mediaSessionMocks.unregisterMediaSessionActions).toHaveBeenCalled()
+      })
+      expect(loadMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('卸载时应清理 metadata 和 action handlers', async () => {
+      const view = render(<HookHost />)
+      await waitFor(() => {
+        expect(mediaSessionMocks.registerMediaSessionActions).toHaveBeenCalledTimes(1)
+      })
+
+      view.unmount()
+
+      expect(mediaSessionMocks.unregisterMediaSessionActions).toHaveBeenCalled()
+      expect(mediaSessionMocks.clearMediaSession).toHaveBeenCalled()
+    })
   })
 })

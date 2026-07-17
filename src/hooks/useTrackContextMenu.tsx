@@ -25,7 +25,7 @@ export function useTrackContextMenu(options: Options) {
   const open = useCallback((event: React.MouseEvent, track: Track, kind: TrackMenuKind = 'source') => {
     event.preventDefault()
     if (options.playlistsEnabled && playlists === null) {
-      void window.electronAPI.invoke('playlists:getAll').then((result) => setPlaylists(result as Playlist[])).catch(() => setPlaylists([]))
+      void window.electronAPI.invoke('playlists:getAll').then(setPlaylists).catch(() => setPlaylists([]))
     }
     setTarget({ x: event.clientX, y: event.clientY, track, kind })
   }, [options.playlistsEnabled, playlists])

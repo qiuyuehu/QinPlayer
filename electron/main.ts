@@ -15,9 +15,10 @@
 //   electron/db/database.ts  — SQLite 数据库
 // =============================================================================
 
-import { app, BrowserWindow, ipcMain, protocol, nativeTheme, nativeImage } from 'electron'
+import { app, BrowserWindow, dialog, protocol, nativeTheme, nativeImage } from 'electron'
 import { join } from 'path'
 import { initDatabase, closeDatabase, getDatabase } from './db/database'
+import { recoverInterruptedDatabaseImport } from './db/databaseImport'
 import { registerSongsIPC } from './ipc/songs'
 import { registerPlaylistsIPC } from './ipc/playlists'
 import { getFeatureFlags, loadFeatureFlags, registerSettingsIPC } from './ipc/settings'
@@ -27,6 +28,7 @@ import { registerScanIPC, startIncrementalScan } from './ipc/scan'
 import { registerEqIPC } from './ipc/eq'
 import { registerListeningIPC } from './ipc/listening'
 import { registerContextMenuIPC } from './ipc/contextMenu'
+import { handleIpc, isBooleanIpcPayload, onIpc, sendIpc } from './ipc/typedIpc'
 import { createTray, updateMenu, destroyTray } from './tray'
 import { loadWindowBounds, loadWindowState, normalizeWindowBounds, saveWindowBounds, saveWindowState } from './windowBounds'
 import { createCloseCoordinator } from './closeBehavior'
@@ -65,7 +67,7 @@ const closeCoordinator = createCloseCoordinator({
   hide: () => mainWindow?.hide(),
   quit: () => app.quit(),
   canSendRequest: () => Boolean(mainWindow && !mainWindow.webContents.isDestroyed()),
-  sendRequest: (payload) => mainWindow?.webContents.send('close:request', payload),
+  sendRequest: (payload) => sendIpc(mainWindow?.webContents, 'close:request', payload),
   isCurrentSender: (sender) => mainWindow?.webContents === sender,
 })
 
@@ -208,10 +210,10 @@ function createWindow(flags: FeatureFlags): void {
 
   // 监听最大化/还原状态变化，通知渲染进程更新图标
   mainWindow.on('maximize', () => {
-    mainWindow?.webContents.send('window:maximized', true)
+    sendIpc(mainWindow?.webContents, 'window:maximized', true)
   })
   mainWindow.on('unmaximize', () => {
-    mainWindow?.webContents.send('window:maximized', false)
+    sendIpc(mainWindow?.webContents, 'window:maximized', false)
   })
 
   if (flags.windowSizePersist) {
@@ -259,8 +261,24 @@ function createWindow(flags: FeatureFlags): void {
 // ---------------------------------------------------------------------------
 
 app.whenReady().then(async () => {
-  // 1. 初始化数据库（最先，其他模块可能依赖数据库）
-  await initDatabase()
+  // 1. 先恢复中断的数据库导入，再进行普通初始化。
+  let recovery: Awaited<ReturnType<typeof recoverInterruptedDatabaseImport>>
+  try {
+    recovery = await recoverInterruptedDatabaseImport()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    dialog.showErrorBox('数据库恢复失败', message)
+    app.quit()
+    return
+  }
+  if (!recovery.databaseReady) await initDatabase()
+  if (recovery.warning) {
+    await dialog.showMessageBox({
+      type: 'warning',
+      title: '数据库已恢复',
+      message: recovery.warning,
+    })
+  }
 
   // 1.1 读取功能开关（必须早于窗口、托盘和渲染进程水合）
   const featureFlags = await loadFeatureFlags()
@@ -284,10 +302,10 @@ app.whenReady().then(async () => {
   registerListeningIPC(() => currentFeatureFlags)
   registerContextMenuIPC(getMainWindow)
 
-  ipcMain.on('close:ready', (event) => {
+  onIpc('close:ready', (event) => {
     closeCoordinator.markRendererReady(event.sender)
   })
-  ipcMain.on('close:respond', (event, response) => {
+  onIpc('close:respond', (event, response) => {
     closeCoordinator.handleResponse(event.sender, response)
   })
 
@@ -300,7 +318,7 @@ app.whenReady().then(async () => {
   // 6. 监听系统主题变化（nativeTheme），主动通知渲染进程
   nativeTheme.on('updated', () => {
     const systemTheme = nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
-    mainWindow?.webContents.send('theme:system-changed', systemTheme)
+    sendIpc(mainWindow?.webContents, 'theme:system-changed', systemTheme)
   })
 
   // 7. 创建系统托盘
@@ -313,35 +331,43 @@ app.whenReady().then(async () => {
         if (!getFeatureFlags().playback) return
         // 播放/暂停：切换状态并通知渲染进程
         isPlaying = !isPlaying
-        mainWindow?.webContents.send('tray:play-pause')
+        sendIpc(mainWindow?.webContents, 'tray:play-pause')
         updateMenu()
       },
       () => {
         if (!getFeatureFlags().playback) return
         // 上一首
-        mainWindow?.webContents.send('tray:prev')
+        sendIpc(mainWindow?.webContents, 'tray:prev')
       },
       () => {
         if (!getFeatureFlags().playback) return
         // 下一首
-        mainWindow?.webContents.send('tray:next')
+        sendIpc(mainWindow?.webContents, 'tray:next')
       },
       featureFlags
     )
   }
 
   // 播放状态同步（渲染进程通知主进程）
-  ipcMain.on('player:playing-changed', (_event, playing: boolean) => {
+  onIpc('player:playing-changed', (_event, playing: boolean) => {
+    if (!isBooleanIpcPayload(playing)) {
+      console.warn('[IPC] player:playing-changed 参数无效:', playing)
+      return
+    }
     isPlaying = playing
     updateMenu()
   })
 
   // 开机自启动
-  ipcMain.handle('get-auto-launch', () => {
+  handleIpc('get-auto-launch', () => {
     return app.getLoginItemSettings().openAtLogin
   })
 
-  ipcMain.on('set-auto-launch', (_event, enabled: boolean) => {
+  onIpc('set-auto-launch', (_event, enabled: boolean) => {
+    if (!isBooleanIpcPayload(enabled)) {
+      console.warn('[IPC] set-auto-launch 参数无效:', enabled)
+      return
+    }
     app.setLoginItemSettings({ openAtLogin: enabled })
   })
 

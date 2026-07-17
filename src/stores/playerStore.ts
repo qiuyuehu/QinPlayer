@@ -11,6 +11,16 @@ import type { Track, PlayMode } from '../types'
 import { currentTimeRef } from '../utils/currentTimeRef'
 import { useUIStore } from './uiStore'
 
+export type PlaybackFailure = {
+  kind: 'load' | 'play'
+  trackKey: string
+  code: 'media-error' | 'play-rejected'
+} | null
+
+export function getPlaybackTrackKey(track: Track): string {
+  return `${track.id}:${track.filePath}`
+}
+
 // ---------------------------------------------------------------------------
 // 状态接口
 // ---------------------------------------------------------------------------
@@ -32,6 +42,8 @@ interface PlayerState {
   // --- 进度状态 ---
   duration: number                // 总时长（秒）—— 低频，每首歌只变一次
   seekTime: number | null         // 用户拖拽的目标时间（null = 未拖拽）
+  playbackFailure: PlaybackFailure
+  playbackRetryVersion: number
 
   // --- actions ---
   setPlaying: (v: boolean) => void
@@ -49,6 +61,9 @@ interface PlayerState {
   setLyricOffset: (v: number) => void
   setDuration: (d: number) => void
   setSeekTime: (t: number | null) => void
+  setPlaybackFailure: (failure: Exclude<PlaybackFailure, null>) => void
+  clearPlaybackFailure: (trackKey: string) => void
+  retryCurrentTrack: () => void
   nextTrack: () => void
   prevTrack: () => void
 }
@@ -86,6 +101,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       currentTrack: track,
       duration: getTrackDuration(track),
       isPlaying: true,
+      seekTime: null,
+      playbackFailure: null,
     })
 
     if (flags.recent) {
@@ -118,6 +135,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   lyricOffset: 0,                 // 默认无偏移
   duration: 0,
   seekTime: null,
+  playbackFailure: null,
+  playbackRetryVersion: 0,
 
   // --- 基础 setters ---
 
@@ -125,7 +144,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
   setCurrentTrack: (t) => {
     resetTrackProgress()
-    set({ currentTrack: t, duration: getTrackDuration(t), detachedPlaylistIndex: null })
+    set({
+      currentTrack: t,
+      duration: getTrackDuration(t),
+      detachedPlaylistIndex: null,
+      seekTime: null,
+      playbackFailure: null,
+    })
   },
 
   // 用户主动播放代表新意图，必须取消尚未消费的插队状态。
@@ -218,6 +243,40 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   setDuration: (d) => set({ duration: d }),
 
   setSeekTime: (t) => set({ seekTime: t }),
+
+  setPlaybackFailure: (failure) => {
+    const flags = useUIStore.getState().featureFlags
+    const { currentTrack } = get()
+    if (!flags.playback || !currentTrack || getPlaybackTrackKey(currentTrack) !== failure.trackKey) return
+    set({ playbackFailure: failure })
+  },
+
+  clearPlaybackFailure: (trackKey) => {
+    const { currentTrack, playbackFailure } = get()
+    if (
+      !currentTrack
+      || !playbackFailure
+      || getPlaybackTrackKey(currentTrack) !== trackKey
+      || playbackFailure.trackKey !== trackKey
+    ) return
+    set({ playbackFailure: null })
+  },
+
+  retryCurrentTrack: () => {
+    const flags = useUIStore.getState().featureFlags
+    const { currentTrack, playbackFailure, playbackRetryVersion } = get()
+    if (
+      !flags.playback
+      || !currentTrack
+      || !playbackFailure
+      || playbackFailure.trackKey !== getPlaybackTrackKey(currentTrack)
+    ) return
+    set({
+      playbackFailure: null,
+      playbackRetryVersion: playbackRetryVersion + 1,
+      isPlaying: true,
+    })
+  },
 
   // --- 切歌逻辑 ---
 
@@ -462,10 +521,10 @@ export async function restorePlayerState(): Promise<void> {
     }
 
     const [volumeStr, playMode, lastTrackId, lastTimeStr] = await Promise.all([
-      window.electronAPI.invoke('settings:get', { key: 'volume' }) as Promise<string | null>,
-      window.electronAPI.invoke('settings:get', { key: 'playMode' }) as Promise<string | null>,
-      window.electronAPI.invoke('settings:get', { key: 'lastTrackId' }) as Promise<string | null>,
-      window.electronAPI.invoke('settings:get', { key: 'lastCurrentTime' }) as Promise<string | null>,
+      window.electronAPI.invoke('settings:get', { key: 'volume' }),
+      window.electronAPI.invoke('settings:get', { key: 'playMode' }),
+      window.electronAPI.invoke('settings:get', { key: 'lastTrackId' }),
+      window.electronAPI.invoke('settings:get', { key: 'lastCurrentTime' }),
     ])
 
     console.log('[PlayerStore] 恢复状态 - volume:', volumeStr, 'playMode:', playMode, 'lastTrackId:', lastTrackId, 'lastTime:', lastTimeStr)
@@ -487,7 +546,7 @@ export async function restorePlayerState(): Promise<void> {
     if (lastTrackId) {
       const songId = parseInt(lastTrackId, 10)
       if (!isNaN(songId)) {
-        const allSongs = await window.electronAPI.invoke('songs:getAll') as Track[]
+        const allSongs = await window.electronAPI.invoke('songs:getAll')
         console.log('[PlayerStore] 数据库歌曲数:', allSongs.length, '查找 ID:', songId)
         const track = allSongs.find(s => s.id === songId)
         if (track) {

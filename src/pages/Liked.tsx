@@ -5,7 +5,7 @@
 // 数据来源：songs:getLiked IPC
 // =============================================================================
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import SongList from '../components/SongList'
 import SortMenu from '../components/SortMenu'
 import { IconStar } from '../components/Icons'
@@ -40,7 +40,7 @@ function Liked() {
   const loadLiked = async () => {
     try {
       // 通过 IPC 获取收藏歌曲列表，返回按收藏时间排序的数据
-      const songs = await window.electronAPI.invoke('songs:getLiked') as Track[]
+      const songs = await window.electronAPI.invoke('songs:getLiked')
       setTracks(songs)
     } catch (e) {
       console.error('加载收藏失败:', e)
@@ -53,6 +53,11 @@ function Liked() {
   // 组件挂载时执行一次加载
   useEffect(() => {
     loadLiked()
+  }, [])
+
+  const handleLikedChange = useCallback((track: Track, liked: boolean) => {
+    if (liked) return
+    setTracks((current) => current.filter((item) => item.id !== track.id))
   }, [])
 
   // 加载中时仅显示标题和 loading 提示，避免空列表闪烁
@@ -83,7 +88,7 @@ function Liked() {
 
       {/* 有收藏歌曲时显示列表，showAlbum=false 因为空间有限且收藏列表不需要专辑列 */}
       {tracks.length > 0 ? (
-        <SongList tracks={sortedTracks} showIndex showAlbum={false} />
+        <SongList tracks={sortedTracks} showIndex showAlbum={false} onLikedChange={handleLikedChange} />
       ) : (
         // 无收藏时的空状态引导，提示用户操作方式
         <div className="liked-page__empty">

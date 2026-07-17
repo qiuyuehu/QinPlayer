@@ -23,8 +23,8 @@ function TitleBar() {
 
   // 监听窗口最大化/还原事件（主进程推送）
   useEffect(() => {
-    const unsubscribe = window.electronAPI.on('window:maximized', (maximized: unknown) => {
-      setIsMaximized(maximized as boolean)
+    const unsubscribe = window.electronAPI.on('window:maximized', (maximized) => {
+      setIsMaximized(maximized)
     })
     return unsubscribe
   }, [])

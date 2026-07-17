@@ -129,7 +129,7 @@ function MyProfile() {
         <div className="profile-identity">
           <div className="profile-identity__avatar" aria-hidden="true">
             {avatarPath ? (
-              <img src={`qinplayer://avatar?path=${encodeURIComponent(avatarPath)}`} alt="头像" className="profile-identity__avatar-img" />
+              <img src={window.electronAPI.getAvatarUrl(avatarPath)} alt="头像" className="profile-identity__avatar-img" />
             ) : (
               <IconUser width={30} height={30} />
             )}

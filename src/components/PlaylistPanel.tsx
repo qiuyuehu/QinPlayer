@@ -115,7 +115,7 @@ function PlaylistPanel({ onClose }: PlaylistPanelProps) {
                   {hasCover ? (
                     <img
                       className="queue-panel__cover"
-                      src={window.electronAPI.getCoverUrl(track.coverPath)}
+                      src={window.electronAPI.getCoverUrl(track.id, track.mtime)}
                       alt=""
                       onError={() => handleCoverError(track.id)}
                     />
@@ -150,7 +150,7 @@ function PlaylistPanel({ onClose }: PlaylistPanelProps) {
                   {hasCover ? (
                     <img
                       className="queue-panel__cover"
-                      src={window.electronAPI.getCoverUrl(track.coverPath)}
+                      src={window.electronAPI.getCoverUrl(track.id, track.mtime)}
                       alt=""
                       onError={() => handleCoverError(track.id)}
                     />

@@ -45,10 +45,122 @@ describe('playerStore', () => {
       lyricOffset: 0,
       duration: 0,
       seekTime: null,
+      playbackFailure: null,
+      playbackRetryVersion: 0,
     })
     currentTimeRef.current = 0
     vi.advanceTimersByTime(500)
     invokeMock.mockClear()
+  })
+
+  describe('播放失败与重试', () => {
+    const firstTrackKey = `${songs[0].id}:${songs[0].filePath}`
+    const secondTrackKey = `${songs[1].id}:${songs[1].filePath}`
+
+    it('只接受当前歌曲的错误，也只允许当前 key 清除', () => {
+      usePlayerStore.setState({ currentTrack: songs[0] })
+
+      usePlayerStore.getState().setPlaybackFailure({
+        kind: 'load',
+        trackKey: secondTrackKey,
+        code: 'media-error',
+      })
+      expect(usePlayerStore.getState().playbackFailure).toBeNull()
+
+      usePlayerStore.getState().setPlaybackFailure({
+        kind: 'load',
+        trackKey: firstTrackKey,
+        code: 'media-error',
+      })
+      usePlayerStore.getState().clearPlaybackFailure(secondTrackKey)
+      expect(usePlayerStore.getState().playbackFailure?.trackKey).toBe(firstTrackKey)
+
+      usePlayerStore.getState().clearPlaybackFailure(firstTrackKey)
+      expect(usePlayerStore.getState().playbackFailure).toBeNull()
+    })
+
+    it('切歌会清除旧错误', () => {
+      usePlayerStore.setState({
+        currentTrack: songs[0],
+        playbackFailure: { kind: 'play', trackKey: firstTrackKey, code: 'play-rejected' },
+      })
+
+      usePlayerStore.getState().setCurrentTrack(songs[1])
+
+      expect(usePlayerStore.getState().playbackFailure).toBeNull()
+    })
+
+    it('Retry 清错、恢复播放意图并递增 version', () => {
+      usePlayerStore.setState({
+        currentTrack: songs[0],
+        isPlaying: false,
+        playbackFailure: { kind: 'play', trackKey: firstTrackKey, code: 'play-rejected' },
+        playbackRetryVersion: 3,
+      })
+
+      usePlayerStore.getState().retryCurrentTrack()
+
+      expect(usePlayerStore.getState()).toMatchObject({
+        currentTrack: songs[0],
+        isPlaying: true,
+        playbackFailure: null,
+        playbackRetryVersion: 4,
+      })
+    })
+
+    it('Retry 不改变队列、恢复锚点或 detached cursor', () => {
+      usePlayerStore.setState({
+        currentTrack: songs[0],
+        playlist: songs,
+        priorityQueue: [songs[2]],
+        priorityResumeTrackId: songs[1].id,
+        priorityConsumedTrackIds: [songs[2].id],
+        detachedPlaylistIndex: 1,
+        playbackFailure: { kind: 'load', trackKey: firstTrackKey, code: 'media-error' },
+      })
+      const before = usePlayerStore.getState()
+
+      usePlayerStore.getState().retryCurrentTrack()
+
+      expect(usePlayerStore.getState()).toMatchObject({
+        playlist: before.playlist,
+        priorityQueue: before.priorityQueue,
+        priorityResumeTrackId: before.priorityResumeTrackId,
+        priorityConsumedTrackIds: before.priorityConsumedTrackIds,
+        detachedPlaylistIndex: before.detachedPlaylistIndex,
+      })
+    })
+
+    it('Retry 不重复最近播放或播放次数记账', () => {
+      usePlayerStore.setState({
+        currentTrack: songs[0],
+        playbackFailure: { kind: 'load', trackKey: firstTrackKey, code: 'media-error' },
+      })
+
+      usePlayerStore.getState().retryCurrentTrack()
+
+      expect(invokeMock).not.toHaveBeenCalledWith('songs:recordPlay', expect.anything())
+      expect(invokeMock).not.toHaveBeenCalledWith('songs:updatePlayCount', expect.anything())
+    })
+
+    it('playback flag 关闭时 Retry 无副作用', () => {
+      useUIStore.setState({ featureFlags: { ...DEFAULT_FEATURE_FLAGS, playback: false } })
+      usePlayerStore.setState({
+        currentTrack: songs[0],
+        isPlaying: false,
+        playbackFailure: { kind: 'load', trackKey: firstTrackKey, code: 'media-error' },
+        playbackRetryVersion: 2,
+      })
+
+      usePlayerStore.getState().retryCurrentTrack()
+
+      expect(usePlayerStore.getState()).toMatchObject({
+        isPlaying: false,
+        playbackFailure: { kind: 'load', trackKey: firstTrackKey, code: 'media-error' },
+        playbackRetryVersion: 2,
+      })
+      expect(invokeMock).not.toHaveBeenCalled()
+    })
   })
 
   afterEach(() => {
@@ -159,6 +271,14 @@ describe('playerStore', () => {
       currentTimeRef.current = 123
       usePlayerStore.getState().setCurrentTrack(songs[0])
       expect(currentTimeRef.current).toBe(0)
+    })
+
+    it('设置当前歌曲时清除上一首尚未消费的 seek', () => {
+      usePlayerStore.setState({ seekTime: 45 })
+
+      usePlayerStore.getState().setCurrentTrack(songs[0])
+
+      expect(usePlayerStore.getState().seekTime).toBeNull()
     })
 
     it('设置 null 清空当前歌曲', () => {

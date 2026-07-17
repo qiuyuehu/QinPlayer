@@ -90,7 +90,7 @@ function MiniQueueView({ tracks, priorityQueue = [], currentTrackId, onPlay, onR
             {hasCover ? (
               <img
                 className="mini-queue-view__cover"
-                src={window.electronAPI.getCoverUrl(track.coverPath!)}
+                src={window.electronAPI.getCoverUrl(track.id, track.mtime)}
                 alt={`${track.title} 封面`}
                 onError={() => handleCoverError(track.id)}
               />

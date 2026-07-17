@@ -123,6 +123,24 @@ describe('MyProfile', () => {
     expect(document.querySelectorAll('.profile-trend__bar')).toHaveLength(7)
   })
 
+  it('头像只通过 current avatar helper 生成 URL', async () => {
+    invokeMock.mockImplementation(async (channel: string, args?: { key?: string }) => {
+      if (channel === 'listening:getDays') return days
+      if (channel === 'listening:getRanking') return ranking
+      if (channel === 'settings:get' && args?.key === 'avatarPath') {
+        return 'C:\\UserData\\avatar\\profile.jpg'
+      }
+      return null
+    })
+
+    render(<MyProfile />)
+
+    expect(await screen.findByAltText('头像')).toHaveAttribute(
+      'src',
+      'qinplayer://avatar?id=current&v=profile.jpg',
+    )
+  })
+
   it.each(['doubleClick', 'enter'] as const)(
     'playback 开启时应通过 %s 播放排行歌曲并设置 Top 队列',
     async (interaction) => {

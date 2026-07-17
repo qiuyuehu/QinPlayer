@@ -125,7 +125,7 @@ describe('PlaylistPanel', () => {
     expect(document.querySelector('.queue-panel__cover--placeholder')).toBeInTheDocument()
     expect(document.querySelector('.queue-panel__cover[src]')).toHaveAttribute(
       'src',
-      'qinplayer://cover?path=C%3A%5Ccovers%5Cc.jpg'
+      'qinplayer://cover?id=3&v=0'
     )
   })
 
@@ -187,7 +187,7 @@ describe('PlaylistPanel', () => {
     const priorityRow = screen.getByTitle('搁浅 - 周杰伦').closest('.queue-panel__item--priority')!
     expect(priorityRow.querySelector('.queue-panel__cover[src]')).toHaveAttribute(
       'src',
-      'qinplayer://cover?path=C%3A%5Ccovers%5Cc.jpg',
+      'qinplayer://cover?id=3&v=0',
     )
     expect(priorityRow).toHaveTextContent('搁浅')
     expect(priorityRow).toHaveTextContent('周杰伦')

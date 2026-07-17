@@ -15,9 +15,15 @@
 // =============================================================================
 
 import { useEffect, useRef } from 'react'
-import { usePlayerStore } from '../stores/playerStore'
-import { getAudioEngine, hasAudioEngine } from '../utils/AudioEngine'
-import { updateMediaSession, setPlaybackState, registerMediaSessionActions } from '../utils/mediaSession'
+import { getPlaybackTrackKey, usePlayerStore } from '../stores/playerStore'
+import { getAudioEngine, hasAudioEngine, type AudioSourceIdentity } from '../utils/AudioEngine'
+import {
+  clearMediaSession,
+  registerMediaSessionActions,
+  setPlaybackState,
+  unregisterMediaSessionActions,
+  updateMediaSession,
+} from '../utils/mediaSession'
 import { currentTimeRef } from '../utils/currentTimeRef'
 import { useUIStore } from '../stores/uiStore'
 import { listeningTracker } from '../utils/listeningTracker'
@@ -28,6 +34,7 @@ export function useAudioSync() {
   const isPlaying = usePlayerStore((s) => s.isPlaying)
   const volume = usePlayerStore((s) => s.volume)
   const seekTime = usePlayerStore((s) => s.seekTime)
+  const playbackRetryVersion = usePlayerStore((s) => s.playbackRetryVersion)
   const setDuration = usePlayerStore((s) => s.setDuration)
   const setIsPlaying = usePlayerStore((s) => s.setPlaying)
   const setSeekTime = usePlayerStore((s) => s.setSeekTime)
@@ -35,17 +42,62 @@ export function useAudioSync() {
   const featureFlags = useUIStore((s) => s.featureFlags)
 
   // 标记：音频加载完毕后需要自动播放
-  const pendingAutoPlay = useRef(false)
-  const pendingSeekRef = useRef<number | null>(null)  // 启动时恢复的 seek 位置
+  type ActiveLoad = AudioSourceIdentity & { trackKey: string }
+  const pendingAutoPlay = useRef<ActiveLoad | null>(null)
+  const pendingSeekRef = useRef<{ trackKey: string; time: number } | null>(null)
+  const activeLoadRef = useRef<ActiveLoad | null>(null)
   // 曲目切换期间旧音频仍可能在淡出并发送事件；新 metadata 就绪前忽略这些事件。
   const trackTransitionRef = useRef(false)
   const trackedTrackKeyRef = useRef<string | null>(null)
   const previousPlayingRef = useRef(isPlaying)
+  const handledRetryVersionRef = useRef(playbackRetryVersion)
   const trackingEnabledRef = useRef(featureFlags.playback && featureFlags.profile)
   const fadeEnabled = usePlayerStore((s) => s.fadeEnabled)  // 淡入淡出开关
 
   // 标记：引擎事件是否已注册
   const eventsRegistered = useRef(false)
+
+  const isActiveLoad = (identity: AudioSourceIdentity | null | undefined): identity is AudioSourceIdentity => {
+    const active = activeLoadRef.current
+    return !!identity
+      && !!active
+      && active.source === identity.source
+      && active.generation === identity.generation
+  }
+
+  const setActiveLoad = (trackKey: string, identity: AudioSourceIdentity): ActiveLoad => {
+    const active = { ...identity, trackKey }
+    activeLoadRef.current = active
+    return active
+  }
+
+  const isCurrentActiveLoad = (candidate: ActiveLoad | null | undefined): candidate is ActiveLoad => {
+    if (!candidate || !isActiveLoad(candidate)) return false
+    const liveTrack = usePlayerStore.getState().currentTrack
+    return !!liveTrack && getPlaybackTrackKey(liveTrack) === candidate.trackKey
+  }
+
+  const failPlayback = (kind: 'load' | 'play', owner: ActiveLoad): void => {
+    const flags = useUIStore.getState().featureFlags
+    const player = usePlayerStore.getState()
+    if (
+      !flags.playback
+      || !isCurrentActiveLoad(owner)
+    ) return
+
+    pendingAutoPlay.current = null
+    player.setPlaying(false)
+    player.setPlaybackFailure({
+      kind,
+      trackKey: owner.trackKey,
+      code: kind === 'load' ? 'media-error' : 'play-rejected',
+    })
+  }
+
+  const clearPlaybackFailure = (owner: ActiveLoad): void => {
+    if (!isCurrentActiveLoad(owner)) return
+    usePlayerStore.getState().clearPlaybackFailure(owner.trackKey)
+  }
 
   // ---------------------------------------------------------------------------
   // 注册 AudioEngine 事件（抽取为公共函数，消除重复）
@@ -71,16 +123,46 @@ export function useAudioSync() {
       }
     })
 
-    engine.onLoadedMetadata((dur) => {
+    engine.onLoadedMetadata((dur, identity) => {
+      const active = activeLoadRef.current
+      const eventIdentity = identity ?? active
+      if (!active || !isActiveLoad(eventIdentity)) return
+      const liveTrack = usePlayerStore.getState().currentTrack
+      if (!liveTrack || getPlaybackTrackKey(liveTrack) !== active.trackKey) return
+
       trackTransitionRef.current = false
       setDuration(dur)
-      // 音频加载完毕，如果有待播放标记，立即播放
-      if (pendingAutoPlay.current) {
-        pendingAutoPlay.current = false
-        engine.play().catch((err) => {
-          if (err.name !== 'AbortError') setIsPlaying(false)
-        })
+      const pendingSeek = pendingSeekRef.current
+      if (pendingSeek?.trackKey === active.trackKey) {
+        const safeDuration = Number.isFinite(dur) ? Math.max(0, dur) : 0
+        const target = Math.min(Math.max(0, pendingSeek.time), safeDuration)
+        engine.currentTime = target
+        currentTimeRef.current = target
+        pendingSeekRef.current = null
       }
+      clearPlaybackFailure(active)
+      // 音频加载完毕，如果有待播放标记，立即播放
+      const pendingPlay = pendingAutoPlay.current
+      if (
+        pendingPlay
+        && pendingPlay.trackKey === active.trackKey
+        && pendingPlay.generation === active.generation
+      ) {
+        pendingAutoPlay.current = null
+        const playOwner = active
+        engine.play().then(
+          () => clearPlaybackFailure(playOwner),
+          (err) => {
+            if (err?.name !== 'AbortError') failPlayback('play', playOwner)
+          },
+        )
+      }
+    })
+
+    engine.onError((error) => {
+      const active = activeLoadRef.current
+      if (!active || !isActiveLoad(error)) return
+      failPlayback('load', active)
     })
 
     engine.onEnded(() => {
@@ -105,23 +187,22 @@ export function useAudioSync() {
         nextTrack()
       } else if (livePlayer.playMode === 'loop') {
         engine.currentTime = 0
-        engine.play().catch(() => {})
+        currentTimeRef.current = 0
+        const playOwner = activeLoadRef.current
+        engine.play().then(
+          () => {
+            if (playOwner) clearPlaybackFailure(playOwner)
+          },
+          (error) => {
+            if (error?.name !== 'AbortError' && playOwner) failPlayback('play', playOwner)
+          },
+        )
       } else {
         setIsPlaying(false)
         nextTrack()
       }
     })
 
-    if (useUIStore.getState().featureFlags.mediaSession) {
-      // 注册 Media Session 动作回调（键盘多媒体键、任务栏按钮）
-      registerMediaSessionActions({
-        play: () => usePlayerStore.getState().setPlaying(true),
-        pause: () => usePlayerStore.getState().setPlaying(false),
-        prevTrack: () => usePlayerStore.getState().prevTrack(),
-        nextTrack: () => usePlayerStore.getState().nextTrack(),
-        seekTo: (time) => usePlayerStore.getState().setSeekTime(time)
-      })
-    }
   }
 
   // ---------------------------------------------------------------------------
@@ -173,6 +254,38 @@ export function useAudioSync() {
     return () => window.removeEventListener('pagehide', handlePageHide)
   }, [])
 
+  // Media Session actions 与功能开关同生命周期，关闭和卸载都必须对称清理。
+  useEffect(() => {
+    if (!featureFlags.playback || !featureFlags.mediaSession) {
+      unregisterMediaSessionActions()
+      clearMediaSession()
+      return
+    }
+
+    const unregister = registerMediaSessionActions({
+      play: () => usePlayerStore.getState().setPlaying(true),
+      pause: () => usePlayerStore.getState().setPlaying(false),
+      prevTrack: () => usePlayerStore.getState().prevTrack(),
+      nextTrack: () => usePlayerStore.getState().nextTrack(),
+      seekTo: (time) => usePlayerStore.getState().setSeekTime(time),
+    })
+
+    return () => {
+      unregister()
+      clearMediaSession()
+    }
+  }, [featureFlags.mediaSession, featureFlags.playback])
+
+  // 文字 metadata 先提交，封面由 mediaSession 模块按 generation 异步补齐。
+  useEffect(() => {
+    if (!featureFlags.playback || !featureFlags.mediaSession || !currentTrack) {
+      clearMediaSession()
+      return
+    }
+
+    void updateMediaSession(currentTrack)
+  }, [currentTrack, featureFlags.mediaSession, featureFlags.playback])
+
   // ---------------------------------------------------------------------------
   // currentTrack 变化 → 加载音频
   // ---------------------------------------------------------------------------
@@ -185,20 +298,40 @@ export function useAudioSync() {
       }
       listeningTracker.resetSample()
       trackedTrackKeyRef.current = nextTrackKey
+      pendingAutoPlay.current = null
+      if (pendingSeekRef.current?.trackKey !== nextTrackKey) pendingSeekRef.current = null
     }
 
     if (!featureFlags.playback) {
       trackTransitionRef.current = false
+      pendingAutoPlay.current = null
+      pendingSeekRef.current = null
+      activeLoadRef.current = null
+      if (hasAudioEngine()) getAudioEngine().invalidatePendingLoads()
       return
     }
     if (!currentTrack) {
       trackTransitionRef.current = false
       currentTimeRef.current = 0
+      pendingAutoPlay.current = null
+      pendingSeekRef.current = null
+      activeLoadRef.current = null
+      if (hasAudioEngine()) getAudioEngine().invalidatePendingLoads()
       return
     }
 
+    const trackKey = getPlaybackTrackKey(currentTrack)
     trackTransitionRef.current = true
     currentTimeRef.current = 0
+
+    const restoreSeek = usePlayerStore.getState().seekTime
+    if (restoreSeek !== null) {
+      pendingSeekRef.current = {
+        trackKey,
+        time: Number.isFinite(restoreSeek) && restoreSeek >= 0 ? restoreSeek : 0,
+      }
+      setSeekTime(null)
+    }
 
     // 懒创建引擎（此时可能已有用户交互上下文）
     const engine = getAudioEngine()
@@ -208,13 +341,8 @@ export function useAudioSync() {
       registerEngineEvents(engine)
     }
 
-    const url = window.electronAPI.getAudioUrl(currentTrack.filePath)
+    const url = window.electronAPI.getAudioUrl(currentTrack.id, currentTrack.mtime)
     console.log('[useAudioSync] 加载歌曲:', currentTrack.title, url)
-
-    // ⚠️ 暗礁 1：更新 Media Session（封面图需转 Blob URL）
-    if (featureFlags.mediaSession) {
-      updateMediaSession(currentTrack)
-    }
 
     // ⚠️ 用 getState() 实时读取，避免未列入依赖的 fadeEnabled/isPlaying 形成旧闭包
     const { fadeEnabled: currentFade, isPlaying: currentPlaying } = usePlayerStore.getState()
@@ -223,24 +351,63 @@ export function useAudioSync() {
     // 根据 fadeEnabled 决定是否使用淡入淡出
     if (shouldFade && currentPlaying) {
       // 淡入淡出模式：fadeOut → load → play → fadeIn
-      engine.loadWithFade(url, 500).catch((err) => {
-        if (err.name !== 'AbortError') {
+      const fadePromise = engine.loadWithFade(url, 500)
+      const fadeIdentity = engine.latestLoadOperationIdentity
+      const active = fadeIdentity ? setActiveLoad(trackKey, fadeIdentity) : null
+      fadePromise.then((identity) => {
+        if (identity && active && isActiveLoad(identity)) clearPlaybackFailure(active)
+      }).catch((err) => {
+        if (
+          err?.name !== 'AbortError'
+          && active
+          && isActiveLoad(active)
+          && usePlayerStore.getState().currentTrack
+          && getPlaybackTrackKey(usePlayerStore.getState().currentTrack!) === trackKey
+        ) {
           console.error('[useAudioSync] loadWithFade 失败:', err)
           // 降级：直接加载播放
-          engine.load(url)
-          pendingAutoPlay.current = true
+          const fallback = setActiveLoad(trackKey, engine.load(url))
+          pendingAutoPlay.current = currentPlaying ? fallback : null
         }
       })
     } else {
       // 普通模式：直接加载
-      engine.load(url)
+      const active = setActiveLoad(trackKey, engine.load(url))
 
       // 如果当前应该播放，标记加载完后自动播放
       if (currentPlaying) {
-        pendingAutoPlay.current = true
+        pendingAutoPlay.current = active
       }
     }
-  }, [currentTrack, featureFlags.playback, featureFlags.mediaSession, featureFlags.fadeEffect])
+  }, [currentTrack, featureFlags.playback, featureFlags.fadeEffect, setSeekTime])
+
+  // Retry 重新加载同一 Track，不经过 playTrack，因此不会清队列或重复记账。
+  useEffect(() => {
+    if (handledRetryVersionRef.current === playbackRetryVersion) return
+    handledRetryVersionRef.current = playbackRetryVersion
+
+    const flags = useUIStore.getState().featureFlags
+    const liveTrack = usePlayerStore.getState().currentTrack
+    if (!flags.playback || !liveTrack) return
+
+    const trackKey = getPlaybackTrackKey(liveTrack)
+    const retryTime = currentTimeRef.current
+    pendingSeekRef.current = {
+      trackKey,
+      time: Number.isFinite(retryTime) && retryTime >= 0 ? retryTime : 0,
+    }
+    trackTransitionRef.current = true
+
+    const engine = getAudioEngine()
+    if (!eventsRegistered.current) {
+      eventsRegistered.current = true
+      registerEngineEvents(engine)
+    }
+    const url = window.electronAPI.getAudioUrl(liveTrack.id, liveTrack.mtime)
+    const active = setActiveLoad(trackKey, engine.load(url))
+    pendingAutoPlay.current = active
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playbackRetryVersion])
 
   // ---------------------------------------------------------------------------
   // isPlaying 变化 → 播放/暂停
@@ -258,6 +425,10 @@ export function useAudioSync() {
 
     if (!featureFlags.playback) {
       if (isPlaying) setIsPlaying(false)
+      pendingAutoPlay.current = null
+      pendingSeekRef.current = null
+      activeLoadRef.current = null
+      if (hasAudioEngine()) getAudioEngine().invalidatePendingLoads()
       return
     }
 
@@ -265,16 +436,33 @@ export function useAudioSync() {
     const engine = getAudioEngine()
 
     if (isPlaying) {
+      const active = activeLoadRef.current
+      if (
+        trackTransitionRef.current
+        && active
+        && pendingSeekRef.current?.trackKey === active.trackKey
+      ) return
+
+      const liveTrack = usePlayerStore.getState().currentTrack
+      if (!liveTrack) return
+      const trackKey = getPlaybackTrackKey(liveTrack)
+      const playOwner = activeLoadRef.current
+      if (!playOwner || playOwner.trackKey !== trackKey) return
       const p = engine.play()
       if (p) {
-        p.catch((err) => {
-          if (err.name === 'AbortError') {
-            pendingAutoPlay.current = true
-          } else {
-            console.error('[useAudioSync] 播放失败:', err)
-            setIsPlaying(false)
-          }
-        })
+        p.then(
+          () => clearPlaybackFailure(playOwner),
+          (err) => {
+            if (err?.name === 'AbortError') {
+              if (isCurrentActiveLoad(playOwner)) {
+                pendingAutoPlay.current = playOwner
+              }
+            } else {
+              console.error('[useAudioSync] 播放失败:', err)
+              failPlayback('play', playOwner)
+            }
+          },
+        )
       }
       if (featureFlags.mediaSession) setPlaybackState('playing')
     } else {
@@ -296,25 +484,46 @@ export function useAudioSync() {
   // seekTime 变化 → 跳转进度
   // ---------------------------------------------------------------------------
   useEffect(() => {
-    if (!featureFlags.playback) return
-    if (seekTime === null || isNaN(seekTime)) return
+    if (!featureFlags.playback || !currentTrack) {
+      pendingSeekRef.current = null
+      if (seekTime !== null) setSeekTime(null)
+      return
+    }
+    if (seekTime === null) return
+
+    const trackKey = getPlaybackTrackKey(currentTrack)
+    const targetTime = Number.isFinite(seekTime) ? Math.max(0, seekTime) : 0
 
     const liveFlags = useUIStore.getState().featureFlags
     if (liveFlags.profile) void listeningTracker.flush()
     listeningTracker.resetSample()
 
     if (!hasAudioEngine()) {
-      // 引擎还没创建（启动恢复场景），存到 ref 等加载完后 seek
-      pendingSeekRef.current = seekTime
+      pendingSeekRef.current = { trackKey, time: targetTime }
       setSeekTime(null)
       return
     }
 
     const engine = getAudioEngine()
-    engine.currentTime = seekTime
-    currentTimeRef.current = seekTime
+    if (trackTransitionRef.current || engine.duration <= 0) {
+      pendingSeekRef.current = { trackKey, time: targetTime }
+      setSeekTime(null)
+      return
+    }
+
+    const clampedTime = Math.min(targetTime, engine.duration)
+    pendingSeekRef.current = null
+    engine.currentTime = clampedTime
+    currentTimeRef.current = clampedTime
     setSeekTime(null)
-  }, [seekTime, setSeekTime, featureFlags.playback])
+  }, [seekTime, currentTrack, setSeekTime, featureFlags.playback])
+
+  useEffect(() => () => {
+    pendingAutoPlay.current = null
+    pendingSeekRef.current = null
+    activeLoadRef.current = null
+    if (hasAudioEngine()) getAudioEngine().invalidatePendingLoads()
+  }, [])
 
   // ---------------------------------------------------------------------------
   // 播放状态变化 → 通知主进程（托盘菜单需要）

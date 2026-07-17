@@ -1,4 +1,15 @@
-import type { FeatureFlags, NativeTrackMenuAction, NativeTrackMenuWindowInit } from './ipc'
+import type {
+  FeatureFlags,
+  IpcEventArgs,
+  IpcEventChannel,
+  IpcSendArgs,
+  IpcSendChannel,
+  MainWindowInvokeArgs,
+  MainWindowInvokeChannel,
+  MainWindowInvokeResult,
+  NativeTrackMenuAction,
+  NativeTrackMenuWindowInit,
+} from './ipc'
 
 // =============================================================================
 // QinPlayer — Electron API 类型声明
@@ -8,10 +19,12 @@ import type { FeatureFlags, NativeTrackMenuAction, NativeTrackMenuWindowInit } f
 // =============================================================================
 
 export interface ElectronAPI {
-  /** 将本地文件路径转换为 qinplayer://audio 协议 URL */
-  getAudioUrl: (filePath: string) => string
-  /** 将本地文件路径转换为 qinplayer://cover 协议 URL */
-  getCoverUrl: (filePath: string) => string
+  /** 生成由主进程按歌曲 ID 授权的音频 URL */
+  getAudioUrl: (songId: number, mtime: number) => string
+  /** 生成由主进程按歌曲 ID 授权的封面 URL */
+  getCoverUrl: (songId: number, mtime: number) => string
+  /** 生成只指向当前设置头像的 URL；路径只用于缓存版本文件名 */
+  getAvatarUrl: (avatarPath: string) => string
   /** 最小化窗口 */
   minimize: () => void
   /** 最大化/还原窗口 */
@@ -23,11 +36,17 @@ export interface ElectronAPI {
   /** 获取功能开关快照 */
   getFeatureFlags: () => Promise<FeatureFlags>
   /** 双向 IPC 通信（渲染 → 主进程） */
-  invoke: (channel: string, ...args: unknown[]) => Promise<unknown>
+  invoke: <C extends MainWindowInvokeChannel>(
+    channel: C,
+    ...args: MainWindowInvokeArgs<C>
+  ) => Promise<MainWindowInvokeResult<C>>
   /** 单向发送（渲染 → 主进程） */
-  send: (channel: string, ...args: unknown[]) => void
+  send: <C extends IpcSendChannel>(channel: C, ...args: IpcSendArgs<C>) => void
   /** 监听主进程推送的消息 */
-  on: (channel: string, callback: (...args: unknown[]) => void) => () => void
+  on: <C extends IpcEventChannel>(
+    channel: C,
+    callback: (...args: IpcEventArgs<C>) => void,
+  ) => () => void
 }
 
 export interface ContextMenuWindowAPI {

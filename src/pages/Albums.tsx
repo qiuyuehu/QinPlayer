@@ -39,7 +39,7 @@ function Albums() {
     async function loadAlbums() {
       try {
         // 获取数据库中所有歌曲，需要前端做分组处理
-        const songs = await window.electronAPI.invoke('songs:getAll') as Track[]
+        const songs = await window.electronAPI.invoke('songs:getAll')
 
         // 按专辑名分组：用 Map 存储，key 为专辑名，value 为 Album
         const albumMap = new Map<string, Album>()
@@ -52,6 +52,8 @@ function Albums() {
               name: key,
               artist: song.artist || '未知歌手',
               coverPath: song.coverPath,  // 取第一首歌的封面作为专辑封面
+              coverSongId: song.coverPath ? song.id : null,
+              coverMtime: song.coverPath ? song.mtime : null,
               songs: []
             })
           }
@@ -123,11 +125,11 @@ function Albums() {
             >
               {/* 封面区域：有封面路径时显示图片，否则显示占位图标 */}
               <div className="albums__cover">
-                {album.coverPath ? (
+                {album.coverPath && album.coverSongId !== null && album.coverMtime !== null ? (
                   <img
                     className="albums__cover-img"
                     // 通过 electronAPI 的辅助方法将本地路径转为可用的 URL
-                    src={window.electronAPI.getCoverUrl(album.coverPath)}
+                    src={window.electronAPI.getCoverUrl(album.coverSongId, album.coverMtime)}
                     alt={album.name}
                   />
                 ) : (

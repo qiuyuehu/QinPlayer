@@ -39,7 +39,7 @@ function Search() {
       setLoading(true)
       try {
         // 通过 IPC 调用主进程的歌曲搜索接口，传入关键词
-        const songs = await window.electronAPI.invoke('songs:search', { keyword: searchQuery }) as Track[]
+        const songs = await window.electronAPI.invoke('songs:search', { keyword: searchQuery })
         // 仅在请求未被取消时更新结果，避免竞态条件导致旧结果覆盖新结果
         if (!cancelled) {
           setResults(songs)

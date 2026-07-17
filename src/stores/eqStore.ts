@@ -157,7 +157,7 @@ export const useEqStore = create<EqState>((set, get) => ({
   /** 从数据库加载均衡器设置 */
   loadFromDb: async () => {
     try {
-      const saved = await window.electronAPI.invoke('eq:get') as string | null
+      const saved = await window.electronAPI.invoke('eq:get')
       if (saved) {
         const parsed = JSON.parse(saved)
         if (Array.isArray(parsed) && parsed.length === 10) {

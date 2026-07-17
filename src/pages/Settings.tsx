@@ -116,7 +116,7 @@ function Settings() {
 
   // 选择头像
   const handlePickAvatar = useCallback(async () => {
-    const path = await window.electronAPI.invoke('settings:pickAvatar') as string | null
+    const path = await window.electronAPI.invoke('settings:pickAvatar')
     if (path) setAvatarPath(path)
   }, [])
 
@@ -251,13 +251,13 @@ function Settings() {
     if (exporting) return
     setExporting(true)
     try {
-      const result = await window.electronAPI.invoke('db:export') as { success: boolean; canceled?: boolean; error?: string }
-      if (result.canceled) return
-      if (result.success) {
-        alert('备份导出成功！')
-      } else {
-        alert('导出失败：' + (result.error || '未知错误'))
+      const result = await window.electronAPI.invoke('db:export')
+      if (!result.success) {
+        if ('canceled' in result) return
+        alert('导出失败：' + result.error)
+        return
       }
+      alert('备份导出成功！')
     } catch (err) {
       alert('导出失败：' + String(err))
     } finally {
@@ -270,7 +270,7 @@ function Settings() {
     if (importing) return
     try {
       // 第一步：选择备份文件
-      const backupPath = await window.electronAPI.invoke('db:import-select') as string | null
+      const backupPath = await window.electronAPI.invoke('db:import-select')
       if (!backupPath) return
 
       // 第二步：确认（会覆盖现有数据）
@@ -282,7 +282,7 @@ function Settings() {
       setImporting(true)
 
       // 第三步：替换数据库并重启
-      const result = await window.electronAPI.invoke('db:import-apply', backupPath) as { success: boolean; error?: string }
+      const result = await window.electronAPI.invoke('db:import-apply', backupPath)
       if (!result.success) {
         alert('导入失败：' + (result.error || '未知错误'))
         setImporting(false)
@@ -307,7 +307,7 @@ function Settings() {
 
     setClearing(true)
     try {
-      const result = await window.electronAPI.invoke('songs:deleteAll') as { deleted: number }
+      const result = await window.electronAPI.invoke('songs:deleteAll')
       alert(`已清空 ${result.deleted} 首歌曲`)
     } catch (err) {
       alert('清空失败：' + String(err))
@@ -332,7 +332,7 @@ function Settings() {
               title="更换头像"
             >
               {avatarPath ? (
-                <img src={`qinplayer://avatar?path=${encodeURIComponent(avatarPath)}`} alt="头像" />
+                <img src={window.electronAPI.getAvatarUrl(avatarPath)} alt="头像" />
               ) : (
                 <IconUser width={28} height={28} />
               )}

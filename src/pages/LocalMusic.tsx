@@ -45,7 +45,7 @@ function LocalMusic() {
   useEffect(() => {
     async function loadExistingSongs() {
       try {
-        const songs = await window.electronAPI.invoke('songs:getAll') as Track[]
+        const songs = await window.electronAPI.invoke('songs:getAll')
         if (songs && songs.length > 0) {
           setTracks(songs)   // 有数据才更新，避免覆盖为空数组
         }
@@ -61,20 +61,30 @@ function LocalMusic() {
   // ---------------------------------------------------------------------------
   // 采用事件驱动模式：Worker 逐首推送歌曲，前端实时追加到列表
   useEffect(() => {
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null
+    let refreshGeneration = 0
+    let active = true
+    const refreshSongs = async (): Promise<void> => {
+      const generation = ++refreshGeneration
+      try {
+        const songs = await window.electronAPI.invoke('songs:getAll')
+        if (active && generation === refreshGeneration) setTracks(songs)
+      } catch {
+        // 扫描仍由 done/error 收口；单次 UI 刷新失败不终止 Worker。
+      }
+    }
+    const scheduleRefresh = (): void => {
+      if (refreshTimer) clearTimeout(refreshTimer)
+      refreshTimer = setTimeout(() => {
+        refreshTimer = null
+        void refreshSongs()
+      }, 150)
+    }
+
     // 监听：发现新歌曲
-    // 每发现一首歌就追加到列表（已存在则更新，避免重复）
-    const unsubSong = window.electronAPI.on('scan:song-found', (song: Track) => {
-      setTracks(prev => {
-        const idx = prev.findIndex(t => t.id === (song as Track).id)
-        if (idx >= 0) {
-          // 已存在，更新元数据（封面、标题等可能变化）
-          const next = [...prev]
-          next[idx] = song as Track
-          return next
-        }
-        // 新歌曲，追加到末尾
-        return [...prev, song as Track]
-      })
+    // Worker payload 没有数据库 ID；短窗口合并后读取一次正式 Track 列表，避免逐首全表查询。
+    const unsubSong = window.electronAPI.on('scan:song-found', () => {
+      scheduleRefresh()
     })
 
     // 监听：扫描进度
@@ -87,28 +97,32 @@ function LocalMusic() {
     // 扫描结束：停止 loading 状态，进度条固定在 100%
     // 同时从数据库重新加载歌曲列表（增量扫描可能新增/删除了歌曲）
     const unsubDone = window.electronAPI.on('scan:done', async () => {
+      if (refreshTimer) {
+        clearTimeout(refreshTimer)
+        refreshTimer = null
+      }
       setScanning(false)
       setProgress(100)
-      // 从数据库重新加载最新歌曲列表（清理已删除的 + 新增的）
-      try {
-        const songs = await window.electronAPI.invoke('songs:getAll') as Track[]
-        if (songs) {
-          setTracks(songs)
-        }
-      } catch {
-        // 忽略
-      }
+      await refreshSongs()
     })
 
     // 监听：扫描错误
     // 扫描出错时显示错误信息，停止 loading 状态
     const unsubError = window.electronAPI.on('scan:error', (data: { message: string }) => {
+      if (refreshTimer) {
+        clearTimeout(refreshTimer)
+        refreshTimer = null
+      }
       setError(data.message)
       setScanning(false)
+      void refreshSongs()
     })
 
     // cleanup：组件卸载时取消所有事件监听，防止内存泄漏
     return () => {
+      active = false
+      refreshGeneration += 1
+      if (refreshTimer) clearTimeout(refreshTimer)
       unsubSong()
       unsubProgress()
       unsubDone()
@@ -122,7 +136,7 @@ function LocalMusic() {
   // 整个流程：打开对话框 → 重置状态 → 发送 IPC 启动 Worker → 通过事件接收结果
   const handleSelectFolder = useCallback(async () => {
     // 1. 打开系统文件夹选择对话框（通过 IPC 调用 Electron 原生 dialog）
-    const path = await window.electronAPI.invoke('select-folder') as string | null
+    const path = await window.electronAPI.invoke('select-folder')
     if (!path) return  // 用户关闭对话框时返回 null，直接退出
 
     setFolderPath(path)
@@ -133,7 +147,7 @@ function LocalMusic() {
 
     // 2. 启动 Worker 扫描 —— 此调用只触发扫描，歌曲通过 scan:song-found 事件逐首推送
     try {
-      const result = await window.electronAPI.invoke('scan-folder', path) as { success: boolean; error?: string }  // 返回扫描启动结果
+      const result = await window.electronAPI.invoke('scan-folder', path)  // 返回扫描启动结果
       if (!result.success) {
         setError(result.error || '扫描启动失败')  // Worker 启动失败时立即提示
         setScanning(false)                         // 恢复按钮可用状态

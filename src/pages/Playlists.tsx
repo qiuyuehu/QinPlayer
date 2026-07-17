@@ -53,7 +53,7 @@ function Playlists() {
   const loadPlaylists = useCallback(async () => {
     try {
       // 调用 IPC 获取所有歌单数据
-      const list = await window.electronAPI.invoke('playlists:getAll') as Playlist[]
+      const list = await window.electronAPI.invoke('playlists:getAll')
       setPlaylists(list)
     } catch (e) {
       console.error('加载歌单失败:', e)
@@ -77,7 +77,7 @@ function Playlists() {
         id: playlistId,
         sortBy,
         order: sortOrder
-      }) as Track[]
+      })
       if (requestToken === songsRequestTokenRef.current) setSongs(trackList)
     } catch (e) {
       if (requestToken === songsRequestTokenRef.current) console.error('加载歌单歌曲失败:', e)
@@ -300,10 +300,10 @@ function Playlists() {
               onContextMenu={(event) => handleCardContextMenu(event, pl)}
             >
               <div className="playlists__card-cover">
-                {pl.coverPath ? (
+                {pl.coverPath && pl.coverSongId !== null && pl.coverMtime !== null ? (
                   <img
                     className="playlists__card-cover-img"
-                    src={window.electronAPI.getCoverUrl(pl.coverPath)}
+                    src={window.electronAPI.getCoverUrl(pl.coverSongId, pl.coverMtime)}
                     alt={pl.name}
                   />
                 ) : (

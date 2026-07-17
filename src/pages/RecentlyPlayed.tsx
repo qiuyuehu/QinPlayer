@@ -25,7 +25,7 @@ function RecentlyPlayed() {
     async function load() {
       try {
         // 调用后端 IPC 接口获取最近播放的歌曲列表
-        const songs = await window.electronAPI.invoke('songs:getRecent') as Track[]
+        const songs = await window.electronAPI.invoke('songs:getRecent')
         setTracks(songs)
       } catch (e) {
         console.error('加载最近播放失败:', e)

@@ -3,7 +3,7 @@
  * 覆盖：歌单封面渲染与无封面占位图
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import Playlists from '../src/pages/Playlists'
 import { usePlayerStore } from '../src/stores/playerStore'
 import { useUIStore } from '../src/stores/uiStore'
@@ -16,6 +16,8 @@ const playlists: Playlist[] = [
     createdAt: '',
     songCount: 2,
     coverPath: 'C:\\covers\\a.jpg',
+    coverSongId: 10,
+    coverMtime: 123,
   },
   {
     id: 2,
@@ -23,6 +25,8 @@ const playlists: Playlist[] = [
     createdAt: '',
     songCount: 0,
     coverPath: null,
+    coverSongId: null,
+    coverMtime: null,
   },
 ]
 
@@ -45,15 +49,17 @@ describe('Playlists', () => {
       ...window.electronAPI,
       invoke: invokeMock,
     }
-    useUIStore.setState({ featureFlags: { ...DEFAULT_FEATURE_FLAGS } })
-    usePlayerStore.setState({ playlist: [], currentTrack: null, isPlaying: false })
+    act(() => {
+      useUIStore.setState({ featureFlags: { ...DEFAULT_FEATURE_FLAGS } })
+      usePlayerStore.setState({ playlist: [], currentTrack: null, isPlaying: false })
+    })
   })
 
   it('应该渲染第一首歌封面', async () => {
     render(<Playlists />)
 
     const cover = await screen.findByAltText('有封面歌单')
-    expect(cover).toHaveAttribute('src', 'qinplayer://cover?path=C%3A%5Ccovers%5Ca.jpg')
+    expect(cover).toHaveAttribute('src', 'qinplayer://cover?id=10&v=123')
   })
 
   it('无封面时应该显示歌单卡片和歌曲数量', async () => {
@@ -170,6 +176,19 @@ describe('Playlists', () => {
     expect(invokeMock.mock.calls.filter(([channel]) => channel === 'songs:recordPlay' || channel === 'songs:updatePlayCount')).toHaveLength(2)
   })
 
+  it('默认排序应该保持既有 added wire payload', async () => {
+    render(<Playlists />)
+
+    fireEvent.click(await screen.findByText('有封面歌单'))
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('playlists:getSongs', {
+        id: 1,
+        sortBy: 'added',
+        order: 'desc',
+      })
+    })
+  })
+
   it('播放全部应该位于排序栏末尾，并保留既有禁用条件', async () => {
     invokeMock.mockImplementation(async (channel: string) => {
       if (channel === 'playlists:getAll') return playlists
@@ -202,7 +221,9 @@ describe('Playlists', () => {
     resolveSongs([])
     await waitFor(() => expect(screen.getByRole('button', { name: '播放全部' })).toBeDisabled())
 
-    useUIStore.setState({ featureFlags: { ...DEFAULT_FEATURE_FLAGS, playback: false } })
+    act(() => {
+      useUIStore.setState({ featureFlags: { ...DEFAULT_FEATURE_FLAGS, playback: false } })
+    })
     expect(screen.getByRole('button', { name: '播放全部' })).toBeDisabled()
   })
 

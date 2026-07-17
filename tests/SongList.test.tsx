@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { createRef } from 'react'
 import { readFileSync } from 'node:fs'
-import SongList, { type SongListHandle } from '../src/components/SongList'
+import SongList, { type SongListHandle } from '@/components/SongList'
 import { usePlayerStore } from '../src/stores/playerStore'
 import { useUIStore } from '../src/stores/uiStore'
 import { DEFAULT_FEATURE_FLAGS } from '../src/utils/featureFlags'
@@ -167,6 +167,100 @@ describe('SongList', () => {
 
     expect(screen.queryByTitle('收藏')).not.toBeInTheDocument()
     expect(invokeMock).not.toHaveBeenCalledWith('songs:getLiked')
+  })
+
+  it('取消收藏成功后更新星标并通知一次', async () => {
+    invokeMock.mockImplementation((channel: string) => (
+      channel === 'songs:getLiked' ? Promise.resolve([tracks[0]]) : Promise.resolve(undefined)
+    ))
+    const onLikedChange = vi.fn()
+    render(<SongList tracks={tracks} onLikedChange={onLikedChange} />)
+
+    fireEvent.click(await screen.findByTitle('取消收藏'))
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('songs:unlike', { songId: tracks[0].id })
+      expect(onLikedChange).toHaveBeenCalledWith(tracks[0], false)
+    })
+    expect(onLikedChange).toHaveBeenCalledTimes(1)
+    expect(screen.getAllByTitle('收藏')).toHaveLength(tracks.length)
+  })
+
+  it('收藏成功后更新星标并通知一次', async () => {
+    const onLikedChange = vi.fn()
+    render(<SongList tracks={tracks} onLikedChange={onLikedChange} />)
+
+    const likeButtons = await screen.findAllByTitle('收藏')
+    fireEvent.click(likeButtons[0])
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('songs:like', { songId: tracks[0].id })
+      expect(onLikedChange).toHaveBeenCalledWith(tracks[0], true)
+    })
+    expect(onLikedChange).toHaveBeenCalledTimes(1)
+    expect(screen.getByTitle('取消收藏')).toBeInTheDocument()
+  })
+
+  it('收藏 IPC 失败时不改内部状态、不通知并记录中文错误', async () => {
+    invokeMock.mockImplementation((channel: string) => {
+      if (channel === 'songs:getLiked') return Promise.resolve([tracks[0]])
+      if (channel === 'songs:unlike') return Promise.reject(new Error('database failed'))
+      return Promise.resolve(undefined)
+    })
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const onLikedChange = vi.fn()
+    render(<SongList tracks={tracks} onLikedChange={onLikedChange} />)
+
+    fireEvent.click(await screen.findByTitle('取消收藏'))
+
+    await waitFor(() => {
+      expect(consoleError).toHaveBeenCalledWith('更新收藏状态失败:', expect.any(Error))
+    })
+    expect(screen.getByTitle('取消收藏')).toBeInTheDocument()
+    expect(onLikedChange).not.toHaveBeenCalled()
+    consoleError.mockRestore()
+  })
+
+  it('通知回调抛错不回滚已经成功的收藏状态', async () => {
+    invokeMock.mockImplementation((channel: string) => (
+      channel === 'songs:getLiked' ? Promise.resolve([tracks[0]]) : Promise.resolve(undefined)
+    ))
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const onLikedChange = vi.fn(() => { throw new Error('consumer failed') })
+    render(<SongList tracks={tracks} onLikedChange={onLikedChange} />)
+
+    fireEvent.click(await screen.findByTitle('取消收藏'))
+
+    await waitFor(() => {
+      expect(screen.getAllByTitle('收藏')).toHaveLength(tracks.length)
+      expect(onLikedChange).toHaveBeenCalledWith(tracks[0], false)
+    })
+    expect(consoleError).toHaveBeenCalledWith('通知收藏状态失败:', expect.any(Error))
+    expect(consoleError).not.toHaveBeenCalledWith('更新收藏状态失败:', expect.any(Error))
+    consoleError.mockRestore()
+  })
+
+  it('同一歌曲收藏请求进行中时忽略重复点击', async () => {
+    let resolveUnlike!: () => void
+    const unlikePending = new Promise<void>((resolve) => { resolveUnlike = resolve })
+    invokeMock.mockImplementation((channel: string) => {
+      if (channel === 'songs:getLiked') return Promise.resolve([tracks[0]])
+      if (channel === 'songs:unlike') return unlikePending
+      return Promise.resolve(undefined)
+    })
+    const onLikedChange = vi.fn()
+    render(<SongList tracks={tracks} onLikedChange={onLikedChange} />)
+
+    const unlike = await screen.findByTitle('取消收藏')
+    fireEvent.click(unlike)
+    fireEvent.click(unlike)
+
+    expect(invokeMock.mock.calls.filter(([channel]) => channel === 'songs:unlike')).toHaveLength(1)
+    expect(unlike).toBeDisabled()
+
+    resolveUnlike()
+    await waitFor(() => expect(onLikedChange).toHaveBeenCalledWith(tracks[0], false))
+    expect(onLikedChange).toHaveBeenCalledTimes(1)
   })
 
   it('containerHeight 应该控制滚动容器高度', () => {

@@ -11,7 +11,7 @@
 
 export interface Track {
   id: number               // 数据库自增 ID
-  filePath: string         // 文件绝对路径（用于 qinplayer:// 协议加载）
+  filePath: string         // 文件绝对路径（歌词、歌曲信息和打开位置使用）
   fileName: string         // 文件名（标签缺失时兜底显示）
   title: string            // 歌名（来自 ID3 标签，缺失则用文件名）
   artist: string           // 歌手
@@ -33,6 +33,8 @@ export interface Playlist {
   createdAt: string        // 创建时间
   songCount?: number       // 歌曲数量（查询时填充）
   coverPath: string | null // 默认顺序第一首歌的封面路径
+  coverSongId: number | null // 代表封面的歌曲 ID（协议授权依据）
+  coverMtime: number | null  // 代表歌曲 mtime（仅缓存失效）
 }
 
 // ---------------------------------------------------------------------------
@@ -43,6 +45,8 @@ export interface Album {
   name: string             // 专辑名
   artist: string           // 歌手
   coverPath: string | null // 封面路径
+  coverSongId: number | null // 代表封面的歌曲 ID（协议授权依据）
+  coverMtime: number | null  // 代表歌曲 mtime（仅缓存失效）
   songs: Track[]           // 专辑内歌曲
 }
 

@@ -21,6 +21,15 @@ export function setAudioEngineEqualizerEnabled(enabled: boolean): void {
   equalizerEnabled = enabled
 }
 
+export interface AudioSourceIdentity {
+  source: string
+  generation: number
+}
+
+export interface AudioEngineError extends AudioSourceIdentity {
+  code: number | null
+}
+
 function isValidEqGain(value: number): boolean {
   return Number.isFinite(value) && value >= EQ_GAIN_MIN && value <= EQ_GAIN_MAX
 }
@@ -46,15 +55,19 @@ export class AudioEngine {
   // --- 状态回调（外部注册）---
   private _onTimeUpdate: ((currentTime: number, duration: number) => void) | null = null
   private _onEnded: (() => void) | null = null
-  private _onLoadedMetadata: ((duration: number) => void) | null = null
+  private _onLoadedMetadata: ((duration: number, identity: AudioSourceIdentity | null) => void) | null = null
+  private _onError: ((error: AudioEngineError) => void) | null = null
 
   // --- timeupdate 节流 ---
   private _lastUpdateTime = 0
   private readonly _updateInterval = 250  // 每 250ms 更新一次（约 4fps，避免高频 setState）
 
-  // --- loadWithFade 竞态防护 ---
-  // 每次 loadWithFade 调用递增 generation ID，过期的 setTimeout 直接 return
-  private _fadeGeneration = 0
+  // --- source 提交权 ---
+  private _loadOperationGeneration = 0
+  private _latestLoadOperationIdentity: AudioSourceIdentity | null = null
+  private _pendingSourceIdentity: AudioSourceIdentity | null = null
+  private _currentSourceIdentity: AudioSourceIdentity | null = null
+  private _destroyed = false
 
   constructor() {
     // 创建 HTMLAudioElement（基础播放用，不依赖 Web Audio API）
@@ -80,18 +93,52 @@ export class AudioEngine {
       }
     })
 
+    // load() 会先清空 active identity；真实 loadstart 到达后才允许本次 source 提交媒体事件。
+    this.audioElement.addEventListener('loadstart', () => {
+      const pending = this._pendingSourceIdentity
+      if (!pending || !this.canCommitLoad(pending)) return
+      this._currentSourceIdentity = pending
+      this._pendingSourceIdentity = null
+    })
+
     // 监听元数据加载完成（获取时长）
     this.audioElement.addEventListener('loadedmetadata', () => {
-      if (this._onLoadedMetadata) {
-        this._onLoadedMetadata(this.audioElement.duration)
-      }
+      const identity = this._currentSourceIdentity
+      if (!identity || !this._onLoadedMetadata) return
+      this._onLoadedMetadata(this.audioElement.duration, identity)
     })
 
     // 监听加载错误
     this.audioElement.addEventListener('error', () => {
       const err = this.audioElement.error
       console.error('[AudioEngine] 加载错误:', err?.code, err?.message, 'src:', this.audioElement.src)
+      if (this._destroyed || !this._currentSourceIdentity || !this._onError) return
+      this._onError({
+        ...this._currentSourceIdentity,
+        code: typeof err?.code === 'number' ? err.code : null,
+      })
     })
+  }
+
+  private beginLoadOperation(source: string): AudioSourceIdentity {
+    const identity = { source, generation: ++this._loadOperationGeneration }
+    this._latestLoadOperationIdentity = identity
+    return identity
+  }
+
+  private canCommitLoad(identity: AudioSourceIdentity): boolean {
+    return !this._destroyed && identity.generation === this._loadOperationGeneration
+  }
+
+  private commitLoad(identity: AudioSourceIdentity): boolean {
+    if (!this.canCommitLoad(identity)) return false
+    console.log('[AudioEngine] 加载:', identity.source)
+    this._currentSourceIdentity = null
+    this._pendingSourceIdentity = identity
+    this.audioElement.src = identity.source
+    if (!this.canCommitLoad(identity)) return false
+    this.audioElement.load()
+    return true
   }
 
   // ---------------------------------------------------------------------------
@@ -169,10 +216,22 @@ export class AudioEngine {
    * 加载音频文件
    * @param protocolUrl qinplayer:// 协议 URL（由 preload.getAudioUrl 生成）
    */
-  load(protocolUrl: string): void {
-    console.log('[AudioEngine] 加载:', protocolUrl)
-    this.audioElement.src = protocolUrl
-    this.audioElement.load()
+  load(protocolUrl: string): AudioSourceIdentity {
+    const identity = this.beginLoadOperation(protocolUrl)
+    this.commitLoad(identity)
+    return identity
+  }
+
+  /** 使尚未提交的 fade/load operation 失效，不改动当前音频节点。 */
+  invalidatePendingLoads(): void {
+    this._loadOperationGeneration += 1
+    this._latestLoadOperationIdentity = null
+    this._pendingSourceIdentity = null
+    this._currentSourceIdentity = null
+  }
+
+  get latestLoadOperationIdentity(): AudioSourceIdentity | null {
+    return this._latestLoadOperationIdentity
   }
 
   /**
@@ -250,8 +309,13 @@ export class AudioEngine {
   }
 
   /** 注册元数据加载完成回调 */
-  onLoadedMetadata(callback: (duration: number) => void): void {
+  onLoadedMetadata(callback: (duration: number, identity: AudioSourceIdentity | null) => void): void {
     this._onLoadedMetadata = callback
+  }
+
+  /** 注册结构化媒体加载错误，不向 Renderer 暴露浏览器 message。 */
+  onError(callback: (error: AudioEngineError) => void): void {
+    this._onError = callback
   }
 
   // ---------------------------------------------------------------------------
@@ -426,9 +490,8 @@ export class AudioEngine {
    * @param protocolUrl 新歌曲的 qinplayer:// 协议 URL
    * @param fadeDuration 淡入淡出时长（毫秒），默认 500ms
    */
-  async loadWithFade(protocolUrl: string, fadeDuration: number = 500): Promise<void> {
-    // 递增 generation ID，标识本次切歌
-    const myGeneration = ++this._fadeGeneration
+  async loadWithFade(protocolUrl: string, fadeDuration: number = 500): Promise<AudioSourceIdentity | null> {
+    const identity = this.beginLoadOperation(protocolUrl)
 
     // 1. 淡出当前歌曲
     if (this.playing && this.webAudioConnected) {
@@ -436,29 +499,33 @@ export class AudioEngine {
       // 等淡出动画完成（如果期间有新的 loadWithFade 调用，直接 return）
       await new Promise(resolve => setTimeout(resolve, fadeDuration))
       // ⚠️ 竞态检查：如果期间有新的切歌，本次作废
-      if (this._fadeGeneration !== myGeneration) {
+      if (!this.canCommitLoad(identity)) {
         console.log('[AudioEngine] loadWithFade 被新切歌覆盖，跳过')
-        return
+        return null
       }
     }
 
     // 2. 加载新歌曲
-    this.load(protocolUrl)
+    if (!this.commitLoad(identity)) return null
 
     // 3. 播放
+    if (!this.canCommitLoad(identity)) return null
     await this.play()
 
     // 4. 淡入新歌曲（再次检查 generation，防止极端情况）
-    if (this._fadeGeneration !== myGeneration) return
+    if (!this.canCommitLoad(identity)) return null
     if (this.webAudioConnected) {
       this.fadeIn(fadeDuration)
     }
+    return identity
   }
 
   /**
    * 销毁引擎，释放资源
    */
   destroy(): void {
+    this._destroyed = true
+    this.invalidatePendingLoads()
     this.audioElement.pause()
     this.audioElement.src = ''
     if (this.audioContext && this.audioContext.state !== 'closed') {

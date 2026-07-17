@@ -1,161 +1,214 @@
 // =============================================================================
 // QinPlayer — Media Session API 管理模块
 // =============================================================================
-// 职责：接管系统媒体控制（Windows 任务栏 + 键盘多媒体键）
-// 设计：
-//   - 更新歌曲信息（标题、歌手、专辑、封面）
-//   - 注册播放控制回调（play/pause/prev/next）
-//   - ⚠️ 暗礁 1：封面图必须转为 Blob URL，OS 不认识 qinplayer:// 协议
-// =============================================================================
 
 import type { Track } from '../types'
 
-// ---------------------------------------------------------------------------
-// 内存管理：记录上一个 Blob URL，切歌时 revoke 防止内存泄漏
-// ---------------------------------------------------------------------------
+type MediaSessionActions = {
+  play: () => void
+  pause: () => void
+  prevTrack: () => void
+  nextTrack: () => void
+  seekTo?: (time: number) => void
+}
+
+const MEDIA_ACTIONS: MediaSessionAction[] = [
+  'play',
+  'pause',
+  'previoustrack',
+  'nexttrack',
+  'seekto',
+]
+
+let mediaSessionGeneration = 0
+let artworkAbortController: AbortController | null = null
 let lastArtworkBlobUrl: string | null = null
 
-/**
- * 将封面图转换为 Blob URL
- * ⚠️ 暗礁 1：OS 原生媒体服务不认识 qinplayer:// 协议
- * 必须 fetch → blob → URL.createObjectURL，生成 blob:http://... 格式
- *
- * @param coverPath 封面文件路径（本地路径）
- * @returns Blob URL 或空字符串（无封面时）
- */
-async function getArtworkUrl(coverPath: string | null): Promise<string> {
-  if (!coverPath) {
-    console.log('[MediaSession] 无封面路径，跳过')
-    return ''
-  }
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError'
+}
 
-  const url = `qinplayer://cover?path=${encodeURIComponent(coverPath)}`
-  console.log('[MediaSession] 封面请求 URL:', url)
+function revokeArtworkUrl(url: string | null): void {
+  if (url) URL.revokeObjectURL(url)
+}
 
+function createMetadata(track: Track, artworkUrl: string | null): MediaMetadata {
+  return new MediaMetadata({
+    title: track.title || track.fileName,
+    artist: track.artist || '未知歌手',
+    album: track.album || '未知专辑',
+    artwork: artworkUrl
+      ? [{ src: artworkUrl, sizes: '512x512', type: 'image/jpeg' }]
+      : [],
+  })
+}
+
+function commitMetadata(track: Track, artworkUrl: string | null): boolean {
   try {
-    const response = await fetch(url)
-    console.log('[MediaSession] 封面响应状态:', response.status, response.ok)
+    navigator.mediaSession.metadata = createMetadata(track, artworkUrl)
+    return true
+  } catch (error) {
+    console.error('[MediaSession] 更新 metadata 失败:', error)
+    return false
+  }
+}
 
+/**
+ * 加载本次请求独占的封面 Blob URL。全局 Blob 的接管和释放由调用方处理。
+ */
+async function loadArtworkUrl(track: Track, signal: AbortSignal): Promise<string | null> {
+  if (!track.coverPath) return null
+
+  const url = window.electronAPI.getCoverUrl(track.id, track.mtime)
+  try {
+    const response = await fetch(url, { signal })
     if (!response.ok) {
       console.warn('[MediaSession] 封面请求失败:', response.status)
-      return ''
+      return null
     }
 
     const blob = await response.blob()
-    console.log('[MediaSession] 封面 Blob 大小:', blob.size, 'bytes, 类型:', blob.type)
-
     if (blob.size === 0) {
       console.warn('[MediaSession] 封面 Blob 为空')
-      return ''
+      return null
     }
 
-    // ⚠️ blob:http://localhost:xxx/... — OS 能识别这种格式
-    // revoke 旧的 Blob URL 防止内存泄漏
-    if (lastArtworkBlobUrl) {
-      URL.revokeObjectURL(lastArtworkBlobUrl)
+    return URL.createObjectURL(blob)
+  } catch (error) {
+    if (!isAbortError(error)) {
+      console.warn('[MediaSession] 封面图转换失败:', error)
     }
-    const blobUrl = URL.createObjectURL(blob)
-    lastArtworkBlobUrl = blobUrl
-    console.log('[MediaSession] 封面 Blob URL:', blobUrl)
-    return blobUrl
-  } catch (err) {
-    console.warn('[MediaSession] 封面图转换失败:', err)
-    return ''
+    return null
   }
 }
 
 /**
- * 更新 Media Session 元数据
- * 切歌时调用，更新任务栏媒体控制台显示的信息
- *
- * @param track 当前播放的歌曲
+ * 立即提交文字 metadata，再异步补齐当前 generation 的封面。
  */
 export async function updateMediaSession(track: Track): Promise<void> {
-  if (!('mediaSession' in navigator)) {
-    console.warn('[MediaSession] 当前环境不支持 Media Session API')
+  if (!('mediaSession' in navigator)) return
+
+  const generation = ++mediaSessionGeneration
+  artworkAbortController?.abort()
+  const controller = new AbortController()
+  artworkAbortController = controller
+
+  commitMetadata(track, null)
+
+  if (!track.coverPath) {
+    if (generation !== mediaSessionGeneration) return
+    artworkAbortController = null
+    const previousArtwork = lastArtworkBlobUrl
+    lastArtworkBlobUrl = null
+    revokeArtworkUrl(previousArtwork)
     return
   }
 
-  // ⚠️ 暗礁 1：封面图转为 Blob URL
-  const artworkUrl = await getArtworkUrl(track.coverPath)
-
-  try {
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: track.title || track.fileName,
-      artist: track.artist || '未知歌手',
-      album: track.album || '未知专辑',
-      artwork: artworkUrl
-        ? [{ src: artworkUrl, sizes: '512x512', type: 'image/jpeg' }]
-        : []
-    })
-
-    console.log('[MediaSession] 已更新:', track.title, artworkUrl ? '（含封面）' : '（无封面）')
-  } catch (err) {
-    console.error('[MediaSession] 更新 metadata 失败:', err)
+  const artworkUrl = await loadArtworkUrl(track, controller.signal)
+  if (generation !== mediaSessionGeneration) {
+    revokeArtworkUrl(artworkUrl)
+    return
   }
+
+  artworkAbortController = null
+  if (!artworkUrl) {
+    const previousArtwork = lastArtworkBlobUrl
+    lastArtworkBlobUrl = null
+    revokeArtworkUrl(previousArtwork)
+    return
+  }
+
+  if (!commitMetadata(track, artworkUrl)) {
+    revokeArtworkUrl(artworkUrl)
+    return
+  }
+
+  const previousArtwork = lastArtworkBlobUrl
+  lastArtworkBlobUrl = artworkUrl
+  if (previousArtwork !== artworkUrl) revokeArtworkUrl(previousArtwork)
 }
 
-/**
- * 清除 Media Session 元数据
- */
+/** 清除 metadata，并使所有未完成封面请求永久失效。 */
 export function clearMediaSession(): void {
+  mediaSessionGeneration += 1
+  artworkAbortController?.abort()
+  artworkAbortController = null
+
   if ('mediaSession' in navigator) {
     navigator.mediaSession.metadata = null
   }
+
+  const previousArtwork = lastArtworkBlobUrl
+  lastArtworkBlobUrl = null
+  revokeArtworkUrl(previousArtwork)
 }
 
-/**
- * 更新播放状态
- * @param state 'playing' | 'paused'
- */
+/** 更新播放状态。 */
 export function setPlaybackState(state: 'playing' | 'paused'): void {
   if ('mediaSession' in navigator) {
     navigator.mediaSession.playbackState = state
   }
 }
 
-/**
- * 注册 Media Session 动作回调
- * 键盘多媒体键、任务栏按钮触发时调用
- */
-export function registerMediaSessionActions(actions: {
-  play: () => void
-  pause: () => void
-  prevTrack: () => void
-  nextTrack: () => void
-  seekTo?: (time: number) => void
-}): void {
+/** 将所有已注册的 Media Session 动作恢复为空。 */
+export function unregisterMediaSessionActions(): void {
   if (!('mediaSession' in navigator)) return
 
-  navigator.mediaSession.setActionHandler('play', () => actions.play())
-  navigator.mediaSession.setActionHandler('pause', () => actions.pause())
-  navigator.mediaSession.setActionHandler('previoustrack', () => actions.prevTrack())
-  navigator.mediaSession.setActionHandler('nexttrack', () => actions.nextTrack())
-
-  if (actions.seekTo) {
-    navigator.mediaSession.setActionHandler('seekto', (details) => {
-      if (details.seekTime !== undefined) {
-        actions.seekTo!(details.seekTime)
-      }
-    })
+  for (const action of MEDIA_ACTIONS) {
+    try {
+      navigator.mediaSession.setActionHandler(action, null)
+    } catch {
+      // 某些 Chromium 版本不支持全部 action，已支持的 action 仍需继续清理。
+    }
   }
-
-  console.log('[MediaSession] 动作回调已注册')
 }
 
-/**
- * 设置播放位置（用于 Media Session 进度显示）
- */
-export function setPositionState(position: number, duration: number, playbackRate: number = 1): void {
+function registerMediaSessionAction(
+  action: MediaSessionAction,
+  handler: MediaSessionActionHandler | null,
+): void {
+  try {
+    navigator.mediaSession.setActionHandler(action, handler)
+  } catch (error) {
+    console.warn(`[MediaSession] 当前环境不支持 ${action} action:`, error)
+  }
+}
+
+/** 注册动作并返回对称的注销函数。 */
+export function registerMediaSessionActions(actions: MediaSessionActions): () => void {
+  if (!('mediaSession' in navigator)) return () => {}
+
+  registerMediaSessionAction('play', () => actions.play())
+  registerMediaSessionAction('pause', () => actions.pause())
+  registerMediaSessionAction('previoustrack', () => actions.prevTrack())
+  registerMediaSessionAction('nexttrack', () => actions.nextTrack())
+  registerMediaSessionAction(
+    'seekto',
+    actions.seekTo
+      ? (details) => {
+          if (details.seekTime !== undefined) actions.seekTo!(details.seekTime)
+        }
+      : null,
+  )
+
+  return unregisterMediaSessionActions
+}
+
+/** 设置播放位置（用于 Media Session 进度显示）。 */
+export function setPositionState(
+  position: number,
+  duration: number,
+  playbackRate: number = 1,
+): void {
   if (!('mediaSession' in navigator) || !navigator.mediaSession.setPositionState) return
 
   try {
     navigator.mediaSession.setPositionState({
       duration: duration || 0,
       playbackRate,
-      position: Math.min(position, duration || 0)
+      position: Math.min(position, duration || 0),
     })
-  } catch (err) {
-    // 忽略
+  } catch {
+    // 浏览器会拒绝无效或尚未就绪的 duration/position。
   }
 }

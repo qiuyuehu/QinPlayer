@@ -146,6 +146,21 @@ describe('Albums', () => {
     expect(screen.getByText('4 个专辑')).toBeInTheDocument()
   })
 
+  it('专辑封面使用代表歌曲 id 与 mtime，而不是 coverPath', async () => {
+    invokeMock.mockResolvedValueOnce([{
+      ...createTrack(21, '封面专辑', '歌手'),
+      coverPath: 'C:\\covers\\album.jpg',
+      mtime: 456,
+    }])
+
+    render(<Albums />)
+
+    expect(await screen.findByAltText('封面专辑')).toHaveAttribute(
+      'src',
+      'qinplayer://cover?id=21&v=456',
+    )
+  })
+
   it('歌曲为空时应该显示现有空状态且不抛错', async () => {
     invokeMock.mockResolvedValueOnce([])
 

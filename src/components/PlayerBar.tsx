@@ -256,7 +256,7 @@ function PlayerBar() {
           title={featureFlags.lyrics ? '查看歌词' : undefined}
         >
           {currentTrack?.coverPath && (
-            <img src={window.electronAPI.getCoverUrl(currentTrack.coverPath)} alt="封面" />
+            <img src={window.electronAPI.getCoverUrl(currentTrack.id, currentTrack.mtime)} alt="封面" />
           )}
         </div>
         <div className="player-bar__meta">

@@ -5,10 +5,27 @@
 // =============================================================================
 
 import { contextBridge, ipcRenderer } from 'electron'
-import type { NativeTrackMenuAction, NativeTrackMenuWindowInit } from '../src/types/ipc'
+import type {
+  ContextMenuInvokeArgs,
+  ContextMenuInvokeChannel,
+  ContextMenuInvokeResult,
+  NativeTrackMenuAction,
+} from '../src/types/ipc'
+import type { ContextMenuWindowAPI } from '../src/types/electron'
 
-contextBridge.exposeInMainWorld('contextMenuAPI', {
-  getInit: (): Promise<NativeTrackMenuWindowInit | null> => ipcRenderer.invoke('context-menu:window-get-init'),
-  ready: (): Promise<void> => ipcRenderer.invoke('context-menu:window-ready'),
-  resolve: (action: NativeTrackMenuAction | null): Promise<void> => ipcRenderer.invoke('context-menu:window-resolve', { action }),
-})
+function invokeContextMenu<C extends ContextMenuInvokeChannel>(
+  channel: C,
+  ...args: ContextMenuInvokeArgs<C>
+): Promise<ContextMenuInvokeResult<C>> {
+  return ipcRenderer.invoke(channel, ...args)
+}
+
+export const contextMenuAPI = {
+  getInit: () => invokeContextMenu('context-menu:window-get-init'),
+  ready: () => invokeContextMenu('context-menu:window-ready'),
+  resolve: (action: NativeTrackMenuAction | null) => (
+    invokeContextMenu('context-menu:window-resolve', { action })
+  ),
+} satisfies ContextMenuWindowAPI
+
+contextBridge.exposeInMainWorld('contextMenuAPI', contextMenuAPI)

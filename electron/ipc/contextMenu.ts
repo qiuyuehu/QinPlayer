@@ -4,7 +4,7 @@
 // 职责：校验受限菜单动作，优先显示主题子窗口，失败时回退 Electron 原生菜单
 // =============================================================================
 
-import { app, BrowserWindow, ipcMain, Menu, screen, type MenuItemConstructorOptions } from 'electron'
+import { app, BrowserWindow, Menu, screen, type MenuItemConstructorOptions } from 'electron'
 import { join } from 'path'
 import type {
   NativeTrackMenuAction,
@@ -12,6 +12,7 @@ import type {
   NativeTrackMenuEntry,
   NativeTrackMenuWindowInit,
 } from '../../src/types/ipc'
+import { handleIpc } from './typedIpc'
 
 const MENU_WINDOW_WIDTH = 176
 const MENU_ITEM_HEIGHT = 30
@@ -154,7 +155,7 @@ export function registerContextMenuIPC(getMainWindow: () => BrowserWindow | null
     }
   }
 
-  ipcMain.handle('context-menu:show-track', async (event, payload: unknown): Promise<NativeTrackMenuAction | null> => {
+  handleIpc('context-menu:show-track', async (event, payload: unknown): Promise<NativeTrackMenuAction | null> => {
     const owner = getMainWindow()
     if (
       !owner
@@ -249,7 +250,7 @@ export function registerContextMenuIPC(getMainWindow: () => BrowserWindow | null
     })
   })
 
-  ipcMain.handle('context-menu:window-get-init', (event): NativeTrackMenuWindowInit | null => {
+  handleIpc('context-menu:window-get-init', (event): NativeTrackMenuWindowInit | null => {
     const child = activeMenu?.child
     if (!child || child.isDestroyed() || event.sender !== child.webContents) {
       console.warn('[IPC] Mini 菜单初始化拒绝非活动窗口请求')
@@ -258,7 +259,7 @@ export function registerContextMenuIPC(getMainWindow: () => BrowserWindow | null
     return activeMenu.init
   })
 
-  ipcMain.handle('context-menu:window-ready', (event): void => {
+  handleIpc('context-menu:window-ready', (event): void => {
     const menu = activeMenu
     const child = menu?.child
     if (!menu || !child || child.isDestroyed() || event.sender !== child.webContents) {
@@ -271,7 +272,7 @@ export function registerContextMenuIPC(getMainWindow: () => BrowserWindow | null
     child.focus()
   })
 
-  ipcMain.handle('context-menu:window-resolve', (event, payload: unknown): void => {
+  handleIpc('context-menu:window-resolve', (event, payload: unknown): void => {
     const menu = activeMenu
     const child = menu?.child
     if (!menu || !child || child.isDestroyed() || event.sender !== child.webContents) {

@@ -18,7 +18,14 @@ const track: Track = {
   createdAt: '2026-07-13',
 }
 
-const playlist: Playlist = { id: 3, name: '收藏集', createdAt: '2026-07-13', coverPath: null }
+const playlist: Playlist = {
+  id: 3,
+  name: '收藏集',
+  createdAt: '2026-07-13',
+  coverPath: null,
+  coverSongId: null,
+  coverMtime: null,
+}
 
 function createOptions(overrides: Partial<Parameters<typeof useTrackContextMenu>[0]> = {}) {
   return {

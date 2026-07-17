@@ -35,8 +35,8 @@
 
 ### TypeScript
 - 严格模式（`strict: true`）
-- 主进程和渲染进程共用 `src/types/ipc.ts` 的 IPC 类型映射
-- 禁止裸字符串 IPC 通道名，必须通过 `IpcChannels` 接口定义
+- 主进程和渲染进程共用 `src/types/ipc.ts` 的四个 IPC surface map
+- invoke、Renderer → main send、main → Renderer event 必须使用各自 tuple/result 类型，禁止跨方向复用
 - 禁止 `any` 类型，必要时用 `unknown` + 类型守卫
 
 ### 命名规范
@@ -121,12 +121,29 @@
 ### 增量扫描
 - SQLite 记录文件绝对路径 + `mtime`
 - 启动时对比文件系统与数据库记录，仅对新增/修改的文件触发 Worker 解析
+- 每轮 Worker 必须发送 `roots + existingPaths + unavailablePaths` 文件系统快照；`readdir/stat` 失败必须记录对应 root/subtree/entry，禁止把不可访问解释为不存在
+- 删除候选只能来自本轮注册 root 内，且必须同时满足“不在 existingPaths”与“不位于任何 unavailable scope”；root containment 使用 `path.resolve`、`path.relative`、`path.isAbsolute` 和 Windows 大小写语义，禁止用裸字符串前缀判断
+- 只有同一个 Worker 同时具备合法且与启动 roots 一致的 snapshot、`done`、`exit(0)` 且从未 fatal/error，才允许在单个 better-sqlite3 transaction 中提交删除并发送公共 `scan:done`
+- `scan:done.total` 表示本轮尝试解析数，解析失败仍计入，并与 progress 分母一致
+- 歌曲 upsert 当前仍按每条 `song` 消息执行；本轮扫描安全修复不得借机宣称或实施批量 upsert
+
+### 数据库导入
+- 候选数据库必须在 live 连接关闭前完成普通文件、同一实体、SQLite integrity、外键、核心表/列及关键 unique/FK 验证；不得把任意可打开 SQLite 当作 QinPlayer 备份
+- 导入只能把候选复制到 live DB 同目录的唯一 stage；禁止 `copyFile(..., target)`、delete+copy 或 Windows rename 失败后的非原子覆盖 fallback
+- 发布前 `wal_checkpoint(TRUNCATE)` 必须同时满足 `busy = 0` 与 WAL frames 全部 checkpoint，随后同步关闭连接，二者之间不得插入异步工作
+- `prepared`、`old-moved`、`new-published`、`committed` marker 必须独占新建、写入、sync、关闭且不可覆盖；`committed` 必须可脱离前三个 marker 独立验证
+- phase manifest 必须记录原 target 的稳定文件身份；rollback 回迁与恢复后清理续跑只能在当前 target 身份匹配时进行
+- `committed` 用经目标 Windows/Electron 验证的稳定 device/file ID 绑定 target；不得用会随正常写入变化的内容 hash、size 或 mtime 代替
+- 新库可查询且 `committed` 已持久化前不得删除 rollback 或 reload/relaunch；失败后必须恢复可用旧连接，恢复失败则保留全部 artifacts 并停止启动
+- target 名称被新库占用时必须先 rename 到唯一 quarantine；quarantine 失败后禁止覆盖 target 或移动 rollback
+- prepared 前 orphan stage 只能清理 stage/sidecars，不得改写 target；任一事务 artifacts 未收尾时禁止创建第二组导入事务
 
 ### 自定义协议
 - 注册 `qinplayer://` 协议
 - Renderer 不得通过协议直接授权任意绝对路径；资源必须通过歌曲 ID 或主进程维护的受控映射解析，并在返回文件流前校验资源类型和允许范围
 - 支持经过边界校验的 Range Requests（拖动进度条缓冲），非法或越界范围必须拒绝
-- 当前 `?path=` 实现尚未达到上述安全目标；`SPEC.md` 记录现状，本条继续作为待整改约束
+- 缓存版本参数不得参与数据库查询、路径解析或授权；未知 host、旧 path 参数和资源类型错配必须拒绝
+- audio/cover/avatar 必须在 `realpath` 后执行 path-aware containment 和普通文件检查，symlink/junction 不得逃逸允许根
 
 ---
 
@@ -179,13 +196,21 @@
 - 示例：`songs:getAll`、`playlists:create`、`settings:get`
 
 ### 类型定义
-- 所有通道必须在 `src/types/ipc.ts` 的 `IpcChannels` 接口中定义
-- 定义 `args`（参数类型）和 `return`（返回值类型）
-- 主进程 `ipcMain.handle` 和渲染进程 `ipcRenderer.invoke` 共享此类型
+- 主窗口 invoke、Mini 菜单 invoke、Renderer → main send、main → Renderer event 必须分别定义在 `MainWindowInvokeChannels`、`ContextMenuInvokeChannels`、`IpcSendChannels`、`IpcEventChannels`
+- 每个 channel 定义 tuple `args`；invoke 额外定义 `result`
+- runtime allowlist 必须由共享的四个 channel 常量构造，不得在 preload 中手写或扩写 key
+- Mini 菜单 preload 只能暴露三个固定方法，不得获得主窗口通用 invoke/send/on
+
+### 主进程边界
+- 业务注册和发送统一经过 `electron/ipc/typedIpc.ts` 的 `handleIpc`、`onIpc`、`sendIpc`
+- `typedIpc.ts` 之外禁止直接使用 `ipcMain.handle`、`ipcMain.on` 或业务 `webContents.send`
+- channel 必须是字符串字面量；合同、注册、发送点与 preload allowlist 的缺失、重复和方向错误由 Harness 阻断
+- 编译期类型不是运行时授权；handler 仍必须校验 payload、sender、路径和业务状态
 
 ### 错误处理
-- 必须 try-catch 包裹
-- 错误信息用中文
+- thrown error 由 typed 边界记录原始异常并转换为不泄露本地路径/堆栈的固定中文错误
+- canceled/success 等既有结构化结果保持原语义；结构化失败不得直接返回 `String(error)`
+- 无返回 send 的非法 payload 应记录并忽略，不能让异常穿透主事件循环
 
 ---
 

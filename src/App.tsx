@@ -13,6 +13,7 @@ import Content from './components/Content'
 import PlayerBar from './components/PlayerBar'
 import MiniPlayer from './components/MiniPlayer'
 import CloseConfirmDialog from './components/CloseConfirmDialog'
+import PlaybackErrorBanner from './components/PlaybackErrorBanner'
 import { useTheme } from './hooks/useTheme'
 import { useReducedMotion } from './hooks/useReducedMotion'
 import { useAudioSync } from './hooks/useAudioSync'
@@ -20,7 +21,7 @@ import { restorePlayerState, usePlayerStore } from './stores/playerStore'
 import { useUIStore } from './stores/uiStore'
 import { useEqStore } from './stores/eqStore'
 import type { Theme } from './types'
-import type { CloseResponse, IpcPushChannels } from './types/ipc'
+import type { CloseResponse, IpcEventArgs } from './types/ipc'
 import { isNavAllowed } from './utils/featureFlags'
 import { setAudioEngineEqualizerEnabled } from './utils/AudioEngine'
 
@@ -28,8 +29,8 @@ import { setAudioEngineEqualizerEnabled } from './utils/AudioEngine'
 function App() {
   // 水合状态（数据库加载完成前显示骨架屏）
   const [isHydrated, setIsHydrated] = useState(false)
-  const [closeRequest, setCloseRequest] = useState<IpcPushChannels['close:request'] | null>(null)
-  const closeRequestRef = useRef<IpcPushChannels['close:request'] | null>(null)
+  const [closeRequest, setCloseRequest] = useState<IpcEventArgs<'close:request'>[0] | null>(null)
+  const closeRequestRef = useRef<IpcEventArgs<'close:request'>[0] | null>(null)
 
   // 当前导航项（歌词界面时隐藏导航栏和播放栏）
   const activeNav = useUIStore((state) => state.activeNav)
@@ -46,7 +47,7 @@ function App() {
 
   // 根级监听独立于水合和三种应用壳层，确保任何可见状态都能响应关闭询问。
   useEffect(() => {
-    const unsubscribe = window.electronAPI.on('close:request', (payload: IpcPushChannels['close:request']) => {
+    const unsubscribe = window.electronAPI.on('close:request', (payload) => {
       if (!payload || typeof payload.requestId !== 'string' || payload.requestId.length === 0) return
       if (closeRequestRef.current) return
       closeRequestRef.current = payload
@@ -70,6 +71,7 @@ function App() {
       onRespond={handleCloseResponse}
     />
   ) : null
+  const playbackErrorBanner = <PlaybackErrorBanner />
 
   // 迷你模式切换时通知主进程调整窗口尺寸
   useEffect(() => {
@@ -97,10 +99,10 @@ function App() {
         // 并行恢复：播放状态 + 主题设置 + 歌词偏移量 + 淡入淡出
         const [, savedTheme, savedLyricOffset, savedFadeEnabled, savedReducedMotion] = await Promise.all([
           flags.playback ? restorePlayerState() : Promise.resolve(),
-          window.electronAPI.invoke('settings:get', { key: 'theme' }) as Promise<string | null>,
-          window.electronAPI.invoke('settings:get', { key: 'lyricOffset' }) as Promise<string | null>,
-          window.electronAPI.invoke('settings:get', { key: 'fadeEnabled' }) as Promise<string | null>,
-          window.electronAPI.invoke('settings:get', { key: 'reducedMotion' }) as Promise<string | null>,
+          window.electronAPI.invoke('settings:get', { key: 'theme' }),
+          window.electronAPI.invoke('settings:get', { key: 'lyricOffset' }),
+          window.electronAPI.invoke('settings:get', { key: 'fadeEnabled' }),
+          window.electronAPI.invoke('settings:get', { key: 'reducedMotion' }),
         ])
 
         // 恢复均衡器设置（独立加载，不阻塞其他恢复）
@@ -162,6 +164,7 @@ function App() {
           <div className="app__skeleton-bar" style={{ width: '20%', height: '12px' }} />
         </div>
       </div>
+      {playbackErrorBanner}
       {closeDialog}
       </>
     )
@@ -190,6 +193,7 @@ function App() {
         </>
       )}
     </div>
+    {playbackErrorBanner}
     {closeDialog}
     </>
   )

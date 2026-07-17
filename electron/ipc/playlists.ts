@@ -4,9 +4,9 @@
 // 职责：歌单 CRUD、歌曲排序、添加/移除歌曲
 // =============================================================================
 
-import { ipcMain } from 'electron'
 import { getDatabase } from '../db/database'
 import type { Track, Playlist } from '../../src/types'
+import { handleIpc } from './typedIpc'
 
 // ---------------------------------------------------------------------------
 // 类型映射
@@ -32,6 +32,8 @@ interface PlaylistRow {
   created_at: string
   song_count?: number
   cover_path: string | null
+  cover_song_id?: number | null
+  cover_mtime?: number | null
 }
 
 function rowToTrack(row: SongRow): Track {
@@ -56,7 +58,9 @@ function rowToPlaylist(row: PlaylistRow): Playlist {
     name: row.name,
     createdAt: row.created_at,
     songCount: row.song_count || 0,
-    coverPath: row.cover_path ?? null
+    coverPath: row.cover_path ?? null,
+    coverSongId: row.cover_song_id ?? null,
+    coverMtime: row.cover_song_id == null ? null : (row.cover_mtime ?? 0)
   }
 }
 
@@ -66,7 +70,7 @@ function rowToPlaylist(row: PlaylistRow): Playlist {
 
 export function registerPlaylistsIPC(): void {
   // --- playlists:create — 创建歌单 ---
-  ipcMain.handle('playlists:create', (_event, { name }: { name: string }) => {
+  handleIpc('playlists:create', (_event, { name }: { name: string }) => {
     const db = getDatabase()
     const result = db.prepare('INSERT INTO playlists (name) VALUES (?)').run(name)
     const row = db.prepare('SELECT * FROM playlists WHERE id = ?').get(result.lastInsertRowid) as PlaylistRow
@@ -75,36 +79,38 @@ export function registerPlaylistsIPC(): void {
   })
 
   // --- playlists:rename — 重命名歌单 ---
-  ipcMain.handle('playlists:rename', (_event, { id, name }: { id: number; name: string }) => {
+  handleIpc('playlists:rename', (_event, { id, name }: { id: number; name: string }) => {
     const db = getDatabase()
     db.prepare('UPDATE playlists SET name = ? WHERE id = ?').run(name, id)
     console.log('[IPC] 歌单已重命名:', id, '→', name)
   })
 
   // --- playlists:delete — 删除歌单 ---
-  ipcMain.handle('playlists:delete', (_event, { id }: { id: number }) => {
+  handleIpc('playlists:delete', (_event, { id }: { id: number }) => {
     const db = getDatabase()
     db.prepare('DELETE FROM playlists WHERE id = ?').run(id)
     console.log('[IPC] 歌单已删除:', id)
   })
 
   // --- playlists:getAll — 获取所有歌单（含歌曲数量）---
-  ipcMain.handle('playlists:getAll', () => {
+  handleIpc('playlists:getAll', () => {
     const db = getDatabase()
     const rows = db.prepare(`
       SELECT
         p.*,
         COUNT(ps.song_id) AS song_count,
-        (
-          SELECT s.cover_path
-          FROM playlist_songs first_ps
-          INNER JOIN songs s ON s.id = first_ps.song_id
-          WHERE first_ps.playlist_id = p.id
-          ORDER BY first_ps.sort_order ASC
-          LIMIT 1
-        ) AS cover_path
+        cover_song.cover_path AS cover_path,
+        cover_song.id AS cover_song_id,
+        cover_song.mtime AS cover_mtime
       FROM playlists p
       LEFT JOIN playlist_songs ps ON p.id = ps.playlist_id
+      LEFT JOIN songs cover_song ON cover_song.id = (
+        SELECT first_ps.song_id
+        FROM playlist_songs first_ps
+        WHERE first_ps.playlist_id = p.id
+        ORDER BY first_ps.sort_order ASC
+        LIMIT 1
+      )
       GROUP BY p.id
       ORDER BY p.created_at DESC
     `).all() as PlaylistRow[]
@@ -113,7 +119,7 @@ export function registerPlaylistsIPC(): void {
 
   // --- playlists:getSongs — 获取歌单内歌曲（支持排序）---
   // ⚠️ sortBy/order 用联合类型约束，防止 SQL 注入
-  ipcMain.handle('playlists:getSongs', (_event, { id, sortBy, order }: { id: number; sortBy: 'default' | 'playCount'; order: 'asc' | 'desc' }) => {
+  handleIpc('playlists:getSongs', (_event, { id, sortBy, order }: { id: number; sortBy: 'added' | 'playCount'; order: 'asc' | 'desc' }) => {
     const db = getDatabase()
 
     // 根据排序方式构建 SQL（白名单映射，不直接拼接用户输入）
@@ -136,7 +142,7 @@ export function registerPlaylistsIPC(): void {
   })
 
   // --- playlists:addSong — 添加歌曲到歌单 ---
-  ipcMain.handle('playlists:addSong', (_event, { playlistId, songId }: { playlistId: number; songId: number }) => {
+  handleIpc('playlists:addSong', (_event, { playlistId, songId }: { playlistId: number; songId: number }) => {
     const db = getDatabase()
 
     // 获取当前最大排序值
@@ -151,7 +157,7 @@ export function registerPlaylistsIPC(): void {
   })
 
   // --- playlists:removeSong — 从歌单移除歌曲 ---
-  ipcMain.handle('playlists:removeSong', (_event, { playlistId, songId }: { playlistId: number; songId: number }) => {
+  handleIpc('playlists:removeSong', (_event, { playlistId, songId }: { playlistId: number; songId: number }) => {
     const db = getDatabase()
     db.prepare(
       'DELETE FROM playlist_songs WHERE playlist_id = ? AND song_id = ?'
@@ -159,7 +165,7 @@ export function registerPlaylistsIPC(): void {
   })
 
   // --- playlists:isInPlaylist — 检查歌曲是否在歌单中 ---
-  ipcMain.handle('playlists:isInPlaylist', (_event, { playlistId, songId }: { playlistId: number; songId: number }) => {
+  handleIpc('playlists:isInPlaylist', (_event, { playlistId, songId }: { playlistId: number; songId: number }) => {
     const db = getDatabase()
     const row = db.prepare(
       'SELECT 1 FROM playlist_songs WHERE playlist_id = ? AND song_id = ?'

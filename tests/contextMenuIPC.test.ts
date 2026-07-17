@@ -176,7 +176,7 @@ describe('Mini 歌曲菜单 IPC', () => {
       }),
     }))
     expect(child.loadURL).toHaveBeenCalledWith('http://localhost:5173/mini-context-menu.html')
-    expect(getInit()).toEqual({
+    expect(await getInit()).toEqual({
       entries: ALL_ENTRIES.map((entry) => ({
         ...entry,
         label: expect.any(String),
@@ -216,12 +216,12 @@ describe('Mini 歌曲菜单 IPC', () => {
     const result = show([{ action: 'play', enabled: true }])
     const otherSender = createWindow().webContents
 
-    expect(getInit(otherSender)).toBeNull()
+    expect(await getInit(otherSender)).toBeNull()
     ready(otherSender)
     resolveAction('play', otherSender)
     expect(child.show).not.toHaveBeenCalled()
 
-    expect(getInit()).toEqual({
+    expect(await getInit()).toEqual({
       entries: [{ action: 'play', enabled: true, label: '播放' }],
       theme: 'dark',
       reducedMotion: false,
@@ -312,9 +312,12 @@ describe('Mini 歌曲菜单 IPC', () => {
   it('专用 preload 才能访问内部通道，主 preload 保留唯一公开 invoke', () => {
     const mainPreload = readFileSync(resolve('electron/preload.ts'), 'utf8')
     const dedicatedPreload = readFileSync(resolve('electron/contextMenuPreload.ts'), 'utf8')
+    const ipcTypes = readFileSync(resolve('src/types/ipc.ts'), 'utf8')
 
-    expect(mainPreload.match(/'context-menu:show-track'/g)).toHaveLength(1)
+    expect(mainPreload).toContain('MAIN_WINDOW_INVOKE_CHANNELS')
+    expect(mainPreload).not.toContain("'context-menu:show-track'")
     expect(mainPreload).not.toContain('context-menu:window-get-init')
+    expect(ipcTypes).toContain("'context-menu:show-track': true")
     expect(dedicatedPreload).toContain('context-menu:window-get-init')
     expect(dedicatedPreload).toContain('context-menu:window-ready')
     expect(dedicatedPreload).toContain('context-menu:window-resolve')

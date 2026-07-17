@@ -7,7 +7,7 @@
 // =============================================================================
 
 import Database from 'better-sqlite3'
-import { app } from 'electron'
+import { app, dialog } from 'electron'
 import { join } from 'path'
 import { mkdir } from 'fs/promises'
 import { ensureListeningStatsTable } from './listeningRepository'
@@ -16,7 +16,95 @@ import { ensureListeningStatsTable } from './listeningRepository'
 // 数据库实例（模块级单例）
 // ---------------------------------------------------------------------------
 
-let db: Database.Database | null = null
+export type DatabaseConnection = Database.Database
+
+export interface DatabaseManagerDependencies {
+  getDatabasePath: () => string
+  openDatabase: (databasePath: string) => DatabaseConnection
+  createSchema: (database: DatabaseConnection) => void
+  ensureListeningStats: (database: DatabaseConnection) => void
+  createCoversDirectory: () => Promise<void>
+  showInitializationError: (databasePath: string, error: unknown) => void
+}
+
+export interface DatabaseInitializationOptions {
+  showErrorDialog?: boolean
+}
+
+export function getDatabasePath(): string {
+  return join(app.getPath('userData'), 'qinplayer.db')
+}
+
+export function createDatabaseManager(dependencies: DatabaseManagerDependencies) {
+  let currentDatabase: DatabaseConnection | null = null
+
+  const init = async (
+    options: DatabaseInitializationOptions = {},
+  ): Promise<DatabaseConnection> => {
+    if (currentDatabase) return currentDatabase
+
+    const databasePath = dependencies.getDatabasePath()
+    const showErrorDialog = options.showErrorDialog ?? true
+    let nextDatabase: DatabaseConnection | null = null
+
+    try {
+      nextDatabase = dependencies.openDatabase(databasePath)
+      nextDatabase.pragma('journal_mode = WAL')
+      nextDatabase.pragma('foreign_keys = ON')
+      dependencies.createSchema(nextDatabase)
+      dependencies.ensureListeningStats(nextDatabase)
+      await dependencies.createCoversDirectory()
+
+      currentDatabase = nextDatabase
+      return currentDatabase
+    } catch (error) {
+      currentDatabase = null
+      if (nextDatabase) {
+        try {
+          nextDatabase.close()
+        } catch (closeError) {
+          console.warn('[Database] 初始化失败后的连接关闭也失败:', closeError)
+        }
+      }
+      if (showErrorDialog) dependencies.showInitializationError(databasePath, error)
+      throw error
+    }
+  }
+
+  const get = (): DatabaseConnection => {
+    if (!currentDatabase) {
+      throw new Error('[Database] 数据库尚未初始化，请先调用 initDatabase()')
+    }
+    return currentDatabase
+  }
+
+  const close = (): void => {
+    if (!currentDatabase) return
+    const databaseToClose = currentDatabase
+    currentDatabase = null
+    databaseToClose.close()
+  }
+
+  return { init, get, close }
+}
+
+const databaseManager = createDatabaseManager({
+  getDatabasePath,
+  openDatabase: (databasePath) => new Database(databasePath),
+  createSchema: (database) => createTables(database),
+  ensureListeningStats: (database) => ensureListeningStatsTable(database),
+  createCoversDirectory: async () => {
+    const coversDirectory = join(app.getPath('userData'), 'covers')
+    await mkdir(coversDirectory, { recursive: true })
+    console.log('[Database] 封面缓存目录:', coversDirectory)
+  },
+  showInitializationError: (databasePath, error) => {
+    dialog.showErrorBox(
+      '数据库初始化失败',
+      `QinPlayer 无法初始化数据库，可能是磁盘空间不足或文件权限问题。\n\n路径: ${databasePath}\n错误: ${String(error)}`,
+    )
+  },
+})
 
 /**
  * 初始化数据库
@@ -27,41 +115,18 @@ let db: Database.Database | null = null
  *
  * 必须在 app.whenReady() 之后调用
  */
-export async function initDatabase(): Promise<Database.Database> {
-  // 数据库存储在 userData 目录（Windows: AppData/Roaming/QinPlayer）
-  // 绝对不能存项目目录，否则应用更新会丢失用户数据
-  const dbPath = join(app.getPath('userData'), 'qinplayer.db')
-  console.log('[Database] 数据库路径:', dbPath)
-
+export async function initDatabase(
+  options: DatabaseInitializationOptions = {},
+): Promise<DatabaseConnection> {
+  const databasePath = getDatabasePath()
+  console.log('[Database] 数据库路径:', databasePath)
   try {
-    db = new Database(dbPath)
-
-    // 开启 WAL 模式：读写分离，性能提升
-    db.pragma('journal_mode = WAL')
+    const database = await databaseManager.init(options)
     console.log('[Database] WAL 模式已开启')
-
-    // 开启外键约束（默认是关闭的）
-    db.pragma('foreign_keys = ON')
-
-    // 创建表结构
-    createTables(db)
-    ensureListeningStatsTable(db)
-
-    // 创建封面缓存目录
-    const coversDir = join(app.getPath('userData'), 'covers')
-    await mkdir(coversDir, { recursive: true })
-    console.log('[Database] 封面缓存目录:', coversDir)
-
-    return db
-  } catch (err) {
-    console.error('[Database] 初始化失败:', err)
-    // 弹出错误对话框，告诉用户出了什么问题
-    const { dialog } = require('electron') as typeof import('electron')
-    dialog.showErrorBox(
-      '数据库初始化失败',
-      `QinPlayer 无法初始化数据库，可能是磁盘空间不足或文件权限问题。\n\n路径: ${dbPath}\n错误: ${String(err)}`
-    )
-    throw err  // 向上传播，让 main.ts 知道初始化失败
+    return database
+  } catch (error) {
+    console.error('[Database] 初始化失败:', error)
+    throw error
   }
 }
 
@@ -69,11 +134,8 @@ export async function initDatabase(): Promise<Database.Database> {
  * 获取数据库实例
  * 如果尚未初始化，抛出错误
  */
-export function getDatabase(): Database.Database {
-  if (!db) {
-    throw new Error('[Database] 数据库尚未初始化，请先调用 initDatabase()')
-  }
-  return db
+export function getDatabase(): DatabaseConnection {
+  return databaseManager.get()
 }
 
 /**
@@ -81,11 +143,8 @@ export function getDatabase(): Database.Database {
  * 应用退出时调用
  */
 export function closeDatabase(): void {
-  if (db) {
-    db.close()
-    db = null
-    console.log('[Database] 数据库已关闭')
-  }
+  databaseManager.close()
+  console.log('[Database] 数据库已关闭')
 }
 
 // ---------------------------------------------------------------------------
@@ -96,7 +155,7 @@ export function closeDatabase(): void {
  * 创建所有数据表
  * 使用 IF NOT EXISTS 确保幂等性
  */
-function createTables(db: Database.Database): void {
+function createTables(db: DatabaseConnection): void {
   // 歌曲表：存储所有扫描到的音频文件元数据
   db.exec(`
     CREATE TABLE IF NOT EXISTS songs (

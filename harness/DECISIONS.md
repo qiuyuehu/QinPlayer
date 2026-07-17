@@ -4,11 +4,51 @@
 
 ---
 
+## 2026-07-16 IPC 采用三方向合同与唯一 typed Electron 边界
+
+- **合同拆分**：主窗口 invoke、Mini 菜单 invoke、Renderer → main send、main → Renderer event 分别建模；当前计数为 40/3/10/10。每个 channel 保留真实 tuple 参数和 invoke 结果，不为了形式统一改写字符串参数或既有成功 payload。
+- **runtime 表面**：四个共享常量同时约束类型与 preload allowlist。主 preload 只接受三个主窗口 surface；Mini preload 继续只暴露 `getInit`、`ready`、`resolve`，没有通用 Electron API。
+- **主进程边界**：业务 `ipcMain.handle`、`ipcMain.on`、`webContents.send` 集中到 `typedIpc.ts`，Electron 的 untyped rest args 只在该文件以 `unknown` 窄化。正常结果原样返回，异常记录 channel 后转为固定中文错误。
+- **失败语义**：业务 canceled/success union 不双重包装；扫描启动、扫描事件、数据库导出以及导入的 resolved failure 都不再把 `String(error)`、绝对路径或堆栈发送给 Renderer，原始诊断只留主进程日志。
+- **机械门禁**：专用 TypeScript 合同测试固定错误 channel/参数/callback 必须编译失败；Harness 跨文件比较合同、注册、sender 与 preload，拒绝裸 IPC、动态 channel、漏项、额外项、重复项和方向错误，并追踪 Electron/typed wrapper/webContents 的常见导入与局部别名。
+- **状态**：类型检查、Harness、67 files / 774 tests、生产构建与隔离 Electron 31/真实 SQLite/preload smoke 通过；首轮独立 Review 为 Blocker 0、Important 5、Suggestion 1，第一次短复审为 Blocker 0、Important 2、Suggestion 0，最终短复审 Blocker 0、Important 0、Suggestion 1，gate 通过。未用 deferred Promise 单独锁定旧刷新请求晚到不覆盖终态，作为非阻断测试增强项；OS 对话框、真实扫描 Worker、窗口/托盘副作用和 packaged smoke 仍为人工项。
+
+## 2026-07-16 本地资源协议只接受受控 ID
+
+- **授权模型**：audio/cover 只接受正安全整数 song ID，由主进程参数绑定查询数据库 mapping；avatar 固定 `id=current`，只读取 `settings.avatarPath`。Renderer 不能提供资源路径，也没有旧 path 兼容回退。
+- **路径字段**：`Track.filePath/coverPath` 暂时保留给歌词、歌曲信息、打开位置和是否显示封面；字段存在不等于协议授权。Album/Playlist 额外携带代表封面的 song ID 与 mtime，不增加数据库列。
+- **路径边界**：audio 必须在注册 music root；cover 只允许 `userData/covers` 或该歌曲目录；avatar 只允许 `userData/avatar`。授权统一要求受支持扩展、普通文件、真实目录 root 以及 `realpath` 后的 path-aware containment。
+- **缓存**：`v` 只由歌曲 mtime 或头像文件名生成，用于缓存失效；不得参与 SQL、文件路径或授权。
+- **Range**：只接受 GET/HEAD 与单段 bytes Range。显式 end、开放 end、suffix 的任一边界都必须在文件内；不做 clamp，越界和畸形请求统一 416，HEAD 不创建 body stream。
+- **状态**：64 files / 728 tests、TypeScript、Harness、生产构建和 Electron 31 隔离真实 SQLite/文件流 smoke 通过；独立 Review 最终 Blocker 0、Important 0。完整 GUI 多格式播放、seek 与 packaged smoke 仍是人工项。
+
+## 2026-07-16 数据库导入采用同卷可恢复发布状态机
+
+- **兼容策略**：只接受当前核心表、字段、关键 unique 和 cascade FK；`listening_stats` 可缺失并由初始化补建，已存在但不兼容则拒绝，不猜测未知旧版迁移。
+- **生命周期**：数据库连接先保存在局部变量；WAL、外键、schema、听歌统计表和 covers 目录全部成功后才发布 singleton。失败关闭局部连接并允许重试，导入可关闭初始化弹窗由 importer 统一报告。
+- **发布**：候选复制到 live DB 同目录唯一 stage，只读验证后写 `prepared`；完整 checkpoint 并关闭连接后依次同卷 rename `target → rollback`、`stage → target`，禁止 copy 覆盖 fallback。
+- **恢复证据**：每个事务使用不可变 `prepared`、`old-moved`、`new-published`、`committed` marker。phase manifest 记录原 target stable identity，前三个 marker 形成 digest chain；`committed` 自含 manifest、候选 digest、各 marker digest、chain digest 和新 target stable identity，可在前三个 marker 已清理时独立验证。
+- **身份合同**：Electron 31.7.7 / Node 20.18.0 的隔离 Windows 探针确认 `dev + ino` 非零，且 SQLite 文件经同卷 rename 与实际写入后保持不变，另一文件身份不同；因此终态不使用内容 hash、size 或 mtime 绑定可写 DB。
+- **失败语义**：成功连接可查询且 `committed` 落盘前保留 rollback。新 target 失败时先清 sidecars 并 rename 到唯一 quarantine，再恢复 rollback；quarantine/restore/reopen 任一步失败即 fatal，保留 artifacts 并停止启动。
+- **清理续跑**：rollback 回迁必须匹配 manifest 中的原 target identity；失败恢复后的物理 artifacts 先清理，phase marker 按逆序删除。任何残留事务存在时拒绝同进程创建第二事务，交给下次启动恢复。
+- **测试边界**：Node Vitest 无法直接加载为 Electron ABI 构建的 `better-sqlite3`；schema 使用 `node:sqlite` 真实内存库，文件发布/恢复使用真实临时文件与注入故障，Electron ABI 的真实 validator 另做隔离 smoke，绝不使用唯一用户数据库。
+- **状态**：59 files / 660 tests、TypeScript、Harness、生产构建与 Electron 隔离 smoke 通过；独立 Review 最终 Blocker 0、Important 0。完整 GUI 强制终止、真实文件锁与 packaged relaunch 仍是人工残余项。
+
+## 2026-07-15 增量扫描采用 fail-closed 快照与终止门
+
+- **问题**：旧增量扫描在 `toProcess=0` 时不发送现存路径，无法清理 deletion-only；目录访问失败又会静默形成不完整路径集合，主进程收到集合后立即做全库差集删除，可能级联移除收藏、歌单关联和最近播放。
+- **决策**：把遍历与解析编排抽成可注入的纯 core，每轮发送注册 roots、确认存在路径和 unavailable scopes；主进程只在同一 Worker 的合法 snapshot、`done` 与 `exit(0)` 全部到齐且无 fatal 时提交对账。
+- **路径安全**：删除仅限可信 root 内，使用 Windows 语义的 `resolve/relative/isAbsolute` 判断 containment；不可访问 root/subtree/entry 一律作为保护范围，root 外歌曲不参与本轮删除。
+- **原子性**：删除候选在一个 better-sqlite3 transaction 内提交；任一删除失败整轮回滚。Worker 的 snapshot roots 还必须与启动该 Worker 时的 roots 集合一致。
+- **计数**：full 的 total 为发现并尝试解析数，incremental 的 total 为新增/修改并尝试解析数；单文件解析失败仍计入，并保持非 fatal。
+- **范围取舍**：保留现有逐条歌曲 upsert，不在本轮重写 schema、批量写入、扫描取消或并发调度；这些仍是独立技术债。
+- **状态**：纯 core、删除策略和每 Worker 状态机已有定向测试；类型、Harness、56 files / 556 tests 和生产构建已通过，独立 Review 通过且 P1 Blocker = 0，残余非阻断项见同日 devlog。
+
 ## 2026-07-15 SPEC 与 Harness 采用事实/规范分层
 
 - **SPEC 职责**：根 `SPEC.md` 记录当前代码已实现的产品、数据和运行时事实，并保留带日期的验证快照与文档职责；不再混入历史 Phase、未来设想、文件行数、完整目录树或逐测试文件清单。
 - **Harness 职责**：`CONSTRAINTS.md` 继续表达长期工程目标。代码尚未满足的禁止 `any`、IPC 类型与错误处理、测试覆盖、批量事务、受控本地资源映射等规则不因现状而放宽，差异按技术债处理。
-- **协议口径**：`SPEC.md` 明确记录当前 `qinplayer://...?path=` 文件流实现；Harness 继续要求歌曲 ID 或主进程受控映射以及 Range 边界校验，避免用文档改写掩盖安全缺口。
+- **协议口径**：本条已被 2026-07-16 P3 受控 ID 协议实现取代；保留用于说明此前 SPEC/Harness 事实与规范分层的背景。
 - **历史保留**：`DECISIONS.md` 保留旧决策及其当时背景；后续实现改变结论时标记“已被取代”，不反向删除历史。
 - **范围**：本次只校准 `SPEC.md`、`harness/CONSTRAINTS.md` 和本文件，不改变源码、IPC、数据库 schema、Feature Flag 类型或运行时行为。
 
@@ -169,7 +209,7 @@
 - **决策**：所有 IPC 通道在 `src/types/ipc.ts` 的 `IpcChannels` 接口中定义
 - **原因**：编译期类型安全，IDE 自动补全
 - **权衡**：新增通道需要同步更新接口定义
-- **状态**：已验证
+- **状态**：已被 2026-07-16 三方向合同与唯一 typed Electron 边界取代
 
 ---
 
@@ -200,6 +240,66 @@
 - **原因**：减少初版复杂度，不做账号/资料系统
 - **权衡**：用户无法自定义昵称，但初版够用
 - **状态**：已被当前昵称与头像编辑能力取代；本条仅保留为初版历史
+
+---
+
+## 2026-07-17 播放失败、恢复进度与 Media Session 竞态
+
+- **背景**：媒体加载/播放失败只写 console，恢复 seek 可能在 metadata 前丢失，快速切歌的旧封面请求可能覆盖新歌。
+- **决策**：失败后停在当前歌曲并显示固定中文提示，不自动跳过或无限重试。
+- **原因**：坏文件和临时设备错误应由用户决定重试或跳过，避免队列被静默推进。
+- **权衡**：播放会保持停止状态直到用户操作。
+- **状态**：已实施
+
+- **决策**：Retry 直接重载同一 Track，恢复 `currentTimeRef` 中最后一个有限、非负位置，不调用 `playTrack`。
+- **原因**：避免重复最近播放/播放次数记账、清队列或改变来源游标。
+- **权衡**：底层错误持续存在时 Retry 仍会再次失败并继续展示提示。
+- **状态**：已实施
+
+- **决策**：pending seek 绑定 Track key，在 metadata 后 clamp、只消费一次，并先于 autoplay 应用。
+- **原因**：防止从 0 先播放再跳转，以及旧曲 seek 串到新曲。
+- **权衡**：metadata 未就绪前不直接写入媒体位置。
+- **状态**：已实施
+
+- **决策**：Media Session 采用 generation + AbortController；文字 metadata 先提交，封面 loader 只拥有自己创建的 Blob，最新请求接管后才释放上一有效 Blob。
+- **原因**：仅 abort 不能覆盖不响应取消或已进入 Blob 创建阶段的迟到请求。
+- **权衡**：一次切歌会产生文字和封面两次 metadata 提交。
+- **状态**：已实施
+
+---
+
+## 2026-07-17 Renderer 恢复页与 Liked 即时刷新
+
+- **背景**：Renderer render/lifecycle 异常会留下空白界面，Liked 页取消收藏后仍保留已删除行。
+- **决策**：在 `React.StrictMode` 外层放置根级 Error Boundary，fallback 只显示固定中文信息，“重新加载”执行完整页面 reload。
+- **原因**：Boundary 必须包住整个 `App` 才能捕获其 render/lifecycle 异常；完整 reload 是最小且可预测的恢复路径。
+- **权衡**：不捕获异步 rejection、事件 handler、Electron main 或音频错误，也不做局部组件恢复和远程上报。
+- **状态**：已实施
+
+- **决策**：`SongList` 对每首歌曲设置独立的进行中锁，只在 like/unlike IPC 成功后更新内部星标并通知调用方；Liked 页面收到 `liked=false` 后只过滤自己的查询结果。
+- **原因**：数据库是收藏事实来源，同时需要让当前页面即时反映成功操作。
+- **权衡**：不做乐观更新、不重新请求全列表、不引入全局收藏 Store，也不修改当前会话的播放来源列表。
+- **状态**：已实施
+
+---
+
+## 2026-07-17 Tray 可测试边界与零框架警告
+
+- **背景**：Tray 缺少 callback/flag/生命周期直接测试，Vitest 配置同时触发 Vite CJS 和不兼容 React plugin 选项警告。
+- **决策**：Tray 保留现有模块入口，在内部使用可注入 controller adapter；测试直接验证菜单模板、动作路由、窗口恢复和 create/destroy/create 生命周期。
+- **原因**：避免 Vitest 依赖真实 Windows Tray，同时覆盖文本之外的行为合同。
+- **权衡**：真实系统托盘图标、右键弹出和 Windows 生命周期仍需 Electron 人工 smoke。
+- **状态**：已实施
+
+- **决策**：Vitest 配置迁为 ESM `.mts`，alias 使用 `import.meta.url`，测试链不加载 `@vitejs/plugin-react`；production `electron.vite.config.ts` 保持原 React plugin。
+- **原因**：测试不需要 Fast Refresh，移除跨 Vite 主版本加载的 plugin 即可消除四类框架 warning，不必调整依赖。
+- **权衡**：测试 TSX 依赖 Vitest/Vite 默认转换；由 `@/components/SongList` 定向测试和 production build 双重验证。
+- **状态**：已实施；`package.json` 与 lockfile 未修改
+
+- **决策**：测试 setup 只把 React `not wrapped in act` / `wrap-tests-with-act` 警告升级为失败，其他 `console.error` 原样转发。
+- **原因**：让异步测试未 settle 的回归立即阻断，同时保留业务错误测试的诊断输出。
+- **权衡**：React 若更改 warning 文案，需要按测试规范更新窄范围 matcher。
+- **状态**：已实施
 
 ---
 
